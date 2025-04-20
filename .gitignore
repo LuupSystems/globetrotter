@@ -1,0 +1,7 @@
+.DS_Store
+target/
+deprecated/
+
+# goreleaser
+goreleaser-dist/
+.intentionally-empty-file.o

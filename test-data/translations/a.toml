@@ -1,0 +1,8 @@
+[page.title]
+de = "german page title from a.toml"
+en = "english page title from a.toml"
+fr = """
+French page title from a.toml
+Multiline is supported
+"""
+arguments = { a = "number" }

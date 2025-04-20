@@ -1,0 +1,10 @@
+[translation.literal]
+de = "German"
+en = "English"
+fr = "French"
+
+[translation.greeting]
+de = "Hallo {{name}}"
+en = "Hello {{name}}"
+fr = "Bonjour {{name}}"
+arguments = { name = "string" }

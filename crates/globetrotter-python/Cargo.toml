@@ -1,0 +1,35 @@
+[package]
+name = "globetrotter-python"
+license = "MIT"
+readme = "../../README.md"
+documentation = "https://docs.rs/globetrotter-python"
+publish = true
+
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories = [
+  "command-line-utilities",
+  "internationalization",
+  "localization",
+]
+keywords = [
+  "i8n",
+  "internationalization",
+  "translations",
+  "python",
+]
+
+[features]
+default = []
+
+[package.metadata.cargo-feature-combinations]
+exclude_features = ["default"]
+
+[dependencies]
+serde.workspace = true
+color-eyre.workspace = true
+tracing.workspace = true

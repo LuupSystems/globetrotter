@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+dist: goreleaser-dist
+
+before:
+  hooks:
+    - rustup default stable
+    - cargo install --locked --force cargo-zigbuild
+
+brews:
+  - name: globetrotter
+    ids:
+      - globetrotter
+    description: "Polyglot, type-safe internationalization"
+    directory: Formula
+    commit_author:
+      name: roman
+      email: roman@luup-systems.com
+    repository:
+      owner: LuupSystems
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+      pull_request:
+        enabled: false
+
+builds:
+  - id: "globetrotter"
+    builder: rust
+    binary: globetrotter
+    targets:
+      - x86_64-unknown-linux-gnu
+      - x86_64-apple-darwin
+      - x86_64-pc-windows-gnu
+      - aarch64-unknown-linux-gnu
+      - aarch64-apple-darwin
+    dir: ./
+    tool: cargo
+    command: zigbuild
+    flags:
+      - "--release"
+      - "--package=globetrotter-cli"
+      - "--bin=globetrotter"
+      - "--target-dir=./target" # TODO: can we remove this once rust support is better?
+
+archives:
+  - id: globetrotter
+    formats: ["tar.gz"]
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    ids:
+      - globetrotter
+    files:
+      - LICENSE
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  use: github
+  filters:
+    exclude:
+      - "^ci:"
+      - "^docs:"
+      - "^test:"
+
+release:
+  draft: false

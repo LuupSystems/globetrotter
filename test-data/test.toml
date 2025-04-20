@@ -1,0 +1,46 @@
+[upload.title]
+de = "Insight(s) der Schwellenwert von 3,0 ueberschritten wurde."
+en = "insight(s) exceeded the threshold of 3.0."
+# fr = "l'aperE7u a d9pas9 le seuil de 3,0."
+fr = """
+This is a
+
+Template!
+"""
+
+# this is a test
+# [upload.message.translations]
+[upload.message]
+de = "Insight(s) der Schwellenwert von 3,0 ueberschritten wurde."
+en = "insight(s) exceeded the threshold of 3.0."
+# fr = "l'aperE7u a d9pas9 le seuil de 3,0."
+fr = """
+Hello {{uppercase name}}, you are {{age}} years old.
+Template!
+"""
+arguments = {name = "string", age = "number"}
+
+# [upload.message.arguments]
+# name = "string"
+# age = "number"
+
+# # NOTE: this is duplicate and should error
+# [upload.message]
+# de = "Insight(s) der Schwellenwert von 3,0 ueberschritten wurde."
+
+# [materialRecommendationReason]
+# de = "Insight(s) der Schwellenwert von 3,0 ueberschritten wurde."
+
+[materialRecommendationReason]
+de = "Insight(s) der Schwellenwert von 3,0 ueberschritten wurde."
+en = "insight(s) exceeded the threshold of 3.0."
+# fr = "l'aperE7u a d9pas9 le seuil de 3,0."
+fr = """
+This is a
+
+Template!
+"""
+
+[materialRecommendationReason.arguments]
+name = "string"
+age = "number"

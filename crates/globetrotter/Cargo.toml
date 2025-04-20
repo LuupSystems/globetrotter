@@ -1,0 +1,85 @@
+[package]
+name = "globetrotter"
+license = "MIT"
+readme = "../../README.md"
+documentation = "https://docs.rs/globetrotter"
+publish = true
+
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories = [
+  "command-line-utilities",
+  "internationalization",
+  "localization",
+]
+keywords = [
+  "i8n",
+  "internationalization",
+  "translations",
+]
+
+[features]
+default = [
+  "typescript",
+  "rust",
+  "golang",
+  "python",
+  "rayon",
+]
+typescript = ["dep:globetrotter-typescript"]
+rust = ["dep:globetrotter-rust"]
+golang = ["dep:globetrotter-golang"]
+python = ["dep:globetrotter-python"]
+
+[package.metadata.cargo-feature-combinations]
+exclude_features = ["default"]
+
+[dependencies]
+strum.workspace = true
+thiserror.workspace = true
+itertools.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+futures.workspace = true
+
+# colors and diagnostics
+codespan-reporting = "^0.12"
+colored = "3"
+strip-ansi-escapes = "0"
+unindent = "0"
+
+# show compressed file sizes of json translation files
+flate2 = { version = "1", features = ["rust_backend"], default-features = false }
+human_bytes = "0"
+
+# path globbing and templating
+glob = "0"
+pathdiff = "0"
+normalize-path = "0"
+handlebars = "6"
+
+# config parsing
+serde.workspace = true
+indexmap = { workspace = true, features = ["serde", "rayon"] }
+yaml-spanned = "0"
+toml-span = { version = "0", features = ["reporting", "serde"] }
+
+# model
+globetrotter-model = { path = "../globetrotter-model" }
+
+# optional: language targets
+globetrotter-typescript = { path = "../globetrotter-typescript", optional = true }
+globetrotter-rust = { path = "../globetrotter-rust", optional = true }
+globetrotter-golang = { path = "../globetrotter-golang", optional = true }
+globetrotter-python = { path = "../globetrotter-python", optional = true }
+
+# optional: rayon for parallel processing
+rayon = { version = "1", optional = true }
+
+[dev-dependencies]
+color-eyre.workspace = true
+similar-asserts.workspace = true

@@ -1,0 +1,72 @@
+[package]
+name = "globetrotter-cli"
+license = "MIT"
+readme = "../../README.md"
+documentation = "https://docs.rs/globetrotter-cli"
+publish = true
+
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories = [
+  "command-line-utilities",
+  "internationalization",
+  "localization",
+]
+keywords = [
+  "i8n",
+  "internationalization",
+  "translations",
+]
+
+[features]
+default = [
+	"typescript",
+	"rust",
+	"golang",
+	"python",
+	"convert",
+]
+typescript = ["globetrotter/typescript"]
+rust = ["globetrotter/rust"]
+golang = ["globetrotter/golang"]
+python = ["globetrotter/python"]
+convert = ["dep:serde", "dep:serde_json", "dep:toml_edit", "dep:convert_case"]
+
+[package.metadata.cargo-feature-combinations]
+exclude_features = ["default"]
+
+[dependencies]
+tokio.workspace = true
+futures.workspace = true
+color-eyre.workspace = true
+strum.workspace = true
+thiserror.workspace = true
+
+# colors and diagnostics
+termcolor = "1"
+codespan-reporting = "^0.12"
+
+# argument parsing
+clap = { version = "4", features = ["derive", "env"]}
+
+# logging
+tracing.workspace = true
+tracing-subscriber = { version = "0", features = ["json", "env-filter"] }
+
+globetrotter = { path = "../globetrotter" }
+
+# optional: convert from json
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+toml_edit = { version = "0", features = ["serde"], optional = true }
+convert_case = { version = "0", optional = true }
+# toml-span = { version = "0", features = ["reporting", "serde"], optional = true }
+
+[dev-dependencies]
+color-eyre.workspace = true
+similar-asserts.workspace = true
+indoc.workspace = true

@@ -1,0 +1,62 @@
+[package]
+name = "globetrotter-model"
+license = "MIT"
+readme = "../../README.md"
+documentation = "https://docs.rs/globetrotter-model"
+publish = true
+
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories = [
+  "command-line-utilities",
+  "internationalization",
+  "localization",
+]
+keywords = [
+  "i8n",
+  "internationalization",
+  "translations",
+]
+
+[features]
+default = ["rayon"]
+rayon = ["dep:rayon", "indexmap/rayon"]
+
+[package.metadata.cargo-feature-combinations]
+exclude_features = ["default"]
+
+[dependencies]
+strum.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+# serialization
+serde.workspace = true
+serde_variant = "0"
+serde_json.workspace = true
+indexmap.workspace = true
+
+# validation
+itertools.workspace = true
+
+# TOML
+toml-span = { version = "0", features = ["reporting", "serde"] }
+
+# translation parser diagnostics
+codespan-reporting = "^0.12"
+unindent = "0"
+
+# template engines to validate templates
+handlebars = "6"
+
+# optional: rayon for parallel validation of translations
+rayon = { version = "1", optional = true }
+
+
+[dev-dependencies]
+color-eyre.workspace = true
+similar-asserts.workspace = true

@@ -1,0 +1,7 @@
+[page.title]
+de = "german page title from b.toml"
+en = "english page title from b.toml"
+fr = """
+French page title from b.toml
+Multiline is supported
+"""

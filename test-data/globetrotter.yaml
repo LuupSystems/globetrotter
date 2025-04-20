@@ -1,0 +1,48 @@
+version: 1
+# test:
+#   # aref: &aref A
+#   bref: !B &bref
+#     - 1
+#     - 2
+#   a: *aref
+#   # b: *bref
+configs:
+  # my-config-name: {}
+
+  my-config-name-other:
+    languages: &languages ["en", "de", fr]
+
+  my-config-name:
+    languages: *languages
+    engine: handlebars
+    strict: true
+    check_templates: true
+    inputs:
+      - prefix: "my-a"
+        prepend_filename: true
+
+        path: ./translations/a.toml
+
+      - path: ./translations/a.toml
+        prefix: "my-a"
+        prepend_filename: true
+      - ./translations/media.toml
+      - ./translations/upload.toml
+      - ./translations/settings.toml
+    outputs:
+      json:
+        - ./output/translations_{{language}}.json
+      typescript:
+        type: ./output/typescript1.ts
+        # type:
+        #   - ./output/typescript1.ts
+        #   - ./output/typescript2.ts
+        # dts:
+        #   - ./output/typescript1.ts
+        #   - ./output/typescript2.ts
+      rust:
+        - ./output/rust.rs
+      golang:
+        - ./output/golang.go
+      python:
+        - ./output/python.py

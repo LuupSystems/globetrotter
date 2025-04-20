@@ -1,0 +1,25 @@
+[files]
+ignore-files = true
+extend-exclude = []
+
+[default]
+extend-ignore-re = [
+  # "spellcheck:ignore-line" ignores the current line
+  "(?Rm)^.*(#|//)\\s*spellcheck:ignore-line$",
+
+  # "spellcheck:ignore-next-line" ignores the next line
+  "(?Rm)^.*(#|//)\\s*spellcheck:ignore-next-line.*?\\n.*?$",
+
+  # "spellcheck:ignore-block" ignores all text in the following block (until the first newline)
+  "(?s)(#|//)\\s*spellcheck:ignore-block(.*?)(?:(?:\\r*\\n){2})",
+
+  # ignores any text within "spellcheck:ignore-start" and "spellcheck:ignore-end"
+  "(?s)(#|//)\\s*spellcheck:ignore-start.*?\\n.*?(#|//)\\s*spellcheck:ignore-end"
+]
+
+[default.extend-identifiers]
+FlateDecode = "FlateDecode"
+
+[default.extend-words]
+# allow ".typ" file extension
+typ = "typ"

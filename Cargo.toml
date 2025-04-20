@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/*",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+authors = ["roman <roman@luup-systems.com>"]
+description = "Polyglot, type-safe internationalization"
+license-file = "LICENSE"
+readme = "README.md"
+homepage = "https://github.com/LuupSystems/globetrotter"
+repository = "https://github.com/LuupSystems/globetrotter"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = "symbols"
+
+[workspace.dependencies]
+thiserror = "2"
+tracing = "0"
+itertools = "0"
+strum = { version = "0", features = ["derive"] }
+indoc = "2"
+
+# serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+indexmap = { version = "2", features = ["serde"] }
+
+# async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0"
+
+# testing
+color-eyre = "0"
+similar-asserts = "1"

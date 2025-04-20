@@ -1,0 +1,146 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+tasks:
+  default:
+    cmds:
+      - task: run
+
+  run:
+    desc: "run"
+    cmds:
+      - cargo run -p globetrotter-cli -- {{.CLI_ARGS}}
+
+  build:
+    desc: "build in debug mode"
+    cmds:
+      - cargo build --all-targets {{.CLI_ARGS}}
+
+  build:release:
+    desc: "build in release mode"
+    cmds:
+      - cargo build --all-targets --release {{.CLI_ARGS}}
+
+  build:goreleaser:
+    desc: "build in release mode using goreleaser"
+    cmds:
+      # pretter-ignore
+      - >-
+        docker run --rm
+        -v "${PWD}:/workspace"
+        -w /workspace
+        ghcr.io/rust-cross/cargo-zigbuild
+        bash -c './release.sh && goreleaser build --snapshot --clean'
+
+  release:
+    desc: "release using goreleaser"
+    cmds:
+      # pretter-ignore
+      - >-
+        docker run --rm
+        -e "GITHUB_TOKEN=${GITHUB_TOKEN}"
+        -e "TAP_GITHUB_TOKEN=${TAP_GITHUB_TOKEN}"
+        -v "${PWD}:/workspace"
+        -w /workspace
+        ghcr.io/rust-cross/cargo-zigbuild
+        bash -c './release.sh && goreleaser release --clean'
+
+  typos:
+    desc: "check repository for typos"
+    aliases: [spellcheck]
+    cmds:
+      - typos
+
+  check:
+    desc: "check cargo workspace"
+    cmds:
+      - cargo check --workspace --all-targets {{.CLI_ARGS}}
+
+  check:fc:
+    desc: "check cargo workspace"
+    cmds:
+      - cargo fc check --fail-fast --workspace --all-targets {{.CLI_ARGS}}
+
+  clean:
+    desc: "clean cargo workspace"
+    cmds:
+      - cargo clean {{.CLI_ARGS}}
+
+  docs:
+    desc: "open documentation preview"
+    env:
+      RUSTDOCFLAGS: "--cfg docsrs"
+    cmds:
+      - cargo +nightly watchdoc --all-features {{.CLI_ARGS}}
+
+  outdated:
+    desc: "check for outdated cargo workspace dependencies"
+    cmds:
+      - cargo outdated --workspace --ignore-external-rel --exit-code 1 -v {{.CLI_ARGS}}
+
+  unused:
+    desc: "check for unused cargo workspace dependencies"
+    aliases: [unused-dependencies]
+    cmds:
+      - cargo +nightly udeps {{.CLI_ARGS}}
+
+  audit:
+    desc: "audit cargo workspace dependencies"
+    cmds:
+      - cargo audit {{.CLI_ARGS}}
+
+  format:
+    desc: "format cargo workspace"
+    cmds:
+      - cargo fmt {{.CLI_ARGS}}
+
+  test:
+    desc: "test cargo workspace"
+    cmds:
+      - cargo test --workspace --all-targets {{.CLI_ARGS}}
+
+  test:doc:
+    desc: "run doctests in cargo workspace"
+    cmds:
+      - cargo test --doc {{.CLI_ARGS}}
+
+  test:fc:
+    desc: "test cargo workspace for all combinations of features"
+    cmds:
+      - cargo fc test --workspace --all-targets {{.CLI_ARGS}}
+
+  lint:
+    desc: "lint cargo workspace"
+    cmds:
+      # prettier-ignore
+      - >-
+        cargo clippy
+        --all-targets --all-features
+        {{.CLI_ARGS}}
+        -- -Dclippy::all -Dclippy::pedantic
+
+  lint:fc:
+    desc: "lint cargo workspace for all combinations of features"
+    cmds:
+      # prettier-ignore
+      - >-
+        cargo fc clippy
+        --all-targets --all-features
+        {{.CLI_ARGS}}
+        -- -Dclippy::all -Dclippy::pedantic
+
+  lint:fix:
+    desc: "lint and fix cargo workspace"
+    aliases: [fix]
+    cmds:
+      # prettier-ignore
+      - >-
+        cargo clippy
+        --fix --allow-dirty --allow-staged
+        --all-targets --all-features
+        {{.CLI_ARGS}}
+        -- -Dclippy::all -Dclippy::pedantic
+
+  lint:actions:
+    desc: "lint github actions"
+    cmds:
+      - actionlint

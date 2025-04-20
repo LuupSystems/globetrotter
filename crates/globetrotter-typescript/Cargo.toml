@@ -1,0 +1,61 @@
+[package]
+name = "globetrotter-typescript"
+license = "MIT"
+readme = "../../README.md"
+documentation = "https://docs.rs/globetrotter-typescript"
+publish = true
+
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+homepage.workspace = true
+repository.workspace = true
+categories = [
+  "command-line-utilities",
+  "internationalization",
+  "localization",
+]
+keywords = [
+  "i8n",
+  "internationalization",
+  "translations",
+  "typescript",
+]
+
+[features]
+default = ["swc"]
+serde = ["dep:serde"]
+swc = ["dep:swc_core", "dep:anyhow"]
+oxc = ["dep:oxc_allocator", "dep:oxc_parser", "dep:oxc_span", "dep:oxc_ast", "dep:serde_json"]
+
+[package.metadata.cargo-feature-combinations]
+exclude_features = ["default", "oxc"]
+
+[dependencies]
+globetrotter-model = { path = "../globetrotter-model" }
+thiserror.workspace = true
+tracing.workspace = true
+
+unindent = "0"
+
+# optional: swc based typescript codegen
+swc_core = { version = "22", features = ["base", "common", "ecma_ast"], optional = true }
+anyhow = { version = "1", optional = true }
+
+# optional: oxc based typescript codegen
+oxc_allocator = { version = "0", features = ["serialize"], optional = true }
+oxc_parser = { version = "0", optional = true }
+oxc_span = { version = "0", features = ["serialize"], optional = true }
+oxc_ast = { version = "0", features = ["serialize"], optional = true }
+serde_json = { workspace = true, optional = true }
+
+# optional: serde for config
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+color-eyre.workspace = true
+similar-asserts.workspace = true
+indoc = "2"
+# include ecma parser for reference
+swc_core = { version = "22", features = ["base", "common", "ecma_ast", "ecma_parser"] }
