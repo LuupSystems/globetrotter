@@ -912,72 +912,56 @@ dependencies = [
 name = "globetrotter-cpp"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
 name = "globetrotter-csharp"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
 name = "globetrotter-dart"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
 name = "globetrotter-elixir"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
 name = "globetrotter-golang"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
 name = "globetrotter-java"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
 name = "globetrotter-kotlin"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
 name = "globetrotter-lua"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
@@ -1005,27 +989,21 @@ dependencies = [
 name = "globetrotter-php"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
 name = "globetrotter-python"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
 name = "globetrotter-ruby"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
@@ -1054,9 +1032,7 @@ dependencies = [
 name = "globetrotter-swift"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
@@ -1080,9 +1056,7 @@ dependencies = [
 name = "globetrotter-zig"
 version = "0.0.1"
 dependencies = [
- "color-eyre",
  "serde",
- "tracing",
 ]
 
 [[package]]
