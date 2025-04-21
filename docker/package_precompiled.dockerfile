@@ -1,4 +1,4 @@
-FROM scratch
+FROM busybox AS package
 
 COPY ./goreleaser-dist /tmp/goreleaser-dist
 
@@ -9,8 +9,10 @@ RUN set -eux; \
       arm64) export RUST_TARGET_TRIPLE=aarch64-unknown-linux-musl;; \
       *) exit 1;; \
     esac; \
-    cp /tmp/goreleaser-dist/globetrotter_${RUST_TARGET_TRIPLE}/globetrotter \
-	/usr/local/bin/globetrotter \
-    && rm -rf /tmp/goreleaser-dist
+    ls -liah /tmp/goreleaser-dist/ \
+    && cp /tmp/goreleaser-dist/globetrotter_${RUST_TARGET_TRIPLE}/globetrotter \
+	/usr/bin/globetrotter \
 
+FROM scratch
+COPY --from=package /usr/bin/globetrotter /usr/local/bin/globetrotter
 ENTRYPOINT ["/usr/local/bin/globetrotter"]

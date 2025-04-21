@@ -34,7 +34,7 @@ tasks:
         -v "${PWD}:/workspace"
         -w /workspace
         ghcr.io/rust-cross/cargo-zigbuild
-        bash -c './release.sh && goreleaser build --snapshot --clean'
+        bash -c './release.sh && goreleaser build --snapshot --clean --timeout 120m'
 
   build:container:
     desc: "build multi-arch docker container from source"
@@ -60,7 +60,7 @@ tasks:
         -v "${PWD}:/workspace"
         -w /workspace
         ghcr.io/rust-cross/cargo-zigbuild
-        bash -c './release.sh && goreleaser release --clean'
+        bash -c './release.sh && goreleaser release --clean --timeout 120m'
 
   typos:
     desc: "check repository for typos"
