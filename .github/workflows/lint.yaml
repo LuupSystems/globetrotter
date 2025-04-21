@@ -20,6 +20,7 @@ jobs:
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "3.42.1"
       - uses: dtolnay/rust-toolchain@stable
       - uses: romnn/cargo-feature-combinations@main
       - name: Lint
@@ -32,6 +33,7 @@ jobs:
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "3.42.1"
       - uses: Homebrew/actions/setup-homebrew@master
       - uses: dtolnay/rust-toolchain@stable
       - run: brew install cargo-audit
@@ -45,6 +47,7 @@ jobs:
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "3.42.1"
       - uses: Homebrew/actions/setup-homebrew@master
       - uses: dtolnay/rust-toolchain@stable
       - run: brew install cargo-outdated
@@ -58,6 +61,7 @@ jobs:
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "3.42.1"
       - uses: Homebrew/actions/setup-homebrew@master
       - uses: dtolnay/rust-toolchain@nightly
       - run: brew install cargo-udeps
@@ -71,6 +75,7 @@ jobs:
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "3.42.1"
       - uses: Homebrew/actions/setup-homebrew@master
       - uses: dtolnay/rust-toolchain@stable
       - run: brew install typos-cli
