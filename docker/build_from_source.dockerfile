@@ -15,15 +15,17 @@ RUN cargo chef prepare \
 
 # build
 FROM chef AS builder
-ARG TARGETARCH
 
 RUN apk add --no-cache musl-dev
 
 COPY --from=planner /app/recipe.json ./recipe.json
+ARG TARGETARCH
+
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
     set -eux; \
     cargo chef cook \
+	--release \
 	--recipe-path ./recipe.json \
 	--target $(case "${TARGETARCH}" in \
 	    amd64) echo x86_64-unknown-linux-musl;; \
@@ -42,10 +44,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
       *) exit 1;; \
     esac; \
     cargo build \
+	--release \
 	--target "${RUST_TARGET_TRIPLE}" \
 	--package globetrotter-cli \
 	--bin globetrotter \
-    && mv /app/target/${RUST_TARGET_TRIPLE}/debug/globetrotter /app/globetrotter
+    && mv /app/target/${RUST_TARGET_TRIPLE}/release/globetrotter /app/globetrotter
 
 # runtime
 FROM scratch AS runtime

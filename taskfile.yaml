@@ -26,7 +26,7 @@ tasks:
       - cargo build --all-targets --release {{.CLI_ARGS}}
 
   build:goreleaser:
-    desc: "build in release mode using goreleaser"
+    desc: "cross compile using goreleaser"
     cmds:
       # pretter-ignore
       - >-
@@ -37,14 +37,14 @@ tasks:
         bash -c './release.sh && goreleaser build --snapshot --clean'
 
   build:container:
-    desc: "build multi-arch docker container"
+    desc: "build multi-arch docker container from source"
     cmds:
       # pretter-ignore
       - >-
         docker buildx build
         --load
         --platform linux/amd64,linux/arm64
-        -f ./Dockerfile
+        -f ./docker/build_from_source.dockerfile
         -t globetrotter:latest
         ./
         {{.CLI_ARGS}}
