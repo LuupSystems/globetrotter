@@ -36,6 +36,19 @@ tasks:
         ghcr.io/rust-cross/cargo-zigbuild
         bash -c './release.sh && goreleaser build --snapshot --clean'
 
+  build:container:
+    desc: "build multi-arch docker container"
+    cmds:
+      # pretter-ignore
+      - >-
+        docker buildx build
+        --load
+        --platform linux/amd64,linux/arm64
+        -f ./Dockerfile
+        -t globetrotter:latest
+        ./
+        {{.CLI_ARGS}}
+
   release:
     desc: "release using goreleaser"
     cmds:

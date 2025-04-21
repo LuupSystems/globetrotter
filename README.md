@@ -24,7 +24,7 @@ Also, contributions for more languages are always welcome!
 brew install LuupSystems/tap/globetrotter
 
 # or install from source
-cargo install globetrotter-cli
+cargo install --locked globetrotter-cli
 ```
 
 ### Get started
