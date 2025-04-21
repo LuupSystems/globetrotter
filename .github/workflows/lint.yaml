@@ -8,30 +8,22 @@ on:
     - cron: "0 8 1 1,6 *"
 
 jobs:
-  feature-matrix:
-    uses: ./.github/workflows/feature-matrix.yaml
-
   lint:
-    name: lint ${{ matrix.package.name }} (${{ matrix.os }}, features ${{ matrix.package.features }})
+    name: lint (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: [feature-matrix]
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-24.04]
-        package: ${{ fromJson(needs.feature-matrix.outputs.matrix) }}
+        os: [macos-15, ubuntu-24.04, windows-2025]
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: Homebrew/actions/setup-homebrew@master
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: romnn/cargo-feature-combinations@main
       - name: Lint
-        # prettier-ignore
-        run: >-
-          task lint --
-          --package "${{ matrix.package.name }}"
-          --features "${{ matrix.package.features }}"
+        run: task lint:fc
 
   audit:
     runs-on: ubuntu-24.04
@@ -81,7 +73,6 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Homebrew/actions/setup-homebrew@master
       - uses: dtolnay/rust-toolchain@stable
-      - run: |
-          brew install typos-cli
+      - run: brew install typos-cli
       - name: Spellcheck
         run: task spellcheck --output group --output-group-error-only

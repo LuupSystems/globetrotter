@@ -32,6 +32,10 @@ serde = ["dep:serde"]
 [package.metadata.cargo-feature-combinations]
 exclude_features = ["default"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 globetrotter-model = { path = "../globetrotter-model" }
 thiserror.workspace = true

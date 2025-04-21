@@ -8,33 +8,23 @@ on:
     - cron: "0 8 1 1,6 *"
 
 jobs:
-  feature-matrix:
-    uses: ./.github/workflows/feature-matrix.yaml
-
   build:
-    name: build ${{ matrix.package.name }} (${{ matrix.os }}, features ${{ matrix.package.features }})
+    name: build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: [feature-matrix]
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-24.04]
-        package: ${{ fromJson(needs.feature-matrix.outputs.matrix) }}
+        os: [macos-15, ubuntu-24.04, windows-2025]
 
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: Homebrew/actions/setup-homebrew@master
       - uses: dtolnay/rust-toolchain@stable
+      - uses: romnn/cargo-feature-combinations@main
       - name: Build
-        # prettier-ignore
-        run: >-
-          cargo build
-          --package "${{ matrix.package.name }}"
-          --features "${{ matrix.package.features }}"
-          --all-targets
+        run: task build:fc
 
   goreleaser:
     runs-on: ubuntu-24.04

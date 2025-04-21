@@ -24,11 +24,11 @@ keywords = [
 
 [features]
 default = [
-	"typescript",
-	"rust",
-	"golang",
-	"python",
-	"convert",
+  "typescript",
+  "rust",
+  "golang",
+  "python",
+  "convert",
 ]
 typescript = ["globetrotter/typescript"]
 rust = ["globetrotter/rust"]
@@ -38,6 +38,14 @@ convert = ["dep:serde", "dep:serde_json", "dep:toml_edit", "dep:convert_case"]
 
 [package.metadata.cargo-feature-combinations]
 exclude_features = ["default"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[[bin]]
+name = "globetrotter"
+path = "src/main.rs"
 
 [dependencies]
 tokio.workspace = true

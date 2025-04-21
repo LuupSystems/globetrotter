@@ -29,12 +29,22 @@ builds:
   - id: "globetrotter"
     builder: rust
     binary: globetrotter
+    # see: https://doc.rust-lang.org/nightly/rustc/platform-support.html
     targets:
+      # linux
       - x86_64-unknown-linux-gnu
-      - x86_64-apple-darwin
-      - x86_64-pc-windows-gnu
+      - x86_64-unknown-linux-musl
       - aarch64-unknown-linux-gnu
+      - aarch64-unknown-linux-musl
+      # macos
+      - x86_64-apple-darwin
       - aarch64-apple-darwin
+      # windows (gnu)
+      - x86_64-pc-windows-gnu
+      - aarch64-pc-windows-gnullvm
+      # windows (msvc) doesnt work right now, requires windows.h from msvc
+      # - x86_64-pc-windows-msvc
+      # - aarch64-pc-windows-msvc
     dir: ./
     tool: cargo
     command: zigbuild

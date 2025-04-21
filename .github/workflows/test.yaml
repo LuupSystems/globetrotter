@@ -9,36 +9,22 @@ on:
     - cron: "0 8 1 1,6 *"
 
 jobs:
-  feature-matrix:
-    uses: ./.github/workflows/feature-matrix.yaml
-
   test:
-    name: test ${{ matrix.package.name }} (${{ matrix.os }}, features ${{ matrix.package.features }})
+    name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: [feature-matrix]
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-24.04]
-        package: ${{ fromJson(needs.feature-matrix.outputs.matrix) }}
+        os: [macos-15, ubuntu-24.04, windows-2025]
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
-      - name: Configure git author
-        run: |
-          git config --global user.email "test@example.com"
-          git config --global user.name "test"
-
+      - uses: romnn/cargo-feature-combinations@main
       - name: Test
-        # prettier-ignore
-        run: >-
-          cargo test
-          --package "${{ matrix.package.name }}"
-          --features "${{ matrix.package.features }}"
-          --all-targets
+        run: task test:fc
 
   doc-tests:
     name: doc-tests (${{ matrix.os }})
@@ -46,14 +32,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-24.04]
+        os: [macos-15, ubuntu-24.04, windows-2025]
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: romnn/cargo-feature-combinations@main
       - uses: dtolnay/rust-toolchain@stable
+      - uses: romnn/cargo-feature-combinations@main
       - name: Doc-tests
         run: cargo fc test --only-packages-with-lib-target --doc
 

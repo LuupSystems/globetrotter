@@ -29,6 +29,10 @@ default = []
 [package.metadata.cargo-feature-combinations]
 exclude_features = ["default"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 serde.workspace = true
 color-eyre.workspace = true

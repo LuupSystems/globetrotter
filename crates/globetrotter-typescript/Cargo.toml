@@ -32,6 +32,10 @@ oxc = ["dep:oxc_allocator", "dep:oxc_parser", "dep:oxc_span", "dep:oxc_ast", "de
 [package.metadata.cargo-feature-combinations]
 exclude_features = ["default", "oxc"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 globetrotter-model = { path = "../globetrotter-model" }
 thiserror.workspace = true

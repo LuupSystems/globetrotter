@@ -15,6 +15,11 @@ tasks:
     cmds:
       - cargo build --all-targets {{.CLI_ARGS}}
 
+  build:fc:
+    desc: "build cargo workspace for each combination of features"
+    cmds:
+      - cargo fc build --workspace --all-targets {{.CLI_ARGS}}
+
   build:release:
     desc: "build in release mode"
     cmds:
@@ -58,7 +63,7 @@ tasks:
   check:fc:
     desc: "check cargo workspace"
     cmds:
-      - cargo fc check --fail-fast --workspace --all-targets {{.CLI_ARGS}}
+      - cargo fc check --workspace --all-targets {{.CLI_ARGS}}
 
   clean:
     desc: "clean cargo workspace"
