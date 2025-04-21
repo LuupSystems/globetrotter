@@ -74,8 +74,7 @@ impl Translations {
                     None => {
                         let diagnostic =
                             Diagnostic::warning_or_error(strict).with_message(format!(
-                            "running with `--check`, but no template engine is specified for `{}`",
-                            config_name,
+                            "running with `--check`, but no template engine is specified for `{config_name}`",
                         ));
                         diagnostics.push(diagnostic);
                     }
@@ -105,6 +104,6 @@ impl Translations {
             diagnostics
         });
 
-        diagnostics.extend(partial_diagnostics.collect::<Vec<_>>().into_iter());
+        diagnostics.extend(partial_diagnostics.collect::<Vec<_>>());
     }
 }

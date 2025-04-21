@@ -62,8 +62,8 @@ pub trait TranslationKey: serde::Serialize {
 //         .build()
 
 // impl<'a> TranslationKey for Translation<'a> {
-impl<'a> Translation<'a> {
-    pub fn key(&self) -> &'static str {
+impl Translation<'_> {
+    #[must_use] pub fn key(&self) -> &'static str {
         match self {
             Self::ValueOne {} => "value.one",
             Self::ValueTwo { .. } => "value.two",
@@ -105,7 +105,7 @@ pub mod helpers {
         ))
     }
 
-    pub const PLURALIZE_HELPER_NAME: &'static str = "pluralize";
+    pub const PLURALIZE_HELPER_NAME: &str = "pluralize";
 
     pub fn pluralize(
         h: &Helper,
@@ -129,13 +129,13 @@ pub mod helpers {
             .value();
         let count = count
             .as_number()
-            .and_then(|num| num.as_i64())
+            .and_then(serde_json::Number::as_i64)
             .ok_or(invalid_param_type(PLURALIZE_HELPER_NAME, "count", "number"))?;
 
         if count == 1 {
             out.write(value)?;
         } else {
-            out.write(&format!("{}s", value))?;
+            out.write(&format!("{value}s"))?;
         }
         Ok(())
     }
@@ -164,10 +164,10 @@ impl MyTranslator {
         reader: impl std::io::BufRead,
     ) -> eyre::Result<()> {
         let translations: model::json::Translations = serde_json::from_reader(reader)?;
-        for (key, value) in translations.translations.iter() {
+        for (key, value) in &translations.translations {
             if let model::json::Translation::Template(template) = value {
                 // register template
-                self.handlebars.register_template_string(&key, template);
+                self.handlebars.register_template_string(key, template);
             }
         }
 
@@ -181,9 +181,9 @@ impl MyTranslator {
         self.load_translations_from_reader(reader)
     }
 
-    pub fn translate<'a>(
+    #[must_use] pub fn translate(
         &self,
-        spec: Translation<'a>,
+        spec: Translation<'_>,
     ) -> Option<Result<String, handlebars::RenderError>> {
         // let metadata = spec.metadata();
         let key = spec.key();

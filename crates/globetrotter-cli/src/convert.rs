@@ -97,7 +97,7 @@ pub fn convert_json_entry(
         ));
     }
     if let Some((key, value)) = value.as_array().and_then(|array| {
-        let key = array.get(0).and_then(|key| key.as_str())?;
+        let key = array.first().and_then(|key| key.as_str())?;
         let value = array.get(1)?;
         Some((key, value))
     }) {
@@ -107,8 +107,8 @@ pub fn convert_json_entry(
         ));
     }
     if let Some((key, value)) = value.as_array().and_then(|array| {
-        let key = array.get(0).and_then(|key| key.as_str())?;
-        let value = array.get(0)?;
+        let key = array.first().and_then(|key| key.as_str())?;
+        let value = array.first()?;
         Some((key, value))
     }) {
         return Ok((
@@ -182,10 +182,10 @@ fn change_case(value: &mut String, case: options::KeyStyle) {
     match case.try_into().ok() {
         None => match case {
             options::KeyStyle::Dotted => {
-                *value = value.to_case(Case::Kebab).replace("-", ".");
+                *value = value.to_case(Case::Kebab).replace('-', ".");
             }
             options::KeyStyle::UpperDotted => {
-                *value = value.to_case(Case::UpperKebab).replace("-", ".");
+                *value = value.to_case(Case::UpperKebab).replace('-', ".");
             }
             other => tracing::warn!("key style {other:?} not implemented"),
         },
@@ -546,7 +546,7 @@ mod tests {
         translations.sort();
 
         let doc: toml_edit::DocumentMut = super::to_document(&translations)?;
-        println!("\n=======================\n{}", doc.to_string());
+        println!("\n=======================\n{}", doc);
 
         sim_assert_eq!(
             doc.to_string(),

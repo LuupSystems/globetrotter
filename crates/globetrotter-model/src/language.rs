@@ -579,15 +579,15 @@ pub enum Language {
 }
 
 impl Language {
-    pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
+    #[must_use] pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
         <Self as strum::IntoEnumIterator>::iter()
     }
 
-    pub fn code(&self) -> &'static str {
+    #[must_use] pub fn code(&self) -> &'static str {
         serde_variant::to_variant_name(self).unwrap_or_else(|_| self.into())
     }
 
-    pub fn name(&self) -> &'static str {
+    #[must_use] pub fn name(&self) -> &'static str {
         // spellcheck:ignore-block
         match self {
             Language::Aa => "Afar",

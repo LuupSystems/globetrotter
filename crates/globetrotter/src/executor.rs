@@ -95,7 +95,7 @@ pub(crate) fn resolve_input_paths<'a>(
 
     if valid_entries.is_empty() {
         let mut diagnostic = Diagnostic::warning_or_error(strict)
-            .with_message(format!("pattern {:?} did not match input", input_path));
+            .with_message(format!("pattern {input_path:?} did not match input"));
 
         if let Some(file_id) = file_id {
             diagnostic = diagnostic.with_labels(vec![
@@ -250,7 +250,7 @@ impl Executor {
                 };
 
             let prefix: Vec<_> = prefix
-                .into_iter()
+                .iter()
                 .filter_map(|p| *p)
                 .filter(|p| !p.is_empty())
                 .collect();
@@ -258,8 +258,7 @@ impl Executor {
             let separator = input
                 .separator
                 .as_ref()
-                .map(|sep| sep.as_ref().as_str())
-                .unwrap_or(".");
+                .map_or(".", |sep| sep.as_ref().as_str());
 
             if !prefix.is_empty() {
                 translations.0 = translations
@@ -376,7 +375,7 @@ impl Executor {
                 Severity::Bug | Severity::Error => num_errors += 1,
                 Severity::Warning => num_warnings += 1,
                 Severity::Note | Severity::Help => {}
-            };
+            }
             let _ = self.diagnostic_printer.emit(&diagnostic);
         }
         if num_errors > 0 {
@@ -401,7 +400,7 @@ impl Executor {
                 Severity::Bug | Severity::Error => num_errors += 1,
                 Severity::Warning => num_warnings += 1,
                 Severity::Note | Severity::Help => {}
-            };
+            }
             let _ = self.diagnostic_printer.emit(&diagnostic);
         }
         if num_errors > 0 {
@@ -465,7 +464,7 @@ impl Executor {
                 Severity::Bug | Severity::Error => num_errors += 1,
                 Severity::Warning => num_warnings += 1,
                 Severity::Note | Severity::Help => {}
-            };
+            }
             let _ = self.diagnostic_printer.emit(&diagnostic);
         }
         if num_errors > 0 {

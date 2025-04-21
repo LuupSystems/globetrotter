@@ -2,22 +2,17 @@
 
 pub mod config;
 
-#[cfg(feature = "oxc")]
-mod ast_oxc;
 #[cfg(feature = "swc")]
 mod ast_swc;
 
 #[cfg(feature = "swc")]
-pub use ast_swc::generate_translations_type_export;
-#[cfg(feature = "swc")]
 pub use ast_swc::Error;
+#[cfg(feature = "swc")]
+pub use ast_swc::generate_translations_type_export;
 
 pub use config::OutputConfig;
 
-#[cfg(feature = "oxc")]
-pub use ast_oxc::build_interface_ast;
-
-pub fn preamble() -> String {
+#[must_use] pub fn preamble() -> String {
     unindent::unindent(&format!(
         "\
         //

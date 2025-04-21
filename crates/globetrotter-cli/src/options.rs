@@ -47,7 +47,7 @@ pub enum KeyStyle {
     /// My Variable Name
     #[strum(to_string = "title", serialize = "title")]
     Title,
-    /// MyVariableName
+    /// `MyVariableName`
     #[strum(to_string = "pascal", serialize = "pascal")]
     Pascal,
     // spellcheck:ignore-next-line
@@ -60,10 +60,10 @@ pub enum KeyStyle {
     /// alias for `Pascal`
     #[strum(to_string = "upper-camel", serialize = "upper-camel")]
     UpperCamel,
-    /// my_variable_name
+    /// `my_variable_name`
     #[strum(to_string = "snake", serialize = "snake")]
     Snake,
-    /// MY_VARIABLE_NAME
+    /// `MY_VARIABLE_NAME`
     #[strum(to_string = "upper-snake", serialize = "upper-snake")]
     UpperSnake,
     /// alias for `UpperSnake`

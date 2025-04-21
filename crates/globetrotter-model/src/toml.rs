@@ -133,11 +133,11 @@ pub fn parse_translation(
     let arguments = arguments
         .map(|arguments| match arguments.as_ref() {
             toml_span::value::ValueInner::Array(array) => array
-                .into_iter()
+                .iter()
                 .map(|name_value| {
                     let name = name_value
                         .as_str()
-                        .map(|name| name.to_string())
+                        .map(std::string::ToString::to_string)
                         .ok_or_else(|| Error::UnexpectedType {
                             message: "argument name must be a string".to_string(),
                             expected: vec![ValueKind::String],
@@ -148,7 +148,7 @@ pub fn parse_translation(
                 })
                 .collect::<Result<IndexMap<_, _>, _>>(),
             toml_span::value::ValueInner::Table(table) => table
-                .into_iter()
+                .iter()
                 .map(|(name_value, typ_value)| {
                     let name = name_value.name.to_string();
                     let typ = typ_value.as_str().ok_or_else(|| Error::UnexpectedType {
@@ -196,7 +196,7 @@ pub fn parse_translation(
 
             let translation = translation_value
                 .as_str()
-                .map(|translation| translation.to_string())
+                .map(std::string::ToString::to_string)
                 .ok_or_else(|| Error::UnexpectedType {
                     message: "translation must be a string".to_string(),
                     expected: vec![ValueKind::String],
@@ -226,8 +226,8 @@ pub fn parse_translation(
     }
 }
 
-fn flatten_toml_span<'doc>(
-    value: &'doc mut toml_span::value::ValueInner,
+fn flatten_toml_span(
+    value: &mut toml_span::value::ValueInner,
     span: toml_span::Span,
     key: String,
     out: &mut super::Translations,
@@ -254,12 +254,12 @@ fn flatten_toml_span<'doc>(
                 let new_key: String = if key.is_empty() {
                     child_key.to_string()
                 } else {
-                    format!("{}.{}", key, child_key)
+                    format!("{key}.{child_key}")
                 };
 
                 match value.take() {
                     toml_span::value::ValueInner::Array(mut tables) => {
-                        for nested_table in tables.iter_mut() {
+                        for nested_table in &mut tables {
                             flatten_toml_span(
                                 &mut nested_table.take(),
                                 nested_table.span,
@@ -284,7 +284,7 @@ fn flatten_toml_span<'doc>(
                     }
                     other => {
                         return Err(Error::TODO {
-                            message: format!("extra stuff {:?}", other),
+                            message: format!("extra stuff {other:?}"),
                             span: value.span.into(),
                         });
                     }
@@ -300,7 +300,7 @@ fn flatten_toml_span<'doc>(
                 ))]);
             diagnostics.push(diagnostic);
         }
-    };
+    }
 
     Ok(())
 }
@@ -316,7 +316,7 @@ impl crate::Translations {
         flatten_toml_span(
             &mut value.take(),
             value.span,
-            "".to_string(),
+            String::new(),
             &mut translations,
             file_id,
             strict,
@@ -332,7 +332,7 @@ impl crate::Translations {
         diagnostics: &mut Vec<Diagnostic<FileId>>,
     ) -> Result<crate::Translations, Error> {
         let translations =
-            toml_span::parse(&raw_translations).map_err(|source| Error::TOML { source })?;
+            toml_span::parse(raw_translations).map_err(|source| Error::TOML { source })?;
         Self::from_value(translations, file_id, strict, diagnostics)
     }
 }

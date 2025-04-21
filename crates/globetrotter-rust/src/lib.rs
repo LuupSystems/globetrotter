@@ -10,7 +10,7 @@ use proc_macro2::{Ident, Span};
 use quote::{format_ident, quote, ToTokens};
 use std::sync::Arc;
 
-pub fn preamble() -> String {
+#[must_use] pub fn preamble() -> String {
     format!(
         "
 //
@@ -23,12 +23,12 @@ pub fn preamble() -> String {
 }
 
 fn argument_to_rust_field_name(name: &str) -> String {
-    let field_name = name.replace(" ", "").replace("-", "_").replace(".", "_");
+    let field_name = name.replace(' ', "").replace(['-', '.'], "_");
     field_name.to_case(Case::Snake)
 }
 
 fn key_to_rust_enum_variant(key: &str) -> String {
-    let variant_name = key.replace(" ", "").replace("-", "_").replace(".", "_");
+    let variant_name = key.replace(' ', "").replace(['-', '.'], "_");
     variant_name.to_case(Case::UpperCamel)
 }
 
@@ -145,7 +145,7 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
                 let field = duplicates[0].0.to_string();
                 let arguments = duplicates
                     .into_iter()
-                    .map(|(_, key, _)| key.to_string())
+                    .map(|(_, key, _)| (*key).to_string())
                     .collect();
                 return Err(DuplicateFieldError {
                     field,
@@ -290,7 +290,7 @@ mod tests {
             .collect(),
         );
         let code = super::generate_translation_enum(&translations)?;
-        println!("{}", code);
+        println!("{code}");
 
         let expected = indoc::indoc! {r#"
             #[derive(

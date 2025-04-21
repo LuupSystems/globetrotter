@@ -23,13 +23,13 @@ impl ToSourceName for String {
     }
 }
 
-impl<'a> ToSourceName for &'a Path {
+impl ToSourceName for &Path {
     fn to_source_name(self) -> String {
         self.to_string_lossy().to_string()
     }
 }
 
-impl<'a> ToSourceName for &'a PathBuf {
+impl ToSourceName for &PathBuf {
     fn to_source_name(self) -> String {
         self.as_path().to_source_name()
     }
@@ -42,7 +42,7 @@ impl Default for Printer {
 }
 
 impl Printer {
-    pub fn new(color_choice: term::termcolor::ColorChoice) -> Self {
+    #[must_use] pub fn new(color_choice: term::termcolor::ColorChoice) -> Self {
         let writer = term::termcolor::StandardStream::stderr(color_choice);
         let diagnostic_config = term::Config {
             styles: term::Styles::with_blue(term::termcolor::Color::Blue),

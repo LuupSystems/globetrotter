@@ -46,7 +46,7 @@ pub struct DisplayRepr<'a, T>(pub &'a T);
 //     }
 // }
 
-impl<'a, T> std::fmt::Debug for DisplayRepr<'a, T>
+impl<T> std::fmt::Debug for DisplayRepr<'_, T>
 where
     T: std::fmt::Display,
 {
@@ -55,7 +55,7 @@ where
     }
 }
 
-impl<'a, T> std::fmt::Display for DisplayRepr<'a, T>
+impl<T> std::fmt::Display for DisplayRepr<'_, T>
 where
     T: std::fmt::Display,
 {
@@ -178,7 +178,7 @@ where
     T: PartialOrd,
 {
     fn partial_cmp(&self, other: &T) -> Option<std::cmp::Ordering> {
-        PartialOrd::partial_cmp(&self.inner, &other)
+        PartialOrd::partial_cmp(&self.inner, other)
     }
 }
 

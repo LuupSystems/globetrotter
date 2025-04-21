@@ -19,7 +19,7 @@ fn pad_left(value: &str, width: usize, fill: char) -> String {
     let pad_len = width.saturating_sub(len);
     format!(
         "{}{value}",
-        std::iter::repeat(fill).take(pad_len).collect::<String>()
+        std::iter::repeat_n(fill, pad_len).collect::<String>()
     )
 }
 
@@ -28,11 +28,11 @@ fn pad_right(value: &str, width: usize, fill: char) -> String {
     let pad_len = width.saturating_sub(len);
     format!(
         "{value}{}",
-        std::iter::repeat(fill).take(pad_len).collect::<String>()
+        std::iter::repeat_n(fill, pad_len).collect::<String>()
     )
 }
 
-pub fn relative_to(base_dir: Option<&Path>, path: &Path) -> PathBuf {
+#[must_use] pub fn relative_to(base_dir: Option<&Path>, path: &Path) -> PathBuf {
     base_dir
         .as_ref()
         .and_then(|base_dir| pathdiff::diff_paths(path, base_dir))
@@ -47,7 +47,7 @@ pub struct Logger {
 }
 
 impl Logger {
-    pub fn new<F>(configs: &Configs<F>) -> Self {
+    #[must_use] pub fn new<F>(configs: &Configs<F>) -> Self {
         let longest_config_name = configs
             .iter()
             .filter(|ConfigFile { config, .. }| !config.is_empty())
@@ -71,7 +71,7 @@ impl Logger {
         }
     }
 
-    pub fn target_log_prefix(&self, name: &str, target: Target) -> String {
+    #[must_use] pub fn target_log_prefix(&self, name: &str, target: Target) -> String {
         format!(
             "{}{}",
             pad_left(&name.green().to_string(), self.longest_config_name, ' '),
@@ -83,7 +83,7 @@ impl Logger {
         )
     }
 
-    pub fn language_log_prefix(&self, name: &str, language: Language) -> String {
+    #[must_use] pub fn language_log_prefix(&self, name: &str, language: Language) -> String {
         format!(
             "{}{}",
             pad_left(&name.green().to_string(), self.longest_config_name, ' '),
@@ -95,17 +95,16 @@ impl Logger {
         )
     }
 
-    pub fn completed(&self, duration: &std::time::Duration) -> String {
+    #[must_use] pub fn completed(&self, duration: &std::time::Duration) -> String {
         format!(
             "{} {}",
-            std::iter::repeat(' ')
-                .take(self.longest_config_name + self.longest_target_name + 2)
+            std::iter::repeat_n(' ', self.longest_config_name + self.longest_target_name + 2)
                 .collect::<String>(),
             format!("completed in {duration:?}").bright_black(),
         )
     }
 
-    pub fn dry_run_would_write(&self, path: &Path) -> colored::ColoredString {
+    #[must_use] pub fn dry_run_would_write(&self, path: &Path) -> colored::ColoredString {
         format!("{} would write {}", "DRY RUN:".yellow(), path.display()).bright_black()
     }
 }

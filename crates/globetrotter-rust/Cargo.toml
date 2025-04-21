@@ -26,7 +26,6 @@ keywords = [
 [features]
 default = []
 # default = ["phf"]
-serde = ["dep:serde"]
 # phf = ["dep:phf"]
 
 [package.metadata.cargo-feature-combinations]
@@ -54,7 +53,7 @@ itertools.workspace = true
 # phf_codegen = { version = "0", optional = true }
 
 # optional: serde
-serde = { workspace = true, optional = true }
+# serde = { workspace = true, optional = true }
 
 [dev-dependencies]
 color-eyre.workspace = true

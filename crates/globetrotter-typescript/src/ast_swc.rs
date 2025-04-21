@@ -293,7 +293,7 @@ mod tests {
         dbg!(&program);
 
         let code = super::emit_code(&compiler, &program).map_err(IntoEyre::into_eyre)?;
-        println!("{}", code);
+        println!("{code}");
 
         sim_assert_eq!(format!("{}{}", crate::preamble(), source_code), code);
         Ok(())

@@ -81,7 +81,7 @@ pub enum ArgumentType {
 }
 
 impl ArgumentType {
-    pub fn display(&self) -> DisplayRepr<'_, Self> {
+    #[must_use] pub fn display(&self) -> DisplayRepr<'_, Self> {
         DisplayRepr(self)
     }
 }
@@ -124,11 +124,11 @@ impl std::fmt::Display for Translation {
 }
 
 impl Translation {
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         self.arguments.is_empty() && self.language.is_empty()
     }
 
-    pub fn is_template(&self) -> bool {
+    #[must_use] pub fn is_template(&self) -> bool {
         !self.arguments.is_empty()
     }
 }
@@ -155,11 +155,11 @@ impl Translations {
         }
     }
 
-    pub fn iter(&self) -> indexmap::map::Iter<'_, Spanned<String>, Translation> {
+    #[must_use] pub fn iter(&self) -> indexmap::map::Iter<'_, Spanned<String>, Translation> {
         self.0.iter()
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use] pub fn len(&self) -> usize {
         self.0.len()
     }
 }

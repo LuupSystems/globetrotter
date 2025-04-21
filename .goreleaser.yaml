@@ -36,12 +36,12 @@ builds:
       - x86_64-unknown-linux-musl
       - aarch64-unknown-linux-gnu
       - aarch64-unknown-linux-musl
-      # macos
+      # macos works only for zig<0.14 (unable to open library directory '/opt/MacOSX11.3.sdk/opt/MacOSX11.3.sdk/usr/lib': FileNotFound)
       - x86_64-apple-darwin
       - aarch64-apple-darwin
-      # windows (gnu)
-      - x86_64-pc-windows-gnu
-      - aarch64-pc-windows-gnullvm
+      # windows (gnu) works only for zig>=0.14
+      # - x86_64-pc-windows-gnu
+      # - aarch64-pc-windows-gnullvm
       # windows (msvc) doesnt work right now, requires windows.h from msvc
       # - x86_64-pc-windows-msvc
       # - aarch64-pc-windows-msvc

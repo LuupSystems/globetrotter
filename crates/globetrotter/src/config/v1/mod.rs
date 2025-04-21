@@ -45,7 +45,7 @@ pub fn parse_languages<F>(
 
             let languages = languages
                 .iter()
-                .map(|value| parse(value))
+                .map(parse)
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(languages)
         }
@@ -278,18 +278,15 @@ pub fn parse_json_outputs(value: &Mapping) -> Result<Vec<JsonOutputConfig>, Conf
             }
         };
 
-    match outputs.as_ref() {
-        Value::Sequence(sequence) => {
-            let interfaces = sequence
-                .iter()
-                .map(|item| parse_json_output(item))
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(interfaces)
-        }
-        _ => {
-            let output = parse_json_output(outputs)?;
-            Ok(vec![output])
-        }
+    if let Value::Sequence(sequence) = outputs.as_ref() {
+        let interfaces = sequence
+            .iter()
+            .map(&parse_json_output)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(interfaces)
+    } else {
+        let output = parse_json_output(outputs)?;
+        Ok(vec![output])
     }
 }
 
@@ -511,15 +508,12 @@ impl std::fmt::Display for Input {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Default)]
 pub enum JsonOutputStyle {
+    #[default]
     Flat,
 }
 
-impl Default for JsonOutputStyle {
-    fn default() -> Self {
-        JsonOutputStyle::Flat
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -569,7 +563,7 @@ impl std::fmt::Display for Outputs {
 }
 
 impl Outputs {
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         if !self.json.is_empty() {
             return false;
         }
@@ -640,7 +634,7 @@ impl std::fmt::Display for Config {
 }
 
 impl Config {
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         self.inputs.is_empty() || self.outputs.is_empty()
     }
 }

@@ -71,15 +71,15 @@ pub fn from_str<F: Copy + PartialEq>(
     strict: Option<bool>,
     diagnostics: &mut Vec<Diagnostic<F>>,
 ) -> Result<v1::Configs<F>, ConfigError> {
-    let value = yaml_spanned::from_str(&raw_config).map_err(ConfigError::YAML)?;
+    let value = yaml_spanned::from_str(raw_config).map_err(ConfigError::YAML)?;
     let version = parse_version(&value, file_id, strict, diagnostics)?;
-    let configs = match version {
+    
+
+    match version {
         Version::Latest | Version::V1 => {
             v1::parse_configs(&value, config_dir, file_id, strict, diagnostics)
         }
-    };
-
-    configs
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -211,8 +211,8 @@ mod tests {
             strict: bool,
         ) -> Result<super::Version, ConfigError> {
             let mut diagnostics = vec![];
-            let res = super::parse_version(&value.into(), (), Some(strict), &mut diagnostics);
-            res
+            
+            super::parse_version(&value.into(), (), Some(strict), &mut diagnostics)
         }
 
         sim_assert_eq!(

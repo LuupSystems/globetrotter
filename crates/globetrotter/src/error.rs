@@ -119,7 +119,7 @@ impl<F> DuplicateKeyError<F>
 where
     F: Copy + PartialEq,
 {
-    pub fn to_diagnostics(&self, all: bool) -> Vec<Diagnostic<F>> {
+    #[must_use] pub fn to_diagnostics(&self, all: bool) -> Vec<Diagnostic<F>> {
         assert!(
             self.occurrences.len() >= 2,
             "duplicated key must have at least two occurrences"
@@ -129,19 +129,19 @@ where
         if all {
             labels.extend(self.occurrences[..self.occurrences.len() - 1].iter().map(
                 |(span, file_id)| {
-                    Label::secondary(file_id.clone(), span.clone())
+                    Label::secondary(*file_id, span.clone())
                         .with_message(format!("previous use of key `{}`", self.key))
                 },
             ));
         } else {
             let (span, file_id) = &self.occurrences[self.occurrences.len() - 2];
-            let label = Label::secondary(file_id.clone(), span.clone()).with_message(format!(
+            let label = Label::secondary(*file_id, span.clone()).with_message(format!(
                 "first use of key `{}`{}",
                 self.key,
                 if self.occurrences.len() > 2 {
                     format!(" (duplicated {} more time)", self.occurrences.len() - 2)
                 } else {
-                    "".to_string()
+                    String::new()
                 },
             ));
             labels.push(label);
@@ -149,7 +149,7 @@ where
 
         let (span, file_id) = &self.occurrences[self.occurrences.len() - 1];
         labels.push(
-            Label::primary(file_id.clone(), span.clone())
+            Label::primary(*file_id, span.clone())
                 .with_message("cannot set the same key twice"),
         );
 

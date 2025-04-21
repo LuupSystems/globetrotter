@@ -35,7 +35,7 @@ pub enum Target {
 }
 
 impl Target {
-    pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
+    #[must_use] pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
         <Self as strum::IntoEnumIterator>::iter()
     }
 }
@@ -136,7 +136,7 @@ impl executor::Executor {
                 let translations = Arc::clone(translations);
                 async move {
                     let output_path =
-                        executor::resolve_path(Some(&config_file.config_dir), &output_path);
+                        executor::resolve_path(Some(&config_file.config_dir), output_path);
 
                     let code = tokio::task::spawn_blocking(move || {
                         globetrotter_rust::generate_translation_enum(&translations)

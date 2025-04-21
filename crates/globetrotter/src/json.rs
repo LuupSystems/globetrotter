@@ -34,9 +34,9 @@ pub enum JsonOutputError {
 }
 
 impl executor::Executor {
-    fn resolve_json_output_path<'a>(
+    fn resolve_json_output_path(
         &self,
-        path: &'a Path,
+        path: &Path,
         language: model::Language,
     ) -> Result<PathBuf, JsonOutputError> {
         #[derive(Debug, serde::Serialize)]
@@ -112,7 +112,7 @@ impl executor::Executor {
                     });
 
                     // join tasks
-                    let _ = write_task.await??;
+                    let () = write_task.await??;
                     let num_bytes_gzip = gzip_task.await?.unwrap_or(0);
 
                     if dry_run {

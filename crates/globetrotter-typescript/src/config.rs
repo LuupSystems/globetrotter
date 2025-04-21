@@ -21,7 +21,7 @@ pub struct OutputConfig {
 }
 
 impl OutputConfig {
-    pub fn is_empty(&self) -> bool {
+    #[must_use] pub fn is_empty(&self) -> bool {
         self.interface_type.is_empty()
     }
 }

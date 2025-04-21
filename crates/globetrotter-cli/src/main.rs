@@ -61,7 +61,7 @@ impl Globetrotter {
                     .wrap_err_with(|| "failed to open: {config_path:?}")?;
 
                 if metadata.is_file() {
-                    Ok(config_path.to_owned())
+                    Ok(config_path.clone())
                 } else if metadata.is_dir() {
                     globetrotter::config::find_config_file(&config_path).await?.ok_or_else(|| eyre::eyre!("directory {config_path:?} does not contain a globetrotter config file"))
                 } else {
@@ -199,7 +199,7 @@ impl Globetrotter {
             handlebars: Default::default(),
         };
 
-        println!("");
+        println!();
         executor.execute(self.configs).await?;
         println!("{}", logger.completed(&start.elapsed()));
 
