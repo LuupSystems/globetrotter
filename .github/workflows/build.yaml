@@ -21,7 +21,7 @@ jobs:
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "v3.42.1"
+          version: "3.42.1"
       - uses: dtolnay/rust-toolchain@stable
       - uses: romnn/cargo-feature-combinations@main
       - name: Build
@@ -39,7 +39,7 @@ jobs:
       - uses: arduino/setup-task@v2
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "v3.42.1"
+          version: "3.42.1"
       - name: Release (dry-run)
         run: task build:goreleaser
       - name: Upload precompiled binaries
