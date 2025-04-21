@@ -11,7 +11,7 @@ RUN set -eux; \
     esac; \
     ls -liah /tmp/goreleaser-dist/ \
     && cp /tmp/goreleaser-dist/globetrotter_${RUST_TARGET_TRIPLE}/globetrotter \
-	/usr/bin/globetrotter \
+	/usr/bin/globetrotter
 
 FROM scratch
 COPY --from=package /usr/bin/globetrotter /usr/local/bin/globetrotter
