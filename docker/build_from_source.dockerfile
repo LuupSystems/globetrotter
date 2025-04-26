@@ -1,3 +1,4 @@
+# syntax=docker.io/docker/dockerfile:1.7-labs
 FROM lukemathwalker/cargo-chef:latest-rust-1.86-alpine AS chef
 WORKDIR /app
 

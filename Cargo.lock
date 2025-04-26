@@ -326,9 +326,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.19"
+version = "1.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e3a13707ac958681c13b39b458c073d0d9bc8a22cb1b2f4c8e55eb72c13f362"
+checksum = "04da6a0d40b948dfc4fa8f5bbf402b0fc1a64a28dbf7d12ffd683550f2c1b63a"
 dependencies = [
  "shlex",
 ]
@@ -830,9 +830,9 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
-version = "0.2.15"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4567c8db10ae91089c99af84c68c38da3ec2f087c3f82960bcdbf3656b6f4d7"
+checksum = "335ff9f135e4384c8150d6f27c6daed433577f86b4750418338c01a1a2528592"
 dependencies = [
  "cfg-if",
  "libc",
@@ -853,7 +853,7 @@ checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
 
 [[package]]
 name = "globetrotter"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "codespan-reporting",
  "color-eyre",
@@ -887,7 +887,7 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-cli"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "clap",
  "codespan-reporting",
@@ -896,6 +896,7 @@ dependencies = [
  "futures",
  "globetrotter",
  "indoc",
+ "mimalloc",
  "serde",
  "serde_json",
  "similar-asserts",
@@ -910,63 +911,63 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-cpp"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-csharp"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-dart"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-elixir"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-golang"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-java"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-kotlin"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-lua"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-model"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "codespan-reporting",
  "color-eyre",
@@ -987,28 +988,28 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-php"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-python"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-ruby"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-rust"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "color-eyre",
  "convert_case",
@@ -1030,14 +1031,14 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-swift"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-typescript"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "color-eyre",
@@ -1054,7 +1055,7 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-zig"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
 ]
@@ -1405,6 +1406,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
 
 [[package]]
+name = "libmimalloc-sys"
+version = "0.1.42"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec9d6fac27761dabcd4ee73571cdb06b7022dc99089acbe5435691edffaac0f4"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "libyaml-safer"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1479,6 +1490,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "995942f432bbb4822a7e9c3faa87a695185b0d09273ba85f097b54f4e458f2af"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]
@@ -1864,9 +1884,9 @@ dependencies = [
 
 [[package]]
 name = "psm"
-version = "0.1.25"
+version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f58e5423e24c18cc840e1c98370b3993c6649cd1678b4d24318bcf0a083cbe88"
+checksum = "6e944464ec8536cd1beb0bbfd96987eb5e3b72f2ecdafdc5c769a37f1fa2ae1f"
 dependencies = [
  "cc",
 ]
@@ -2291,9 +2311,9 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "stacker"
-version = "0.1.20"
+version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "601f9201feb9b09c00266478bf459952b9ef9a6b94edb2f21eba14ab681a60a9"
+checksum = "cddb07e32ddb770749da91081d8d0ac3a16f1a569a18b20348cd371f5dead06b"
 dependencies = [
  "cc",
  "cfg-if",
@@ -2462,9 +2482,9 @@ dependencies = [
 
 [[package]]
 name = "swc_common"
-version = "8.1.0"
+version = "8.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d96ac5d021c7c20acb3073940b4ee59b62989a705f855783c4a452e0737a2e6"
+checksum = "4f8c8e4348383e4154f8d384cdad7e48f5d6d3daef78af376ac4e5ddbbf60c88"
 dependencies = [
  "anyhow",
  "ast_node",
@@ -2544,9 +2564,9 @@ dependencies = [
 
 [[package]]
 name = "swc_core"
-version = "22.5.1"
+version = "22.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a4caa69ba639f72b63aa0c7496325d8413a9a62e2042e57f1ec92181a18fe3f"
+checksum = "39b5f70fe5f8db1d3977aae3f2ecb64bae55d0e4f5ec93d372219f2ecf58e372"
 dependencies = [
  "swc",
  "swc_allocator",
@@ -3522,25 +3542,32 @@ dependencies = [
 
 [[package]]
 name = "toml_datetime"
-version = "0.6.8"
+version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0dd7358ecb8fc2f8d014bf86f6f638ce72ba252a2c3a2572f2a795f1d23efb41"
+checksum = "3da5db5a963e24bc68be8b17b6fa82814bb22ee8660f192bb182771d498f09a3"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "toml_edit"
-version = "0.22.24"
+version = "0.22.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17b4795ff5edd201c7cd6dca065ae59972ce77d1b80fa0a84d94950ece7d1474"
+checksum = "10558ed0bd2a1562e630926a2d1f0b98c827da99fabd3fe20920a59642504485"
 dependencies = [
  "indexmap",
  "serde",
  "serde_spanned",
  "toml_datetime",
+ "toml_write",
  "winnow",
 ]
+
+[[package]]
+name = "toml_write"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28391a4201ba7eb1984cfeb6862c0b3ea2cfe23332298967c749dddc0d6cd976"
 
 [[package]]
 name = "tracing"
@@ -4021,9 +4048,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "0.7.6"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63d3fcd9bba44b03821e7d699eeee959f3126dcc4aa8e4ae18ec617c2a5cea10"
+checksum = "6cb8234a863ea0e8cd7284fcdd4f145233eb00fee02bbdd9861aec44e6477bc5"
 dependencies = [
  "memchr",
 ]
