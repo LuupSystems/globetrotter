@@ -38,8 +38,8 @@ builds:
       - x86_64-apple-darwin
       - aarch64-apple-darwin
       # windows (gnu) works only for zig>=0.14
-      # - x86_64-pc-windows-gnu
-      # - aarch64-pc-windows-gnullvm
+      - x86_64-pc-windows-gnu
+      - aarch64-pc-windows-gnullvm
       # windows (msvc) doesnt work right now, requires windows.h from msvc
       # - x86_64-pc-windows-msvc
       # - aarch64-pc-windows-msvc
