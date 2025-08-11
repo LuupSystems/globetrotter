@@ -404,7 +404,7 @@ mod tests {
         .into_iter()
         .collect();
 
-        sim_assert_eq!(have, want);
+        sim_assert_eq!(have: have, want: want);
 
         Ok(())
     }
@@ -483,7 +483,7 @@ mod tests {
         .into_iter()
         .collect();
 
-        sim_assert_eq!(have, want);
+        sim_assert_eq!(have: have, want: want);
         Ok(())
     }
 
@@ -548,22 +548,20 @@ mod tests {
         let doc: toml_edit::DocumentMut = super::to_document(&translations)?;
         println!("\n=======================\n{}", doc);
 
-        sim_assert_eq!(
-            doc.to_string(),
-            indoc::indoc! {
-                r#"
-                ["key.one"]
-                de = "german translation"
-                en = "english translation"
-                arguments = { arg1 = "string", arg2 = "number" }
+        let want = indoc::indoc! {
+            r#"
+            ["key.one"]
+            de = "german translation"
+            en = "english translation"
+            arguments = { arg1 = "string", arg2 = "number" }
 
-                ["key.two"]
-                de = "german translation"
-                en = "english translation"
-                arguments = { "arg.2   " = "string", "arg.3 " = "number" }
-                "#
-            }
-        );
+            ["key.two"]
+            de = "german translation"
+            en = "english translation"
+            arguments = { "arg.2   " = "string", "arg.3 " = "number" }
+            "#
+        };
+        sim_assert_eq!(have: doc.to_string(), want: want);
         Ok(())
     }
 }

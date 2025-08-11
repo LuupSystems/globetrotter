@@ -1,6 +1,6 @@
 use crate::{
-    diagnostics::{DiagnosticExt, FileId, Span, Spanned},
     ArgumentType, Language, Translation,
+    diagnostics::{DiagnosticExt, FileId, Span, Spanned},
 };
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use indexmap::IndexMap;
@@ -55,8 +55,10 @@ mod diagnostics {
                         .join(", or ");
                     let diagnostic = Diagnostic::error()
                         .with_message(self.to_string())
-                        .with_labels(vec![Label::primary(file_id, span.clone())
-                            .with_message(format!("expected {expected}"))])
+                        .with_labels(vec![
+                            Label::primary(file_id, span.clone())
+                                .with_message(format!("expected {expected}")),
+                        ])
                         .with_notes(vec![unindent::unindent(&format!(
                             "
                         expected type {expected}
@@ -75,7 +77,7 @@ mod diagnostics {
                     let diagnostic = Diagnostic::error()
                         .with_message(self.to_string())
                         .with_labels(vec![
-                            Label::primary(file_id, span.clone()).with_message("?".to_string())
+                            Label::primary(file_id, span.clone()).with_message("?".to_string()),
                         ]);
                     vec![diagnostic]
                 }
@@ -83,7 +85,7 @@ mod diagnostics {
                     let diagnostic = Diagnostic::error()
                         .with_message(self.to_string())
                         .with_labels(vec![
-                            Label::primary(file_id, span.clone()).with_message(source.to_string())
+                            Label::primary(file_id, span.clone()).with_message(source.to_string()),
                         ]);
                     vec![diagnostic]
                 }

@@ -1,6 +1,6 @@
 use crate::{
-    diagnostics::{DiagnosticExt, FileId, Spanned},
     Language, TemplateEngine, Translation, Translations,
+    diagnostics::{DiagnosticExt, FileId, Spanned},
 };
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use itertools::Itertools;
@@ -22,11 +22,10 @@ fn validate_handlebars_template(translation: &Translation, errors: &mut Vec<Diag
                     Err(err) => {
                         let diagnostic = Diagnostic::error()
                             .with_message("handlebars template failed to compile")
-                            .with_labels(vec![Label::primary(
-                                translation.file_id,
-                                template.span.clone(),
-                            )
-                            .with_message(err.to_string())]);
+                            .with_labels(vec![
+                                Label::primary(translation.file_id, template.span.clone())
+                                    .with_message(err.to_string()),
+                            ]);
                         Some(diagnostic)
                     }
                 }

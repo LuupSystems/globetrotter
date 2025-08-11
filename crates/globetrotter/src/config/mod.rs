@@ -207,17 +207,8 @@ mod tests {
     use yaml_spanned::{Mapping, Spanned, Value};
 
     #[test]
-    fn parse_version() -> eyre::Result<()> {
-        // fn parse_version_diagnostics(
-        //     value: impl Into<Spanned<Value>>,
-        //     strict: bool,
-        // ) -> (Result<super::Version, ConfigError>, Vec<Diagnostic<()>>) {
-        //     let mut diagnostics = vec![];
-        //     let res = super::parse_version(&value.into(), (), Some(strict), &mut diagnostics);
-        //     (res, diagnostics)
-        // }
-
-        fn parse_version(
+    fn test_parse_version() -> eyre::Result<()> {
+        fn parse_version_wrapper(
             value: impl Into<Spanned<Value>>,
             strict: bool,
         ) -> Result<super::Version, ConfigError> {
@@ -226,31 +217,31 @@ mod tests {
             super::parse_version(&value.into(), (), Some(strict), &mut diagnostics)
         }
 
+        let have = parse_version_wrapper(
+            Value::Mapping([("version".into(), 1.into())].into_iter().collect()),
+            true,
+        );
         sim_assert_eq!(
-            parse_version(
-                Value::Mapping([("version".into(), 1.into())].into_iter().collect()),
-                true
-            )
-            .ok(),
-            Some(super::Version::V1)
+            have: have.ok(),
+            want: Some(super::Version::V1)
         );
 
+        let have = parse_version_wrapper(
+            Value::Mapping([("version".into(), "1".into())].into_iter().collect()),
+            true,
+        );
         sim_assert_eq!(
-            parse_version(
-                Value::Mapping([("version".into(), "1".into())].into_iter().collect()),
-                true
-            )
-            .ok(),
-            Some(super::Version::V1)
+            have: have.ok(),
+            want: Some(super::Version::V1)
         );
 
+        let have = parse_version_wrapper(
+            Value::Mapping([("version".into(), "v1".into())].into_iter().collect()),
+            true,
+        );
         sim_assert_eq!(
-            parse_version(
-                Value::Mapping([("version".into(), "v1".into())].into_iter().collect()),
-                true
-            )
-            .ok(),
-            Some(super::Version::V1)
+            have: have.ok(),
+            want: Some(super::Version::V1)
         );
         Ok(())
     }

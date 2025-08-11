@@ -579,15 +579,18 @@ pub enum Language {
 }
 
 impl Language {
-    #[must_use] pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
+    #[must_use]
+    pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
         <Self as strum::IntoEnumIterator>::iter()
     }
 
-    #[must_use] pub fn code(&self) -> &'static str {
+    #[must_use]
+    pub fn code(&self) -> &'static str {
         serde_variant::to_variant_name(self).unwrap_or_else(|_| self.into())
     }
 
-    #[must_use] pub fn name(&self) -> &'static str {
+    #[must_use]
+    pub fn name(&self) -> &'static str {
         // spellcheck:ignore-block
         match self {
             Language::Aa => "Afar",
@@ -791,13 +794,13 @@ mod tests {
         crate::tests::init();
 
         for language in Language::iter() {
-            sim_assert_eq!(format!("{language}"), language.code());
-            sim_assert_eq!(language.to_string(), language.code());
-            sim_assert_eq!(Language::try_from(language.code()).ok(), Some(language));
-            sim_assert_eq!(Language::from_str(language.code()).ok(), Some(language));
+            sim_assert_eq!(have: format!("{language}"), want: language.code());
+            sim_assert_eq!(have: language.to_string(), want: language.code());
+            sim_assert_eq!(have: Language::try_from(language.code()).ok(), want: Some(language));
+            sim_assert_eq!(have: Language::from_str(language.code()).ok(), want: Some(language));
             sim_assert_eq!(
-                serde_json::to_value(language)?.as_str(),
-                Some(language.code())
+                have: serde_json::to_value(language)?.as_str(),
+                want: Some(language.code())
             );
         }
 

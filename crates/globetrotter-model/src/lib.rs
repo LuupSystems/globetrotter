@@ -81,7 +81,8 @@ pub enum ArgumentType {
 }
 
 impl ArgumentType {
-    #[must_use] pub fn display(&self) -> DisplayRepr<'_, Self> {
+    #[must_use]
+    pub fn display(&self) -> DisplayRepr<'_, Self> {
         DisplayRepr(self)
     }
 }
@@ -124,11 +125,13 @@ impl std::fmt::Display for Translation {
 }
 
 impl Translation {
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.arguments.is_empty() && self.language.is_empty()
     }
 
-    #[must_use] pub fn is_template(&self) -> bool {
+    #[must_use]
+    pub fn is_template(&self) -> bool {
         !self.arguments.is_empty()
     }
 }
@@ -137,13 +140,14 @@ impl Translation {
 pub struct Translations(pub IndexMap<Spanned<String>, Translation>);
 
 impl Translations {
-    // pub fn sort(&mut self) {
-    //     self.0.sort_keys();
-    //     for (_key, translation) in self.0.iter_mut() {
-    //         translation.arguments.sort_keys();
-    //         translation.language.sort_keys();
-    //     }
-    // }
+    #[cfg(not(feature = "rayon"))]
+    pub fn sort(&mut self) {
+        self.0.sort_keys();
+        for (_key, translation) in self.0.iter_mut() {
+            translation.arguments.sort_keys();
+            translation.language.sort_keys();
+        }
+    }
 
     #[cfg(feature = "rayon")]
     pub fn sort(&mut self) {
@@ -155,11 +159,13 @@ impl Translations {
         }
     }
 
-    #[must_use] pub fn iter(&self) -> indexmap::map::Iter<'_, Spanned<String>, Translation> {
+    #[must_use]
+    pub fn iter(&self) -> indexmap::map::Iter<'_, Spanned<String>, Translation> {
         self.0.iter()
     }
 
-    #[must_use] pub fn len(&self) -> usize {
+    #[must_use]
+    pub fn len(&self) -> usize {
         self.0.len()
     }
 }

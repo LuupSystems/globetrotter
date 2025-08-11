@@ -42,7 +42,8 @@ impl Default for Printer {
 }
 
 impl Printer {
-    #[must_use] pub fn new(color_choice: term::termcolor::ColorChoice) -> Self {
+    #[must_use]
+    pub fn new(color_choice: term::termcolor::ColorChoice) -> Self {
         let writer = term::termcolor::StandardStream::stderr(color_choice);
         let diagnostic_config = term::Config {
             styles: term::Styles::with_blue(term::termcolor::Color::Blue),

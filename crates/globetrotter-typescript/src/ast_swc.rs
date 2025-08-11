@@ -252,7 +252,8 @@ mod tests {
             .into_iter()
             .collect(),
         );
-        let expected = indoc::indoc! {r#"
+        let have = super::generate_translations_type_export(&translations)?;
+        let want = indoc::indoc! {r#"
             export type Translations = {
                 readonly "test.one": string;
                 readonly "test.two": (values: {
@@ -262,9 +263,8 @@ mod tests {
                 }) => string;
             };
         "# };
-        let expected = format!("{}{}", crate::preamble(), expected);
-        let generated = super::generate_translations_type_export(&translations)?;
-        sim_assert_eq!(generated, expected);
+        let want = format!("{}{}", crate::preamble(), want);
+        sim_assert_eq!(have: have, want: want);
         Ok(())
     }
 
@@ -292,10 +292,11 @@ mod tests {
         let program = parse(&compiler, fm)?;
         dbg!(&program);
 
-        let code = super::emit_code(&compiler, &program).map_err(IntoEyre::into_eyre)?;
-        println!("{code}");
+        let have = super::emit_code(&compiler, &program).map_err(IntoEyre::into_eyre)?;
+        println!("{have}");
 
-        sim_assert_eq!(format!("{}{}", crate::preamble(), source_code), code);
+        let want = format!("{}{}", crate::preamble(), source_code);
+        sim_assert_eq!(have: have, want: want);
         Ok(())
     }
 }

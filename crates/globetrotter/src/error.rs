@@ -119,7 +119,8 @@ impl<F> DuplicateKeyError<F>
 where
     F: Copy + PartialEq,
 {
-    #[must_use] pub fn to_diagnostics(&self, all: bool) -> Vec<Diagnostic<F>> {
+    #[must_use]
+    pub fn to_diagnostics(&self, all: bool) -> Vec<Diagnostic<F>> {
         assert!(
             self.occurrences.len() >= 2,
             "duplicated key must have at least two occurrences"
@@ -149,13 +150,14 @@ where
 
         let (span, file_id) = &self.occurrences[self.occurrences.len() - 1];
         labels.push(
-            Label::primary(*file_id, span.clone())
-                .with_message("cannot set the same key twice"),
+            Label::primary(*file_id, span.clone()).with_message("cannot set the same key twice"),
         );
 
-        vec![Diagnostic::error()
-            // .with_code("E0384")
-            .with_message(format!("duplicate key `{}`", self.key))
-            .with_labels(labels)]
+        vec![
+            Diagnostic::error()
+                // .with_code("E0384")
+                .with_message(format!("duplicate key `{}`", self.key))
+                .with_labels(labels),
+        ]
     }
 }

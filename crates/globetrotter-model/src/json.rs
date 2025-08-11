@@ -1,4 +1,4 @@
-use crate::{diagnostics::Spanned, Language, TemplateEngine};
+use crate::{Language, TemplateEngine, diagnostics::Spanned};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 

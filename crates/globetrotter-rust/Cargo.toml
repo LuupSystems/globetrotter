@@ -37,6 +37,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 thiserror.workspace = true
+indoc.workspace = true
 tracing.workspace = true
 
 globetrotter-model.workspace = true

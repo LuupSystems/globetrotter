@@ -1,4 +1,4 @@
-use flate2::{write::GzEncoder, Compression};
+use flate2::{Compression, write::GzEncoder};
 use std::io::Write;
 
 pub fn gzipped_size(value: impl AsRef<[u8]>) -> std::io::Result<usize> {

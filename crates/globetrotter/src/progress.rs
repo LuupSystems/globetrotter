@@ -32,7 +32,8 @@ fn pad_right(value: &str, width: usize, fill: char) -> String {
     )
 }
 
-#[must_use] pub fn relative_to(base_dir: Option<&Path>, path: &Path) -> PathBuf {
+#[must_use]
+pub fn relative_to(base_dir: Option<&Path>, path: &Path) -> PathBuf {
     base_dir
         .as_ref()
         .and_then(|base_dir| pathdiff::diff_paths(path, base_dir))
@@ -47,7 +48,8 @@ pub struct Logger {
 }
 
 impl Logger {
-    #[must_use] pub fn new<F>(configs: &Configs<F>) -> Self {
+    #[must_use]
+    pub fn new<F>(configs: &Configs<F>) -> Self {
         let longest_config_name = configs
             .iter()
             .filter(|ConfigFile { config, .. }| !config.is_empty())
@@ -71,7 +73,8 @@ impl Logger {
         }
     }
 
-    #[must_use] pub fn target_log_prefix(&self, name: &str, target: Target) -> String {
+    #[must_use]
+    pub fn target_log_prefix(&self, name: &str, target: Target) -> String {
         format!(
             "{}{}",
             pad_left(&name.green().to_string(), self.longest_config_name, ' '),
@@ -83,7 +86,8 @@ impl Logger {
         )
     }
 
-    #[must_use] pub fn language_log_prefix(&self, name: &str, language: Language) -> String {
+    #[must_use]
+    pub fn language_log_prefix(&self, name: &str, language: Language) -> String {
         format!(
             "{}{}",
             pad_left(&name.green().to_string(), self.longest_config_name, ' '),
@@ -95,7 +99,8 @@ impl Logger {
         )
     }
 
-    #[must_use] pub fn completed(&self, duration: &std::time::Duration) -> String {
+    #[must_use]
+    pub fn completed(&self, duration: &std::time::Duration) -> String {
         format!(
             "{} {}",
             std::iter::repeat_n(' ', self.longest_config_name + self.longest_target_name + 2)
@@ -104,7 +109,8 @@ impl Logger {
         )
     }
 
-    #[must_use] pub fn dry_run_would_write(&self, path: &Path) -> colored::ColoredString {
+    #[must_use]
+    pub fn dry_run_would_write(&self, path: &Path) -> colored::ColoredString {
         format!("{} would write {}", "DRY RUN:".yellow(), path.display()).bright_black()
     }
 }
@@ -116,31 +122,31 @@ mod test {
 
     #[test]
     fn test_pad_right() {
-        sim_assert_eq!(super::pad_right("test", 7, ' '), "test   ");
-        sim_assert_eq!(super::pad_right("test", 2, ' '), "test");
+        sim_assert_eq!(have: super::pad_right("test", 7, ' '), want: "test   ");
+        sim_assert_eq!(have: super::pad_right("test", 2, ' '), want: "test");
 
         let width = 20;
         let colored = format!("-> {} <-", "color".green().bold());
-        let expected = "-> color <-         ";
-        sim_assert_eq!(expected.len(), width);
+        let want = "-> color <-         ";
+        sim_assert_eq!(have: want.len(), want: width);
         sim_assert_eq!(
-            super::strip_color(&super::pad_right(&colored, width, ' ')),
-            expected
+            have: super::strip_color(&super::pad_right(&colored, width, ' ')),
+            want: want
         );
     }
 
     #[test]
     fn test_pad_left() {
-        sim_assert_eq!(super::pad_left("test", 7, ' '), "   test");
-        sim_assert_eq!(super::pad_left("test", 2, ' '), "test");
+        sim_assert_eq!(have: super::pad_left("test", 7, ' '), want: "   test");
+        sim_assert_eq!(have: super::pad_left("test", 2, ' '), want: "test");
 
         let width = 20;
         let colored = format!("-> {} <-", "color".green().bold());
-        let expected = "         -> color <-";
-        sim_assert_eq!(expected.len(), width);
+        let want = "         -> color <-";
+        sim_assert_eq!(have: want.len(), want: width);
         sim_assert_eq!(
-            super::strip_color(&super::pad_left(&colored, width, ' ')),
-            expected
+            have: super::strip_color(&super::pad_left(&colored, width, ' ')),
+            want: want
         );
     }
 }

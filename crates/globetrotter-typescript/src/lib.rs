@@ -12,7 +12,8 @@ pub use ast_swc::generate_translations_type_export;
 
 pub use config::OutputConfig;
 
-#[must_use] pub fn preamble() -> String {
+#[must_use]
+pub fn preamble() -> String {
     unindent::unindent(&format!(
         "\
         //
