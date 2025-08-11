@@ -1,5 +1,7 @@
-use clap::builder::TypedValueParser;
-use clap::{Parser, Subcommand, builder::PossibleValuesParser};
+use clap::{
+    Parser, Subcommand,
+    builder::{PossibleValuesParser, TypedValueParser},
+};
 use globetrotter::model;
 use globetrotter::model::Language;
 use std::path::PathBuf;

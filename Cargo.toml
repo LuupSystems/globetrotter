@@ -41,6 +41,9 @@ futures = "0"
 color-eyre = "0"
 similar-asserts = "1"
 
+# CLI
+clap = { version = "4", features = ["derive", "env"]}
+
 # workspace crates
 globetrotter = { path = "./crates/globetrotter/" }
 globetrotter-model = { path = "./crates/globetrotter-model/" }

@@ -59,7 +59,7 @@ termcolor = "1"
 codespan-reporting = "^0.12"
 
 # argument parsing
-clap = { version = "4", features = ["derive", "env"]}
+clap.workspace = true
 
 # logging
 tracing.workspace = true

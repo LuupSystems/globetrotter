@@ -1,3 +1,9 @@
+pub mod helpers;
+
+use clap::{
+    Parser,
+    builder::{PossibleValuesParser, TypedValueParser},
+};
 use color_eyre::eyre;
 use globetrotter_model as model;
 use handlebars::Handlebars;
@@ -22,136 +28,102 @@ pub mod generated {
 }
 pub use generated::Translation;
 
-pub mod helpers {
-    use handlebars::{
-        Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError,
-        RenderErrorReason,
-    };
+pub trait TranslationKey: Clone + std::fmt::Debug {
+    fn key(&self) -> &'static str;
+}
 
-    fn param_not_found(helper_name: &'static str, index: usize) -> RenderError {
-        RenderError::from(RenderErrorReason::ParamNotFoundForIndex(helper_name, index))
-    }
-
-    fn invalid_param_type(
-        helper_name: &'static str,
-        param_name: &str,
-        expected_type: &str,
-    ) -> RenderError {
-        RenderError::from(RenderErrorReason::ParamTypeMismatchForName(
-            helper_name,
-            param_name.to_string(),
-            expected_type.to_string(),
-        ))
-    }
-
-    pub const PLURALIZE_HELPER_NAME: &str = "pluralize";
-
-    pub fn pluralize(
-        h: &Helper,
-        _: &Handlebars,
-        _: &Context,
-        _: &mut RenderContext,
-        out: &mut dyn Output,
-    ) -> HelperResult {
-        let value = h
-            .param(0)
-            .ok_or(param_not_found(PLURALIZE_HELPER_NAME, 0))?
-            .value();
-        let value =
-            value
-                .as_str()
-                .ok_or(invalid_param_type(PLURALIZE_HELPER_NAME, "value", "string"))?;
-
-        let count = h
-            .param(1)
-            .ok_or(param_not_found(PLURALIZE_HELPER_NAME, 1))?
-            .value();
-        let count = count
-            .as_number()
-            .and_then(serde_json::Number::as_i64)
-            .ok_or(invalid_param_type(PLURALIZE_HELPER_NAME, "count", "number"))?;
-
-        if count == 1 {
-            out.write(value)?;
-        } else {
-            out.write(&format!("{value}s"))?;
-        }
-        Ok(())
+impl TranslationKey for Translation<'_> {
+    fn key(&self) -> &'static str {
+        Translation::key(self)
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct MyTranslator {
-    translations: Option<model::json::Translations>,
+#[derive(Debug, Clone)]
+pub struct MyTranslator<K> {
+    translations: model::json::Translations,
     handlebars: Handlebars<'static>,
+    _key: std::marker::PhantomData<K>,
 }
 
-impl MyTranslator {
-    pub fn new() -> Self {
+impl<K> MyTranslator<K> {
+    pub fn from_reader(reader: impl std::io::BufRead) -> eyre::Result<Self> {
         let mut handlebars = Handlebars::new();
+
         // Register your custom helpers here
         handlebars.register_helper(helpers::PLURALIZE_HELPER_NAME, Box::new(helpers::pluralize));
-        Self {
-            translations: None,
-            handlebars,
-        }
-    }
 
-    pub fn load_translations_from_reader(
-        &mut self,
-        reader: impl std::io::BufRead,
-    ) -> eyre::Result<()> {
         let translations: model::json::Translations = serde_json::from_reader(reader)?;
         for (key, value) in &translations.translations {
             if let model::json::Translation::Template(template) = value {
                 // Register template
-                self.handlebars.register_template_string(key, template)?;
+                handlebars.register_template_string(key, template)?;
             }
         }
-
-        self.translations = Some(translations);
-        Ok(())
+        Ok(Self {
+            handlebars,
+            translations,
+            _key: std::marker::PhantomData::default(),
+        })
     }
+}
 
-    pub fn load_translations(&mut self, path: &std::path::Path) -> eyre::Result<()> {
-        let file = std::fs::OpenOptions::new().read(true).open(path)?;
-        let reader = std::io::BufReader::new(file);
-        self.load_translations_from_reader(reader)
-    }
-
+impl<K> MyTranslator<K>
+where
+    K: TranslationKey + serde::Serialize,
+{
     #[must_use]
-    pub fn translate(
-        &self,
-        spec: Translation<'_>,
-    ) -> Option<Result<String, handlebars::RenderError>> {
-        let key = spec.key();
-        let translations = self.translations.as_ref()?;
-        let translation = translations.translations.get(key)?;
+    pub fn translate(&self, key_with_args: K) -> Option<Result<String, handlebars::RenderError>> {
+        let key = key_with_args.key();
+        let translation = self.translations.translations.get(key)?;
         match translation {
             model::json::Translation::Literal(value) => Some(Ok(value.to_string())),
-            model::json::Translation::Template(_) => Some(self.template(key, spec)),
+            model::json::Translation::Template(_) => {
+                Some(self.handlebars.render(key, &key_with_args))
+            }
         }
     }
 }
 
-pub trait Template {
-    type Error;
-    fn template<T>(&self, key: &str, values: T) -> Result<String, Self::Error>
-    where
-        T: serde::Serialize;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::VariantNames)]
+pub enum Language {
+    #[strum(serialize = "de")]
+    De,
+    #[strum(serialize = "en")]
+    En,
+    #[strum(serialize = "fr")]
+    Fr,
 }
 
-impl Template for MyTranslator {
-    type Error = handlebars::RenderError;
-    fn template<T>(&self, key: &str, values: T) -> Result<String, Self::Error>
-    where
-        T: serde::Serialize,
-    {
-        self.handlebars.render(key, &values)
-    }
+fn language_parser() -> impl TypedValueParser {
+    use strum::VariantNames;
+    PossibleValuesParser::new(Language::VARIANTS).map(|s| s.parse::<Language>().unwrap())
+}
+
+#[derive(Parser, Debug)]
+pub struct Options {
+    #[clap(short = 'l', long = "language", value_parser = language_parser())]
+    pub language: Language,
+
+    #[clap(short = 'n', long = "name")]
+    pub name: String,
 }
 
 fn main() -> eyre::Result<()> {
+    color_eyre::install()?;
+    let options = Options::parse();
+    let json_translations = match options.language {
+        Language::De => JSON_TRANSLATIONS_DE,
+        Language::En => JSON_TRANSLATIONS_EN,
+        Language::Fr => JSON_TRANSLATIONS_FR,
+    };
+    let reader = std::io::Cursor::new(json_translations);
+    let translator: MyTranslator<Translation> = MyTranslator::from_reader(reader)?;
+    let translated = translator
+        .translate(Translation::TranslationGreeting {
+            name: &options.name,
+        })
+        .transpose()?;
+    println!("{}", translated.as_deref().unwrap_or_default());
     Ok(())
 }
 
@@ -172,14 +144,10 @@ mod tests {
         });
     }
 
-    fn build_translator(json_translations: &str) -> eyre::Result<MyTranslator> {
+    fn build_translator(json_translations: &str) -> eyre::Result<MyTranslator<Translation<'_>>> {
         let _ = dbg!(serde_json::from_str::<serde_json::Value>(json_translations));
         let reader = std::io::Cursor::new(json_translations);
-
-        // load translations
-        let mut translator = MyTranslator::new();
-        translator.load_translations_from_reader(reader)?;
-        Ok(translator)
+        MyTranslator::from_reader(reader)
     }
 
     #[test]
