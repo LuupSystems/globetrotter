@@ -72,13 +72,13 @@ where
     K: TranslationKey + serde::Serialize,
 {
     #[must_use]
-    pub fn translate(&self, key_with_args: K) -> Option<Result<String, handlebars::RenderError>> {
+    pub fn translate(&self, key_with_args: &K) -> Option<Result<String, handlebars::RenderError>> {
         let key = key_with_args.key();
         let translation = self.translations.translations.get(key)?;
         match translation {
             model::json::Translation::Literal(value) => Some(Ok(value.to_string())),
             model::json::Translation::Template(_) => {
-                Some(self.handlebars.render(key, &key_with_args))
+                Some(self.handlebars.render(key, key_with_args))
             }
         }
     }
@@ -119,7 +119,7 @@ fn main() -> eyre::Result<()> {
     let reader = std::io::Cursor::new(json_translations);
     let translator: MyTranslator<Translation> = MyTranslator::from_reader(reader)?;
     let translated = translator
-        .translate(Translation::TranslationGreeting {
+        .translate(&Translation::TranslationGreeting {
             name: &options.name,
         })
         .transpose()?;
@@ -171,12 +171,12 @@ mod tests {
 
         let translator = build_translator(JSON_TRANSLATIONS_DE)?;
         let have = translator
-            .translate(Translation::TranslationLiteral {})
+            .translate(&Translation::TranslationLiteral {})
             .transpose()?;
         sim_assert_eq!(have: have.as_deref(), want: Some("German"));
 
         let have = translator
-            .translate(Translation::TranslationGreeting { name: "Roman" })
+            .translate(&Translation::TranslationGreeting { name: "Roman" })
             .transpose()?;
         sim_assert_eq!(have: have.as_deref(), want: Some("Hallo Roman"));
         Ok(())
@@ -188,12 +188,12 @@ mod tests {
 
         let translator = build_translator(JSON_TRANSLATIONS_EN)?;
         let have = translator
-            .translate(Translation::TranslationLiteral {})
+            .translate(&Translation::TranslationLiteral {})
             .transpose()?;
         sim_assert_eq!(have: have.as_deref(), want: Some("English"));
 
         let have = translator
-            .translate(Translation::TranslationGreeting { name: "Roman" })
+            .translate(&Translation::TranslationGreeting { name: "Roman" })
             .transpose()?;
         sim_assert_eq!(have: have.as_deref(), want: Some("Hello Roman"));
         Ok(())
@@ -205,12 +205,12 @@ mod tests {
 
         let translator = build_translator(JSON_TRANSLATIONS_FR)?;
         let have = translator
-            .translate(Translation::TranslationLiteral {})
+            .translate(&Translation::TranslationLiteral {})
             .transpose()?;
         sim_assert_eq!(have: have.as_deref(), want: Some("French"));
 
         let have = translator
-            .translate(Translation::TranslationGreeting { name: "Roman" })
+            .translate(&Translation::TranslationGreeting { name: "Roman" })
             .transpose()?;
         sim_assert_eq!(have: have.as_deref(), want: Some("Bonjour Roman"));
         Ok(())

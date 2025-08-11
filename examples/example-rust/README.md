@@ -6,7 +6,7 @@ rust bindings.
 The build script is similar to the following configuration file, except it stores the 
 generated files in `OUT_DIR`.
 
-```json
+```yaml
 version: 1
 config:
   languages: [en, de, fr]
