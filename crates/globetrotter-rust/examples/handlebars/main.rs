@@ -63,7 +63,8 @@ pub trait TranslationKey: serde::Serialize {
 
 // impl<'a> TranslationKey for Translation<'a> {
 impl Translation<'_> {
-    #[must_use] pub fn key(&self) -> &'static str {
+    #[must_use]
+    pub fn key(&self) -> &'static str {
         match self {
             Self::ValueOne {} => "value.one",
             Self::ValueTwo { .. } => "value.two",
@@ -181,7 +182,8 @@ impl MyTranslator {
         self.load_translations_from_reader(reader)
     }
 
-    #[must_use] pub fn translate(
+    #[must_use]
+    pub fn translate(
         &self,
         spec: Translation<'_>,
     ) -> Option<Result<String, handlebars::RenderError>> {
@@ -236,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn value_from_translation_key() -> eyre::Result<()> {
+    fn test_translation_key() -> eyre::Result<()> {
         crate::tests::init();
 
         sim_assert_eq!(

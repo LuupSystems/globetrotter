@@ -42,7 +42,7 @@ tracing.workspace = true
 unindent = "0"
 
 # optional: swc based typescript codegen
-swc_core = { version = "22", features = ["base", "common", "ecma_ast"], optional = true }
+swc_core = { version = "35", features = ["base", "common", "ecma_ast"], optional = true }
 anyhow = { version = "1", optional = true }
 
 # serialization
@@ -54,4 +54,4 @@ color-eyre.workspace = true
 similar-asserts.workspace = true
 indoc = "2"
 # include ecma parser for reference
-swc_core = { version = "22", features = ["base", "common", "ecma_ast", "ecma_parser"] }
+swc_core = { version = "35", features = ["base", "common", "ecma_ast", "ecma_parser"] }

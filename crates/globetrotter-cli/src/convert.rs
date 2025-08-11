@@ -170,7 +170,7 @@ pub mod fmt {
         }
     }
 
-    pub fn format_document(doc: &mut toml_edit::Document) {
+    pub fn format_document(doc: &mut toml_edit::DocumentMut) {
         let mut visitor = DocumentFormatter { depth: 0 };
         visitor.visit_document_mut(doc);
     }
