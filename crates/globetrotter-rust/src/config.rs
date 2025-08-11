@@ -8,7 +8,14 @@ pub struct OutputConfig {
 }
 
 impl OutputConfig {
-    #[must_use] pub fn is_empty(&self) -> bool {
+    pub fn new(paths: impl IntoIterator<Item = PathBuf>) -> Self {
+        Self {
+            output_paths: paths.into_iter().collect(),
+        }
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.output_paths.is_empty()
     }
 }

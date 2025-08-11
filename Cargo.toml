@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "examples/example-rust",
   "crates/*",
 ]
 
@@ -39,3 +40,13 @@ futures = "0"
 # testing
 color-eyre = "0"
 similar-asserts = "1"
+
+# workspace crates
+globetrotter = { path = "./crates/globetrotter/" }
+globetrotter-model = { path = "./crates/globetrotter-model/" }
+globetrotter-cli = { path = "./crates/globetrotter-cli/" }
+globetrotter-rust = { path = "./crates/globetrotter-rust/" }
+globetrotter-php = { path = "./crates/globetrotter-php/" }
+globetrotter-python = { path = "./crates/globetrotter-python/" }
+globetrotter-typescript = { path = "./crates/globetrotter-typescript/" }
+globetrotter-golang = { path = "./crates/globetrotter-golang/" }

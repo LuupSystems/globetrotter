@@ -36,9 +36,10 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-globetrotter-model = { path = "../globetrotter-model" }
 thiserror.workspace = true
 tracing.workspace = true
+
+globetrotter-model.workspace = true
 
 # rust codegen using syn
 syn = { version = "2", features = ["full"] }
@@ -58,11 +59,8 @@ itertools.workspace = true
 [dev-dependencies]
 color-eyre.workspace = true
 similar-asserts.workspace = true
+indoc.workspace = true
 
-serde = { workspace = true }
-indexmap = { workspace = true, features = ["serde"] }
-serde_json.workspace = true
-handlebars = "6"
-indoc = "2"
+# indexmap = { workspace = true, features = ["serde"] }
 # phf = { version = "0", default-features = false }
 # intl_pluralrules = "7"

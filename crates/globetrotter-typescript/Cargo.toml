@@ -35,9 +35,10 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-globetrotter-model = { path = "../globetrotter-model" }
 thiserror.workspace = true
 tracing.workspace = true
+
+globetrotter-model.workspace = true
 
 unindent = "0"
 

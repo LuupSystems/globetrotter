@@ -171,6 +171,22 @@ pub struct Executor {
 }
 
 impl Executor {
+    pub fn new<F>(
+        configs: &config::Configs<F>,
+        diagnostic_printer: crate::diagnostics::Printer,
+    ) -> Self {
+        let logger = Logger::new(&configs);
+        Self {
+            strict: None,
+            check_templates: None,
+            dry_run: false,
+            global_base_dir_for_display: None,
+            handlebars: handlebars::Handlebars::default(),
+            diagnostic_printer,
+            logger,
+        }
+    }
+
     async fn read_translation_file(
         &self,
         input: (config::Input, PathBuf),
@@ -285,7 +301,7 @@ impl Executor {
         inputs: &'a [config::Input],
         base_dir: Option<&'a Path>,
         strict: bool,
-        file_id: FileId,
+        file_id: Option<FileId>,
         diagnostics: &'a mut Vec<Diagnostic<FileId>>,
     ) -> impl Iterator<Item = Result<(config::Input, PathBuf), Error>> + use<'a> {
         inputs
@@ -346,7 +362,7 @@ impl Executor {
 
         let inputs = self.unique_input_paths(
             &config_file.config.inputs,
-            Some(&config_file.config_dir),
+            config_file.config_dir.as_deref(),
             strict,
             config_file.file_id,
             &mut diagnostics,

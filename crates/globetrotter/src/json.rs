@@ -71,8 +71,10 @@ impl executor::Executor {
                 let translations = Arc::clone(translations);
                 async move {
                     let (json_config, json_output_path, language) = res;
-                    let json_output_path =
-                        executor::resolve_path(Some(&config_file.config_dir), &json_output_path);
+                    let json_output_path = executor::resolve_path(
+                        config_file.config_dir.as_deref(),
+                        &json_output_path,
+                    );
 
                     let mut json = Vec::new();
                     {

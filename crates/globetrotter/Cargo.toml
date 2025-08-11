@@ -73,13 +73,13 @@ yaml-spanned = "0"
 toml-span = { version = "0", features = ["reporting", "serde"] }
 
 # model
-globetrotter-model = { path = "../globetrotter-model" }
+globetrotter-model.workspace = true
 
 # optional: language targets
-globetrotter-typescript = { path = "../globetrotter-typescript", optional = true }
-globetrotter-rust = { path = "../globetrotter-rust", optional = true }
-globetrotter-golang = { path = "../globetrotter-golang", optional = true }
-globetrotter-python = { path = "../globetrotter-python", optional = true }
+globetrotter-typescript = { workspace = true, optional = true }
+globetrotter-rust = { workspace = true, optional = true }
+globetrotter-golang = { workspace = true, optional = true }
+globetrotter-python = { workspace = true, optional = true }
 
 # optional: rayon for parallel processing
 rayon = { version = "1", optional = true }

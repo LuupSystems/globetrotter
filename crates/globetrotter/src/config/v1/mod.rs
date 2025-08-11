@@ -10,8 +10,8 @@ use yaml_spanned::{Mapping, Sequence, Value, value::Kind};
 
 #[derive(Debug)]
 pub struct ConfigFile<F> {
-    pub file_id: F,
-    pub config_dir: PathBuf,
+    pub file_id: Option<F>,
+    pub config_dir: Option<PathBuf>,
     pub config: Config,
 }
 
@@ -43,10 +43,7 @@ pub fn parse_languages<F>(
                     span: value.span().into(),
                 })?;
 
-            let languages = languages
-                .iter()
-                .map(parse)
-                .collect::<Result<Vec<_>, _>>()?;
+            let languages = languages.iter().map(parse).collect::<Result<Vec<_>, _>>()?;
             Ok(languages)
         }
     }
@@ -402,8 +399,8 @@ pub fn parse_configs<F: Copy + PartialEq>(
             diagnostics,
         )?;
         return Ok(vec![ConfigFile {
-            file_id,
-            config_dir: config_dir.to_path_buf(),
+            file_id: Some(file_id),
+            config_dir: Some(config_dir.to_path_buf()),
             config,
         }]);
     }
@@ -433,8 +430,8 @@ pub fn parse_configs<F: Copy + PartialEq>(
                     diagnostics,
                 )?;
                 Ok(ConfigFile {
-                    file_id,
-                    config_dir: config_dir.to_path_buf(),
+                    file_id: Some(file_id),
+                    config_dir: Some(config_dir.to_path_buf()),
                     config,
                 })
             })
@@ -455,8 +452,8 @@ pub fn parse_configs<F: Copy + PartialEq>(
                     diagnostics,
                 )?;
                 Ok(ConfigFile {
-                    file_id,
-                    config_dir: config_dir.to_path_buf(),
+                    file_id: Some(file_id),
+                    config_dir: Some(config_dir.to_path_buf()),
                     config,
                 })
             })
@@ -485,6 +482,38 @@ pub struct Input {
     pub separator: Option<Spanned<String>>,
 }
 
+impl Input {
+    pub fn new(path_or_glob_pattern: impl Into<PathOrGlobPattern>) -> Self {
+        Self {
+            path_or_glob_pattern: Spanned::dummy(path_or_glob_pattern.into()),
+            exclude: vec![],
+            prefix: None,
+            prepend_filename: None,
+            separator: None,
+        }
+    }
+
+    pub fn with_exclude(mut self, exclude: impl IntoIterator<Item = PathOrGlobPattern>) -> Self {
+        self.exclude = exclude.into_iter().map(Spanned::dummy).collect();
+        self
+    }
+
+    pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.prefix = Some(Spanned::dummy(prefix.into()));
+        self
+    }
+
+    pub fn with_prepend_filename(mut self, prepend_filename: bool) -> Self {
+        self.prepend_filename = Some(Spanned::dummy(prepend_filename));
+        self
+    }
+
+    pub fn with_separator(mut self, separator: impl Into<String>) -> Self {
+        self.separator = Some(Spanned::dummy(separator.into()));
+        self
+    }
+}
+
 impl std::fmt::Display for Input {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Input")
@@ -507,19 +536,33 @@ impl std::fmt::Display for Input {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[derive(Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Default,
+)]
 pub enum JsonOutputStyle {
     #[default]
     Flat,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct JsonOutputConfig {
     pub path: Spanned<PathBuf>,
     pub style: Option<Spanned<JsonOutputStyle>>,
+}
+
+impl JsonOutputConfig {
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: Spanned::dummy(path.into()),
+            style: None,
+        }
+    }
+
+    pub fn with_style(mut self, style: impl Into<JsonOutputStyle>) -> Self {
+        self.style = Some(Spanned::dummy(style.into()));
+        self
+    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
@@ -543,6 +586,44 @@ pub struct Outputs {
     pub python: Option<globetrotter_python::OutputConfig>,
 }
 
+impl Outputs {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_json(mut self, json: impl IntoIterator<Item = JsonOutputConfig>) -> Self {
+        self.json = json.into_iter().collect();
+        self
+    }
+
+    #[cfg(feature = "typescript")]
+    pub fn with_typescript(
+        mut self,
+        typescript: impl Into<globetrotter_typescript::OutputConfig>,
+    ) -> Self {
+        self.typescript = Some(typescript.into());
+        self
+    }
+
+    #[cfg(feature = "rust")]
+    pub fn with_rust(mut self, rust: impl Into<globetrotter_rust::OutputConfig>) -> Self {
+        self.rust = Some(rust.into());
+        self
+    }
+
+    #[cfg(feature = "golang")]
+    pub fn with_golang(mut self, golang: impl Into<globetrotter_golang::OutputConfig>) -> Self {
+        self.golang = Some(golang.into());
+        self
+    }
+
+    #[cfg(feature = "python")]
+    pub fn with_python(mut self, python: impl Into<globetrotter_python::OutputConfig>) -> Self {
+        self.python = Some(python.into());
+        self
+    }
+}
+
 impl std::fmt::Display for Outputs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // TODO(roman): all the target configs should implement display
@@ -563,7 +644,8 @@ impl std::fmt::Display for Outputs {
 }
 
 impl Outputs {
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         if !self.json.is_empty() {
             return false;
         }
@@ -606,6 +688,67 @@ pub struct Config {
     pub outputs: Outputs,
 }
 
+impl Config {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: Spanned::dummy(name.into()),
+            languages: vec![],
+            template_engine: None,
+            check_templates: None,
+            strict: None,
+            inputs: vec![],
+            outputs: Outputs::default(),
+        }
+    }
+
+    pub fn with_language(mut self, language: impl Into<model::Language>) -> Self {
+        self.languages.push(Spanned::dummy(language.into()));
+        self
+    }
+
+    pub fn with_languages(mut self, languages: impl IntoIterator<Item = model::Language>) -> Self {
+        self.languages.extend(
+            languages
+                .into_iter()
+                .map(|language| Spanned::dummy(language)),
+        );
+        self
+    }
+
+    pub fn with_check_templates(mut self, check_templates: bool) -> Self {
+        self.check_templates = Some(check_templates);
+        self
+    }
+
+    pub fn with_strict(mut self, strict: bool) -> Self {
+        self.strict = Some(strict);
+        self
+    }
+
+    pub fn with_template_engine(
+        mut self,
+        template_engine: impl Into<model::TemplateEngine>,
+    ) -> Self {
+        self.template_engine = Some(Spanned::dummy(template_engine.into()));
+        self
+    }
+
+    pub fn with_input(mut self, input: impl Into<Input>) -> Self {
+        self.inputs.push(input.into());
+        self
+    }
+
+    pub fn with_inputs(mut self, inputs: impl IntoIterator<Item = Input>) -> Self {
+        self.inputs.extend(inputs.into_iter());
+        self
+    }
+
+    pub fn with_outputs(mut self, outputs: impl Into<Outputs>) -> Self {
+        self.outputs = outputs.into();
+        self
+    }
+}
+
 impl std::fmt::Display for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Config")
@@ -634,7 +777,8 @@ impl std::fmt::Display for Config {
 }
 
 impl Config {
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.inputs.is_empty() || self.outputs.is_empty()
     }
 }

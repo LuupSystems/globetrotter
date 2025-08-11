@@ -65,7 +65,7 @@ clap = { version = "4", features = ["derive", "env"]}
 tracing.workspace = true
 tracing-subscriber = { version = "0", features = ["json", "env-filter"] }
 
-globetrotter = { path = "../globetrotter" }
+globetrotter.workspace = true
 
 # optional: convert from json
 serde = { workspace = true, optional = true }

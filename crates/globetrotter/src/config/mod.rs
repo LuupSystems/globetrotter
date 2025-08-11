@@ -1,5 +1,17 @@
 pub mod v1;
 
+#[cfg(feature = "python")]
+pub use globetrotter_python as python;
+
+#[cfg(feature = "rust")]
+pub use globetrotter_rust as rust;
+
+#[cfg(feature = "typescript")]
+pub use globetrotter_typescript as typescript;
+
+#[cfg(feature = "golang")]
+pub use globetrotter_golang as golang;
+
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 use globetrotter_model::{
@@ -73,7 +85,6 @@ pub fn from_str<F: Copy + PartialEq>(
 ) -> Result<v1::Configs<F>, ConfigError> {
     let value = yaml_spanned::from_str(raw_config).map_err(ConfigError::YAML)?;
     let version = parse_version(&value, file_id, strict, diagnostics)?;
-    
 
     match version {
         Version::Latest | Version::V1 => {
@@ -211,7 +222,7 @@ mod tests {
             strict: bool,
         ) -> Result<super::Version, ConfigError> {
             let mut diagnostics = vec![];
-            
+
             super::parse_version(&value.into(), (), Some(strict), &mut diagnostics)
         }
 

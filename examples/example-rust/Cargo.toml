@@ -1,0 +1,29 @@
+[package]
+name = "example-rust"
+publish = false
+
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+color-eyre.workspace = true
+
+# globetrotter
+globetrotter-rust.workspace = true
+globetrotter-model.workspace = true
+
+# template engine
+handlebars = "6"
+
+# read translations
+serde.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+color-eyre.workspace = true
+globetrotter.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+color-eyre.workspace = true
+similar-asserts.workspace = true

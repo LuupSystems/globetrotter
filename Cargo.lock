@@ -675,6 +675,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "example-rust"
+version = "0.0.5"
+dependencies = [
+ "color-eyre",
+ "globetrotter",
+ "globetrotter-model",
+ "globetrotter-rust",
+ "handlebars",
+ "serde",
+ "serde_json",
+ "similar-asserts",
+ "tokio",
+]
+
+[[package]]
 name = "eyre"
 version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1023,15 +1038,11 @@ dependencies = [
  "color-eyre",
  "convert_case",
  "globetrotter-model",
- "handlebars",
- "indexmap",
  "indoc",
  "itertools 0.14.0",
  "prettyplease",
  "proc-macro2",
  "quote",
- "serde",
- "serde_json",
  "similar-asserts",
  "syn",
  "thiserror 2.0.12",
