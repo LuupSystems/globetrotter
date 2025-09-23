@@ -1,14 +1,11 @@
-#![allow(warnings)]
-
 pub mod config;
 
 pub use config::OutputConfig;
 
 use convert_case::{Case, Casing};
 use globetrotter_model as model;
-use proc_macro2::{Ident, Span};
-use quote::{ToTokens, format_ident, quote};
-use std::sync::Arc;
+use globetrotter_model::ext::iter::TryUnzipExt;
+use quote::{format_ident, quote};
 
 #[must_use]
 pub fn preamble() -> String {
@@ -34,17 +31,29 @@ fn key_to_rust_enum_variant(key: &str) -> String {
 }
 
 trait IntoTokenStream {
-    fn into_token_stream(self) -> proc_macro2::TokenStream;
+    fn into_token_stream(self) -> (proc_macro2::TokenStream, bool);
 }
 
 impl IntoTokenStream for model::ArgumentType {
-    fn into_token_stream(self) -> proc_macro2::TokenStream {
+    fn into_token_stream(self) -> (proc_macro2::TokenStream, bool) {
         match self {
-            Self::String => quote! {&'a str},
-            Self::Number => quote! {i64},
+            Self::String => {
+                let tokens = quote! {&'a str};
+                (tokens, true)
+            }
+            Self::Number => {
+                let tokens = quote! {i64};
+                (tokens, false)
+            }
             // TODO(roman): create our own globetrotter type for this
-            Self::Iso8601DateTimeString => quote! {&'a str},
-            Self::Any => quote! {serde_json::Value},
+            Self::Iso8601DateTimeString => {
+                let tokens = quote! {&'a str};
+                (tokens, true)
+            }
+            Self::Any => {
+                let tokens = quote! {serde_json::Value};
+                (tokens, false)
+            }
         }
     }
 }
@@ -104,7 +113,7 @@ pub enum Error {
 pub fn generate_translation_enum(translations: &model::Translations) -> Result<String, Error> {
     use itertools::Itertools;
 
-    // can we use https://github.com/rust-phf/rust-phf at compile time?
+    // Can we use https://github.com/rust-phf/rust-phf at compile time?
 
     let enum_variant_names: Vec<_> = translations
         .0
@@ -112,7 +121,7 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
         .map(|(key, translation)| (key_to_rust_enum_variant(key.as_ref()), key, translation))
         .collect();
 
-    // find duplicate indentifiers
+    // Find duplicate indentifiers
     let duplicates: Vec<_> = enum_variant_names
         .iter()
         .duplicates_by(|(safe_key, _, _)| safe_key)
@@ -127,7 +136,7 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
         return Err(DuplicateIdentifierError { identifier, keys }.into());
     }
 
-    let enum_variants: Vec<_> = enum_variant_names
+    let enum_variants = enum_variant_names
         .iter()
         .map(|(safe_key, key, translation)| {
             let fields: Vec<_> = translation
@@ -136,7 +145,7 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
                 .map(|(name, typ)| (argument_to_rust_field_name(name), name, typ))
                 .collect();
 
-            // check for duplicate field names
+            // Check for duplicate field names
             let duplicates: Vec<_> = fields
                 .iter()
                 .duplicates_by(|(safe_name, _, _)| safe_name)
@@ -148,35 +157,38 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
                     .into_iter()
                     .map(|(_, key, _)| (*key).to_string())
                     .collect();
-                return Err(DuplicateFieldError {
+                return Err(Error::from(DuplicateFieldError {
                     field,
                     arguments,
                     enum_variant: safe_key.to_string(),
                     key: key.to_string(),
-                }
-                .into());
+                }));
             }
 
-            let fields: Vec<_> = fields
-                .into_iter()
-                .map(|(safe_name, name, typ)| {
-                    let field_ident = format_ident!("{safe_name}");
-                    let typ = typ.into_token_stream();
-                    quote! {
-                        #[serde(rename = #name)]
-                        #field_ident: #typ,
-                    }
-                })
-                .collect();
+            let fields = fields.into_iter().map(|(safe_name, name, typ)| {
+                let field_ident = format_ident!("{safe_name}");
+                let (typ, uses_lifetime) = typ.into_token_stream();
+                let tokens = quote! {
+                    #[serde(rename = #name)]
+                    #field_ident: #typ,
+                };
+                (tokens, uses_lifetime)
+            });
+
+            let (fields, uses_lifetime): (Vec<_>, Vec<_>) = fields.unzip();
+            let uses_lifetime = uses_lifetime.iter().any(|v| *v);
 
             let variant_name_ident = format_ident!("{safe_key}");
-            Ok(quote! {
+            let tokens = quote! {
                 #variant_name_ident {
                     #(#fields)*
                 },
-            })
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
+            };
+            Ok((tokens, uses_lifetime))
+        });
+
+    let (enum_variants, uses_lifetime): (Vec<_>, Vec<_>) = enum_variants.try_unzip()?;
+    let uses_lifetime = uses_lifetime.iter().any(|v| *v);
 
     let enum_variant_keys: Vec<_> = enum_variant_names
         .iter()
@@ -189,16 +201,24 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
         })
         .collect();
 
+    // Build generics only if needed
+    let generics: syn::Generics = if uses_lifetime {
+        syn::parse_quote!(<'a>)
+    } else {
+        syn::Generics::default()
+    };
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
     let out = quote! {
         #[derive(
-            Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+            Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ::serde::Serialize, ::serde::Deserialize,
         )]
         #[serde(untagged)]
-        pub enum Translation<'a> {
+        pub enum Translation #generics {
             #(#enum_variants)*
         }
 
-        impl<'a> Translation<'a> {
+        impl #impl_generics Translation #ty_generics #where_clause {
             pub fn key(&self) -> &'static str {
                 match self {
                     #(#enum_variant_keys)*
@@ -237,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn generate_enum() -> eyre::Result<()> {
+    fn generate_enum_with_lifetime() -> eyre::Result<()> {
         crate::tests::init();
 
         let translations = [
@@ -286,8 +306,8 @@ mod tests {
                 Eq,
                 PartialOrd,
                 Ord,
-                serde::Serialize,
-                serde::Deserialize,
+                ::serde::Serialize,
+                ::serde::Deserialize,
             )]
             #[serde(untagged)]
             pub enum Translation<'a> {
@@ -302,6 +322,74 @@ mod tests {
                 },
             }
             impl<'a> Translation<'a> {
+                pub fn key(&self) -> &'static str {
+                    match self {
+                        Self::TestOne { .. } => "test.one",
+                        Self::TestTwo { .. } => "test.two",
+                    }
+                }
+            }
+        "# };
+        let want = format!("{}\n{}", super::preamble(), want);
+        sim_assert_eq!(have: have, want: want);
+        Ok(())
+    }
+
+    #[test]
+    fn generate_enum_without_lifetime() -> eyre::Result<()> {
+        crate::tests::init();
+
+        let translations = [
+            (
+                Spanned::dummy("test.one".to_string()),
+                model::Translation {
+                    language: [(
+                        model::Language::En,
+                        Spanned::dummy("test.one in en".to_string()),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    arguments: [].into_iter().collect(),
+                    file_id: 0,
+                },
+            ),
+            (
+                Spanned::dummy("test.two".to_string()),
+                model::Translation {
+                    language: [(
+                        model::Language::En,
+                        Spanned::dummy("test.two in en".to_string()),
+                    )]
+                    .into_iter()
+                    .collect(),
+                    arguments: [("ArgTwo".to_string(), model::ArgumentType::Number)]
+                        .into_iter()
+                        .collect(),
+                    file_id: 0,
+                },
+            ),
+        ];
+        let translations = model::Translations(translations.into_iter().collect());
+        let have = super::generate_translation_enum(&translations)?;
+        println!("{have}");
+
+        let want = indoc::indoc! {r#"
+            #[derive(
+                Debug,
+                Clone,
+                PartialEq,
+                Eq,
+                PartialOrd,
+                Ord,
+                ::serde::Serialize,
+                ::serde::Deserialize,
+            )]
+            #[serde(untagged)]
+            pub enum Translation {
+                TestOne {},
+                TestTwo { #[serde(rename = "ArgTwo")] arg_two: i64 },
+            }
+            impl Translation {
                 pub fn key(&self) -> &'static str {
                     match self {
                         Self::TestOne { .. } => "test.one",

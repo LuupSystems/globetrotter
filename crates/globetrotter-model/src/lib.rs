@@ -1,6 +1,7 @@
 #![allow(warnings)]
 
 pub mod diagnostics;
+pub mod ext;
 pub mod json;
 pub mod language;
 pub mod toml;
