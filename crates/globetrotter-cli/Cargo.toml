@@ -56,7 +56,7 @@ thiserror.workspace = true
 
 # colors and diagnostics
 termcolor = "1"
-codespan-reporting = "^0.12"
+codespan-reporting.workspace = true
 
 # argument parsing
 clap.workspace = true

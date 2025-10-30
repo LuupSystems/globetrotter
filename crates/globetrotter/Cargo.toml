@@ -51,7 +51,7 @@ tokio.workspace = true
 futures.workspace = true
 
 # colors and diagnostics
-codespan-reporting = "^0.12"
+codespan-reporting.workspace = true
 colored = "3"
 strip-ansi-escapes = "0"
 unindent = "0"

@@ -1,16 +1,13 @@
 use codespan_reporting::{diagnostic::Diagnostic, files, term};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, LazyLock};
+use tokio::sync::{Mutex, RwLock};
 
-#[derive(Debug, Clone)]
-// #[derive(Debug)]
+#[derive(Clone)]
 pub struct Printer {
-    writer: Arc<term::termcolor::StandardStream>,
-    // writer: term::termcolor::StandardStream,
+    writer: Arc<Mutex<term::StylesWriter<'static, term::termcolor::StandardStream>>>,
     diagnostic_config: term::Config,
     files: Arc<RwLock<files::SimpleFiles<String, String>>>,
-    // files: RwLock<files::SimpleFiles<String, String>>,
 }
 
 pub trait ToSourceName {
@@ -41,20 +38,18 @@ impl Default for Printer {
     }
 }
 
+static DEFAULT_STYLES: LazyLock<term::Styles> = LazyLock::new(|| term::Styles::default());
+
 impl Printer {
     #[must_use]
     pub fn new(color_choice: term::termcolor::ColorChoice) -> Self {
         let writer = term::termcolor::StandardStream::stderr(color_choice);
-        let diagnostic_config = term::Config {
-            styles: term::Styles::with_blue(term::termcolor::Color::Blue),
-            ..term::Config::default()
-        };
+        let writer = term::StylesWriter::new(writer, &DEFAULT_STYLES);
+        let diagnostic_config = term::Config::default();
         Self {
-            writer: Arc::new(writer),
-            // writer,
+            writer: Arc::new(Mutex::new(writer)),
             diagnostic_config,
             files: Arc::new(RwLock::new(files::SimpleFiles::new())),
-            // files: RwLock::new(files::SimpleFiles::new()),
         }
     }
 
@@ -64,8 +59,10 @@ impl Printer {
     }
 
     pub async fn emit(&self, diagnostic: &Diagnostic<usize>) -> Result<(), files::Error> {
-        term::emit(
-            &mut self.writer.lock(),
+        let mut writer = self.writer.lock().await;
+        term::emit_to_write_style(
+            &mut *writer,
+            // &mut self.writer.lock(),
             &self.diagnostic_config,
             &*self.files.read().await,
             diagnostic,

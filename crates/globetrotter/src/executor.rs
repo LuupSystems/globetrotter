@@ -159,7 +159,6 @@ fn combine_translations(
     Ok(translations)
 }
 
-#[derive(Debug)]
 pub struct Executor {
     pub strict: Option<bool>,
     pub check_templates: Option<bool>,

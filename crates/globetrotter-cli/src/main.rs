@@ -38,7 +38,6 @@ impl Invert for Option<bool> {
     }
 }
 
-#[derive(Debug)]
 pub struct Globetrotter {
     pub options: options::Options,
     pub diagnostic_printer: DiagnosticsPrinter,
