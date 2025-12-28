@@ -121,7 +121,7 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
         .map(|(key, translation)| (key_to_rust_enum_variant(key.as_ref()), key, translation))
         .collect();
 
-    // Find duplicate indentifiers
+    // Find duplicate identifiers
     let duplicates: Vec<_> = enum_variant_names
         .iter()
         .duplicates_by(|(safe_key, _, _)| safe_key)
