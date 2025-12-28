@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [tests]
     outputs:
-      precompiled-binaries: ${{ steps.upload.outputs.artifact-path }}
+      precompiled-binaries: ${{ steps.upload.outputs.artifact-url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,7 +47,7 @@ jobs:
           TAP_GITHUB_TOKEN: "${{ secrets.TAP_GITHUB_TOKEN }}"
       - name: Upload precompiled binaries
         id: upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: goreleaser-dist
           path: goreleaser-dist
@@ -58,7 +58,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Download precompiled binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: goreleaser-dist
           path: goreleaser-dist
