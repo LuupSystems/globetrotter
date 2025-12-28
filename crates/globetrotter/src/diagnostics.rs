@@ -62,7 +62,6 @@ impl Printer {
         let mut writer = self.writer.lock().await;
         term::emit_to_write_style(
             &mut *writer,
-            // &mut self.writer.lock(),
             &self.diagnostic_config,
             &*self.files.read().await,
             diagnostic,

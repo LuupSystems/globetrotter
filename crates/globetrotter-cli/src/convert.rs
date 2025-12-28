@@ -20,12 +20,11 @@ impl TryInto<convert_case::Case<'static>> for crate::options::KeyStyle {
     fn try_into(self) -> Result<convert_case::Case<'static>, Self::Error> {
         use convert_case::Case;
         match self {
-            custom @ (Self::Dotted | Self::UpperDotted) => Err(CustomStyle(custom)),
+            Self::Dotted | Self::UpperDotted => Err(CustomStyle(self)),
             Self::Upper => Ok(Case::Upper),
             Self::Lower => Ok(Case::Lower),
             Self::Title => Ok(Case::Title),
             Self::Pascal => Ok(Case::Pascal),
-            Self::Toggle => Ok(Case::Toggle),
             Self::Camel => Ok(Case::Camel),
             Self::UpperCamel => Ok(Case::UpperCamel),
             Self::Snake => Ok(Case::Snake),
@@ -37,7 +36,6 @@ impl TryInto<convert_case::Case<'static>> for crate::options::KeyStyle {
             Self::Train => Ok(Case::Train),
             Self::Flat => Ok(Case::Flat),
             Self::UpperFlat => Ok(Case::UpperFlat),
-            Self::Alternating => Ok(Case::Alternating),
         }
     }
 }

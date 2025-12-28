@@ -8,12 +8,12 @@ before:
     - rustup default stable
     - cargo install --locked --force cargo-zigbuild
 
-brews:
+homebrew_casks:
   - name: globetrotter
     ids:
       - globetrotter
     description: "Polyglot, type-safe internationalization"
-    directory: Formula
+    directory: Casks
     commit_author:
       name: roman
       email: roman@luup-systems.com
@@ -24,6 +24,12 @@ brews:
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
       pull_request:
         enabled: false
+    hooks:
+      post:
+        install: |
+          if OS.mac? && File.exist?("/usr/bin/xattr")
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/globetrotter"]
+          end
 
 builds:
   - id: "globetrotter"
@@ -34,15 +40,12 @@ builds:
       # linux
       - x86_64-unknown-linux-musl
       - aarch64-unknown-linux-musl
-      # macos works only for zig<0.14 (unable to open library directory '/opt/MacOSX11.3.sdk/opt/MacOSX11.3.sdk/usr/lib': FileNotFound)
+      # apple
       - x86_64-apple-darwin
       - aarch64-apple-darwin
-      # windows (gnu) works only for zig>=0.14
+      # windows
       - x86_64-pc-windows-gnu
       - aarch64-pc-windows-gnullvm
-      # windows (msvc) doesnt work right now, requires windows.h from msvc
-      # - x86_64-pc-windows-msvc
-      # - aarch64-pc-windows-msvc
     dir: ./
     tool: cargo
     command: zigbuild

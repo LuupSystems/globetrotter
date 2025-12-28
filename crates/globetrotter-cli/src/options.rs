@@ -52,10 +52,6 @@ pub enum KeyStyle {
     /// `MyVariableName`
     #[strum(to_string = "pascal", serialize = "pascal")]
     Pascal,
-    // spellcheck:ignore-next-line
-    /// mY vARIABLE nAME"
-    #[strum(to_string = "toggle", serialize = "toggle")]
-    Toggle,
     /// myVariableName
     #[strum(to_string = "camel", serialize = "camel")]
     Camel,
@@ -95,9 +91,6 @@ pub enum KeyStyle {
     /// MYVARIABLENAME
     #[strum(to_string = "upper-flat", serialize = "upper-flat")]
     UpperFlat,
-    /// mY vArIaBlE nAmE
-    #[strum(to_string = "alternating", serialize = "alternating")]
-    Alternating,
 }
 
 #[derive(thiserror::Error, Debug)]
