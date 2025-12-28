@@ -42,20 +42,6 @@ tasks:
         build-env
         bash -c 'source ./release.sh && goreleaser build --snapshot --clean --timeout 120m'
 
-  # build:container:
-  #   desc: "build multi-arch docker container from source"
-  #   deps: [build:env]
-  #   cmds:
-  #     # pretter-ignore
-  #     - >-
-  #       docker buildx build
-  #       --load
-  #       --platform linux/amd64,linux/arm64
-  #       -f ./docker/build_from_source.dockerfile
-  #       -t globetrotter:latest
-  #       ./
-  #       {{.CLI_ARGS}}
-
   release:
     desc: "release using goreleaser"
     deps: [build:env]
