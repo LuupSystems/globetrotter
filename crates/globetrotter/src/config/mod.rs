@@ -24,18 +24,15 @@ use std::path::{Path, PathBuf};
 use yaml_spanned::{Spanned, Value};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+#[derive(Default)]
 pub enum Version {
     #[serde(rename = "1", alias = "v1", alias = "V1")]
     V1,
     #[serde(rename = "latest")]
+    #[default]
     Latest,
 }
 
-impl Default for Version {
-    fn default() -> Self {
-        Self::Latest
-    }
-}
 
 pub fn config_file_names() -> impl Iterator<Item = &'static str> {
     [".globetrotter.yaml", "globetrotter.yaml"].into_iter()

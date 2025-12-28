@@ -589,6 +589,7 @@ impl Language {
         serde_variant::to_variant_name(self).unwrap_or_else(|_| self.into())
     }
 
+    #[allow(clippy::too_many_lines)]
     #[must_use]
     pub fn name(&self) -> &'static str {
         // spellcheck:ignore-block

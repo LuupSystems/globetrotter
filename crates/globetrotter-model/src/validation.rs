@@ -33,29 +33,35 @@ fn validate_handlebars_template(translation: &Translation, errors: &mut Vec<Diag
     );
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ValidationOptions<'a> {
+    pub required_languages: &'a [Spanned<Language>],
+    pub template_engine: Option<&'a Spanned<TemplateEngine>>,
+    pub strict: bool,
+    pub check_templates: bool,
+}
+
 impl Translations {
     #[cfg(feature = "rayon")]
     pub fn validate(
         &self,
         config_name: &Spanned<String>,
-        required_languages: &[Spanned<Language>],
-        template_engine: Option<&Spanned<TemplateEngine>>,
-        strict: bool,
-        check_templates: bool,
         config_file_id: Option<FileId>,
         diagnostics: &mut Vec<Diagnostic<FileId>>,
+        options: ValidationOptions<'_>,
     ) {
         use rayon::prelude::*;
 
         tracing::trace!(
             num_translations = self.0.len(),
-            languages = ?required_languages.iter().map(Spanned::as_ref).collect::<Vec<_>>(),
-            check_templates,
+            languages = ?options.required_languages.iter().map(Spanned::as_ref).collect::<Vec<_>>(),
+            check_templates = options.check_templates,
             "validating",
         );
         let partial_diagnostics = self.0.par_iter().flat_map(|(key, translation)| {
             let mut diagnostics = vec![];
-            diagnostics.extend(required_languages.iter().unique().filter_map(|lang| {
+            diagnostics.extend(options.required_languages.iter().unique().filter_map(|lang| {
+                #[allow(clippy::if_same_then_else)]
                 if translation.language.contains_key(lang.as_ref()) {
                     None
                 } else {
@@ -67,14 +73,15 @@ impl Translations {
                 }
             }));
 
-            if check_templates && translation.is_template() {
-                // check that templates compile
-                match template_engine {
+            if options.check_templates && translation.is_template() {
+                // Check that templates compile
+                match options.template_engine {
                     None => {
-                        let diagnostic =
-                            Diagnostic::warning_or_error(strict).with_message(format!(
+                        let message = format!(
                             "running with `--check`, but no template engine is specified for `{config_name}`",
-                        ));
+                        );
+                        let diagnostic =
+                            Diagnostic::warning_or_error(options.strict).with_message(message);
                         diagnostics.push(diagnostic);
                     }
                     Some(Spanned {

@@ -169,11 +169,25 @@ impl Translations {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl FromIterator<(Spanned<String>, Translation)> for Translations {
     fn from_iter<T: IntoIterator<Item = (Spanned<String>, Translation)>>(iter: T) -> Self {
         Self(iter.into_iter().collect())
+    }
+}
+
+impl<'a> IntoIterator for &'a Translations {
+    type Item = (&'a Spanned<String>, &'a Translation);
+    type IntoIter = indexmap::map::Iter<'a, Spanned<String>, Translation>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }
 

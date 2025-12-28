@@ -231,7 +231,7 @@ pub fn parse_translation(
 fn flatten_toml_span(
     value: &mut toml_span::value::ValueInner,
     span: toml_span::Span,
-    key: String,
+    key: &str,
     out: &mut super::Translations,
     file_id: usize,
     strict: bool,
@@ -241,7 +241,8 @@ fn flatten_toml_span(
         toml_span::value::ValueInner::Table(table) => {
             // treat as terminal
             if let Some(translation) = parse_translation(table, file_id)? {
-                out.0.insert(Spanned::new(span, key.clone()), translation);
+                out.0
+                    .insert(Spanned::new(span, key.to_owned()), translation);
             }
 
             // let table_tmp: Vec<(String, String)> = {
@@ -265,7 +266,7 @@ fn flatten_toml_span(
                             flatten_toml_span(
                                 &mut nested_table.take(),
                                 nested_table.span,
-                                new_key.clone(),
+                                &new_key,
                                 out,
                                 file_id,
                                 strict,
@@ -277,7 +278,7 @@ fn flatten_toml_span(
                         flatten_toml_span(
                             &mut nested_table,
                             value.span,
-                            new_key.clone(),
+                            &new_key,
                             out,
                             file_id,
                             strict,
@@ -318,7 +319,7 @@ impl crate::Translations {
         flatten_toml_span(
             &mut value.take(),
             value.span,
-            String::new(),
+            "",
             &mut translations,
             file_id,
             strict,

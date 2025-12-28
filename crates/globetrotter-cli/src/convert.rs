@@ -151,14 +151,13 @@ pub mod fmt {
 
             self.depth += 1;
 
-            if old_depth == 0 {
-                if let Item::Value(Value::InlineTable(inline_table)) = node {
+            if old_depth == 0
+                && let Item::Value(Value::InlineTable(inline_table)) = node {
                     let inline_table = std::mem::replace(inline_table, InlineTable::new());
                     let mut table = inline_table.into_table();
                     key.fmt();
                     *node = Item::Table(table);
                 }
-            }
 
             // recurse further into the document tree.
             visit_table_like_kv_mut(self, key, node);
@@ -544,7 +543,7 @@ mod tests {
         translations.sort();
 
         let doc: toml_edit::DocumentMut = super::to_document(&translations)?;
-        println!("\n=======================\n{}", doc);
+        println!("\n=======================\n{doc}");
 
         let want = indoc::indoc! {
             r#"

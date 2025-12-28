@@ -12,7 +12,10 @@ use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 use colored::Colorize;
 use futures::future::{Future, TryFutureExt};
 use futures::stream::{self, Stream, StreamExt, TryStreamExt};
-use globetrotter_model::diagnostics::{DiagnosticExt, FileId, Span, Spanned, ToDiagnostics};
+use globetrotter_model::{
+    diagnostics::{DiagnosticExt, FileId, Span, Spanned, ToDiagnostics},
+    validation::ValidationOptions,
+};
 use handlebars::Handlebars;
 use itertools::Itertools;
 use normalize_path::NormalizePath;
@@ -142,7 +145,7 @@ fn combine_translations(
         dbg!(&occurrences);
 
         let diagnostic = error::DuplicateKeyError {
-            key: duplicate_key.as_ref().to_string(),
+            key: duplicate_key.as_ref().clone(),
             occurrences,
         };
 
@@ -170,11 +173,12 @@ pub struct Executor {
 }
 
 impl Executor {
+    #[must_use]
     pub fn new<F>(
         configs: &config::Configs<F>,
         diagnostic_printer: crate::diagnostics::Printer,
     ) -> Self {
-        let logger = Logger::new(&configs);
+        let logger = Logger::new(configs);
         Self {
             strict: None,
             check_templates: None,
@@ -312,7 +316,7 @@ impl Executor {
                 let mut input_paths = resolve_input_paths(
                     base_dir,
                     &input.path_or_glob_pattern,
-                    file_id.into(),
+                    file_id,
                     strict,
                     diagnostics,
                 );
@@ -325,7 +329,7 @@ impl Executor {
                         resolve_input_paths(
                             base_dir,
                             &input.path_or_glob_pattern,
-                            file_id.into(),
+                            file_id,
                             strict,
                             diagnostics,
                         )
@@ -434,12 +438,14 @@ impl Executor {
                 let mut diagnostics = vec![];
                 translations.validate(
                     &config_file.config.name,
-                    &config_file.config.languages,
-                    config_file.config.template_engine.as_ref(),
-                    strict,
-                    check_templates,
-                    config_file.file_id.into(),
+                    config_file.file_id,
                     &mut diagnostics,
+                    ValidationOptions {
+                        required_languages: &config_file.config.languages,
+                        template_engine: config_file.config.template_engine.as_ref(),
+                        strict,
+                        check_templates,
+                    },
                 );
                 Ok::<_, Error>(diagnostics)
             }

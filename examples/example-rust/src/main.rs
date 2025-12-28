@@ -62,7 +62,7 @@ impl<K> MyTranslator<K> {
         Ok(Self {
             handlebars,
             translations,
-            _key: std::marker::PhantomData::default(),
+            _key: std::marker::PhantomData,
         })
     }
 }
@@ -76,7 +76,7 @@ where
         let key = key_with_args.key();
         let translation = self.translations.translations.get(key)?;
         match translation {
-            model::json::Translation::Literal(value) => Some(Ok(value.to_string())),
+            model::json::Translation::Literal(value) => Some(Ok(value.clone())),
             model::json::Translation::Template(_) => {
                 Some(self.handlebars.render(key, key_with_args))
             }

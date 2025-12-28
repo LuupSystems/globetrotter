@@ -21,9 +21,9 @@ Also, contributions for more languages are always welcome!
 ### Installation
 
 ```bash
-brew install LuupSystems/tap/globetrotter
+brew install --cask LuupSystems/tap/globetrotter
 
-# or install from source
+# Or install from source
 cargo install --locked globetrotter-cli
 ```
 

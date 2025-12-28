@@ -38,7 +38,7 @@ impl Default for Printer {
     }
 }
 
-static DEFAULT_STYLES: LazyLock<term::Styles> = LazyLock::new(|| term::Styles::default());
+static DEFAULT_STYLES: LazyLock<term::Styles> = LazyLock::new(term::Styles::default);
 
 impl Printer {
     #[must_use]

@@ -63,7 +63,7 @@ fn type_annotation_for_translation(translation: &model::Translation) -> ast::TsT
         .map(|(name, argument)| {
             let key = ast::Expr::Lit(ast::Lit::Str(ast::Str {
                 span: DUMMY_SP,
-                value: name.to_string().into(),
+                value: name.clone().into(),
                 raw: None,
             }));
             ast::TsTypeElement::TsPropertySignature(ast::TsPropertySignature {

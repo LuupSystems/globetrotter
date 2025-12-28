@@ -82,7 +82,7 @@ pub fn parse_input<F>(
             Ok(None)
         }
         Value::String(path) => Ok(Some(Input {
-            path_or_glob_pattern: Spanned::new(value.span, path.to_string()),
+            path_or_glob_pattern: Spanned::new(value.span, path.clone()),
             exclude: Vec::new(),
             prefix: None,
             prepend_filename: None,
@@ -100,7 +100,7 @@ pub fn parse_input<F>(
                 Some(yaml_spanned::Spanned {
                     span,
                     inner: Value::String(path_or_glob_pattern),
-                }) => Ok(vec![Spanned::new(*span, path_or_glob_pattern.to_string())]),
+                }) => Ok(vec![Spanned::new(*span, path_or_glob_pattern.clone())]),
                 Some(yaml_spanned::Spanned {
                     inner: Value::Sequence(sequence),
                     ..
@@ -503,6 +503,7 @@ impl Input {
         self
     }
 
+    #[must_use] 
     pub fn with_prepend_filename(mut self, prepend_filename: bool) -> Self {
         self.prepend_filename = Some(Spanned::dummy(prepend_filename));
         self
@@ -587,6 +588,7 @@ pub struct Outputs {
 }
 
 impl Outputs {
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
@@ -710,16 +712,18 @@ impl Config {
         self.languages.extend(
             languages
                 .into_iter()
-                .map(|language| Spanned::dummy(language)),
+                .map(Spanned::dummy),
         );
         self
     }
 
+    #[must_use] 
     pub fn with_check_templates(mut self, check_templates: bool) -> Self {
         self.check_templates = Some(check_templates);
         self
     }
 
+    #[must_use] 
     pub fn with_strict(mut self, strict: bool) -> Self {
         self.strict = Some(strict);
         self
@@ -739,7 +743,7 @@ impl Config {
     }
 
     pub fn with_inputs(mut self, inputs: impl IntoIterator<Item = Input>) -> Self {
-        self.inputs.extend(inputs.into_iter());
+        self.inputs.extend(inputs);
         self
     }
 

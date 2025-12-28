@@ -9,13 +9,6 @@ echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | tee /etc/apt/sourc
 apt update && apt upgrade -y
 apt install -y git goreleaser mingw-w64
 
-# Install latest zig
-# ZIG_VERSION=0.13.0
-# ZIG_NAME="zig-linux-$(uname -m)-${ZIG_VERSION}"
-
-# ZIG_VERSION=0.14.1
-# ZIG_NAME="zig-$(uname -m)-linux-${ZIG_VERSION}"
-
 ZIG_VERSION=0.15.2
 ZIG_NAME="zig-$(uname -m)-linux-${ZIG_VERSION}"
 

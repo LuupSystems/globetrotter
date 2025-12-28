@@ -11,18 +11,15 @@ pub enum Translation {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+#[derive(Default)]
 pub enum Version {
     #[serde(rename = "1", alias = "v1")]
+    #[default]
     V1,
     // #[serde(rename = "latest")]
     // Latest,
 }
 
-impl Default for Version {
-    fn default() -> Self {
-        Self::V1
-    }
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -70,9 +67,9 @@ impl crate::Translations {
                 |(key, translation)| match translation.language.get(&language) {
                     Some(t) => {
                         let value = if translation.is_template() {
-                            Translation::Template(t.as_ref().to_string())
+                            Translation::Template(t.as_ref().clone())
                         } else {
-                            Translation::Literal(t.as_ref().to_string())
+                            Translation::Literal(t.as_ref().clone())
                         };
                         Ok((key.clone().into_inner(), value))
                     }
