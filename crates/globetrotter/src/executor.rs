@@ -192,9 +192,9 @@ impl Executor {
 
     async fn read_translation_file(
         &self,
-        input: (config::Input, PathBuf),
-    ) -> Result<(config::Input, PathBuf, FileId, String), Error> {
-        let (input, input_path) = input;
+        input: (config::Input, PathBuf, Option<PathBuf>),
+    ) -> Result<(config::Input, PathBuf, FileId, String, Option<PathBuf>), Error> {
+        let (input, input_path, relative_base_dir) = input;
 
         let input_path = tokio::fs::canonicalize(&input_path)
             .await
@@ -220,12 +220,12 @@ impl Executor {
             )
             .await;
 
-        Ok((input, input_path, file_id, raw_translations))
+        Ok((input, input_path, file_id, raw_translations, relative_base_dir))
     }
 
     async fn process_translation_file<'a>(
         &self,
-        input: (config::Input, PathBuf, FileId, String),
+        input: (config::Input, PathBuf, FileId, String, Option<PathBuf>),
         strict: bool,
     ) -> Result<
         (
@@ -237,7 +237,7 @@ impl Executor {
         ),
         Error,
     > {
-        let (input, input_path, file_id, raw_translations) = input;
+        let (input, input_path, file_id, raw_translations, relative_base_dir) = input;
         let handle = tokio::task::spawn_blocking(move || {
             let mut diagnostics = vec![];
 
@@ -254,25 +254,59 @@ impl Executor {
                 Ok(translations) => translations,
             };
 
-            let file_stem = input_path
-                .file_stem()
-                .map(|name| name.to_string_lossy().to_string());
+            let mut prefix: Vec<String> = Vec::new();
 
-            let prefix: &[Option<&str>] =
-                if input.prepend_filename.as_deref().copied().unwrap_or(false) {
-                    &[
-                        file_stem.as_deref(),
-                        input.prefix.as_ref().map(|prefix| prefix.as_ref().as_str()),
-                    ]
-                } else {
-                    &[input.prefix.as_ref().map(|prefix| prefix.as_ref().as_str())]
-                };
+            if input
+                .prepend_relative_path
+                .as_deref()
+                .copied()
+                .unwrap_or(false)
+            {
+                if let Some(base_dir) = relative_base_dir.as_ref() {
+                    if let Some(rel_path) = pathdiff::diff_paths(&input_path, base_dir) {
+                        let mut components: Vec<String> = rel_path
+                            .components()
+                            .filter_map(|c| {
+                                use std::path::Component;
+                                match c {
+                                    Component::Normal(os) => Some(os.to_string_lossy().to_string()),
+                                    _ => None,
+                                }
+                            })
+                            .collect();
 
-            let prefix: Vec<_> = prefix
-                .iter()
-                .filter_map(|p| *p)
-                .filter(|p| !p.is_empty())
-                .collect();
+                        if let Some(last) = components.last_mut() {
+                            if let Some(stripped) = Path::new(last).file_stem() {
+                                *last = stripped.to_string_lossy().to_string();
+                            }
+                        }
+
+                        prefix.extend(components.into_iter().filter(|p| !p.is_empty()));
+                    }
+                }
+            } else if input
+                .prepend_filename
+                .as_deref()
+                .copied()
+                .unwrap_or(false)
+            {
+                let file_stem = input_path
+                    .file_stem()
+                    .map(|name| name.to_string_lossy().to_string());
+                if let Some(file_stem) = file_stem {
+                    if !file_stem.is_empty() {
+                        prefix.push(file_stem);
+                    }
+                }
+            }
+
+            if let Some(extra_prefix) =
+                input.prefix.as_ref().map(|prefix| prefix.as_ref().as_str())
+            {
+                if !extra_prefix.is_empty() {
+                    prefix.push(extra_prefix.to_string());
+                }
+            }
 
             let separator = input
                 .separator
@@ -286,7 +320,8 @@ impl Executor {
                     .map(|(key, value)| {
                         let prefixed_key = prefix
                             .iter()
-                            .chain([&key.as_ref().as_str()])
+                            .map(|s| s.as_str())
+                            .chain([key.as_ref().as_str()])
                             .join(separator);
                         (Spanned::new(key.span, prefixed_key), value)
                     })
@@ -376,7 +411,8 @@ impl Executor {
                 let input_path = tokio::fs::canonicalize(&input_path)
                     .await
                     .map_err(|source| IoError::new(input_path, source))?;
-                Ok::<_, Error>((input, input_path))
+                let relative_base_dir = config_file.config_dir.clone();
+                Ok::<_, Error>((input, input_path, relative_base_dir))
             })
             .buffer_unordered(16)
             .and_then(|input| async { self.read_translation_file(input).await })
@@ -517,3 +553,99 @@ impl Executor {
         Ok(self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn prepend_filename_prefixes_with_file_stem() {
+        let configs: config::Configs<FileId> = vec![];
+        let printer = crate::diagnostics::Printer::default();
+        let executor = Executor::new(&configs, printer);
+
+        let input = config::Input::new("translations/a.toml").with_prepend_filename(true);
+        let input_path = PathBuf::from("/base/dialogs/delete-user.toml");
+        let file_id: FileId = 0;
+        let raw_translations = r#"
+            [section]
+            en = "Hello"
+        "#;
+
+        let (_input, _path, _file_id, translations, _diagnostics) = executor
+            .process_translation_file((input, input_path, file_id, raw_translations.into(), None), true)
+            .await
+            .expect("process_translation_file should succeed");
+
+        let keys: Vec<_> = translations
+            .0
+            .keys()
+            .map(|k| k.as_ref().as_str().to_string())
+            .collect();
+
+        assert_eq!(keys, vec!["delete-user.section".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn prepend_relative_path_prefixes_with_full_path_segments() {
+        let configs: config::Configs<FileId> = vec![];
+        let printer = crate::diagnostics::Printer::default();
+        let executor = Executor::new(&configs, printer);
+
+        let input = config::Input::new("translations/airtype/**/*.toml")
+            .with_prepend_relative_path(true);
+
+        let base_dir = PathBuf::from("/workspace/translations/airtype");
+        let input_path = base_dir.join("dialogs/chat/too-many-files.toml");
+        let file_id: FileId = 0;
+        let raw_translations = r#"
+            [section]
+            en = "Hello"
+        "#;
+
+        let (_input, _path, _file_id, translations, _diagnostics) = executor
+            .process_translation_file(
+                (input, input_path, file_id, raw_translations.into(), Some(base_dir)),
+                true,
+            )
+            .await
+            .expect("process_translation_file should succeed");
+
+        let keys: Vec<_> = translations
+            .0
+            .keys()
+            .map(|k| k.as_ref().as_str().to_string())
+            .collect();
+
+        assert_eq!(keys, vec!["dialogs.chat.too-many-files.section".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn prepend_relative_path_disabled_preserves_existing_behavior() {
+        let configs: config::Configs<FileId> = vec![];
+        let printer = crate::diagnostics::Printer::default();
+        let executor = Executor::new(&configs, printer);
+
+        let input = config::Input::new("translations/upload.toml").with_prefix("upload");
+        let input_path = PathBuf::from("/base/upload.toml");
+        let file_id: FileId = 0;
+        let raw_translations = r#"
+            [message]
+            en = "Hello"
+        "#;
+
+        let (_input, _path, _file_id, translations, _diagnostics) = executor
+            .process_translation_file((input, input_path, file_id, raw_translations.into(), None), true)
+            .await
+            .expect("process_translation_file should succeed");
+
+        let keys: Vec<_> = translations
+            .0
+            .keys()
+            .map(|k| k.as_ref().as_str().to_string())
+            .collect();
+
+        assert_eq!(keys, vec!["upload.message".to_string()]);
+    }
+}
+

@@ -86,6 +86,7 @@ pub fn parse_input<F>(
             exclude: Vec::new(),
             prefix: None,
             prepend_filename: None,
+            prepend_relative_path: None,
             separator: None,
         })),
         Value::Mapping(mapping) => {
@@ -114,12 +115,15 @@ pub fn parse_input<F>(
             }?;
             let prefix = parse_optional::<String>(mapping.get("prefix"))?;
             let prepend_filename = parse_optional::<bool>(mapping.get("prepend_filename"))?;
+            let prepend_relative_path =
+                parse_optional::<bool>(mapping.get("prepend_relative_path"))?;
             let separator = parse_optional::<String>(mapping.get("separator"))?;
             Ok(Some(Input {
                 path_or_glob_pattern,
                 exclude,
                 prefix,
                 prepend_filename,
+                prepend_relative_path,
                 separator,
             }))
         }
@@ -479,6 +483,7 @@ pub struct Input {
     pub exclude: Vec<Spanned<PathOrGlobPattern>>,
     pub prefix: Option<Spanned<String>>,
     pub prepend_filename: Option<Spanned<bool>>,
+    pub prepend_relative_path: Option<Spanned<bool>>,
     pub separator: Option<Spanned<String>>,
 }
 
@@ -489,6 +494,7 @@ impl Input {
             exclude: vec![],
             prefix: None,
             prepend_filename: None,
+            prepend_relative_path: None,
             separator: None,
         }
     }
@@ -509,6 +515,12 @@ impl Input {
         self
     }
 
+    #[must_use]
+    pub fn with_prepend_relative_path(mut self, prepend_relative_path: bool) -> Self {
+        self.prepend_relative_path = Some(Spanned::dummy(prepend_relative_path));
+        self
+    }
+
     pub fn with_separator(mut self, separator: impl Into<String>) -> Self {
         self.separator = Some(Spanned::dummy(separator.into()));
         self
@@ -523,6 +535,10 @@ impl std::fmt::Display for Input {
             .field(
                 "prepend_filename",
                 &self.prepend_filename.as_ref().map(Spanned::display),
+            )
+            .field(
+                "prepend_relative_path",
+                &self.prepend_relative_path.as_ref().map(Spanned::display),
             )
             .field("separator", &self.separator.as_ref().map(Spanned::display))
             .field(
