@@ -142,8 +142,6 @@ fn combine_translations(
             .flat_map(|res| (res.3).0.keys().map(|key| (key.span.clone(), res.2)))
             .collect();
 
-        dbg!(&occurrences);
-
         let diagnostic = error::DuplicateKeyError {
             key: duplicate_key.as_ref().clone(),
             occurrences,
@@ -220,7 +218,13 @@ impl Executor {
             )
             .await;
 
-        Ok((input, input_path, file_id, raw_translations, relative_base_dir))
+        Ok((
+            input,
+            input_path,
+            file_id,
+            raw_translations,
+            relative_base_dir,
+        ))
     }
 
     async fn process_translation_file<'a>(
@@ -284,12 +288,7 @@ impl Executor {
                         prefix.extend(components.into_iter().filter(|p| !p.is_empty()));
                     }
                 }
-            } else if input
-                .prepend_filename
-                .as_deref()
-                .copied()
-                .unwrap_or(false)
-            {
+            } else if input.prepend_filename.as_deref().copied().unwrap_or(false) {
                 let file_stem = input_path
                     .file_stem()
                     .map(|name| name.to_string_lossy().to_string());
@@ -300,8 +299,7 @@ impl Executor {
                 }
             }
 
-            if let Some(extra_prefix) =
-                input.prefix.as_ref().map(|prefix| prefix.as_ref().as_str())
+            if let Some(extra_prefix) = input.prefix.as_ref().map(|prefix| prefix.as_ref().as_str())
             {
                 if !extra_prefix.is_empty() {
                     prefix.push(extra_prefix.to_string());
@@ -431,7 +429,7 @@ impl Executor {
                 Severity::Warning => num_warnings += 1,
                 Severity::Note | Severity::Help => {}
             }
-            let _ = self.diagnostic_printer.emit(&diagnostic);
+            self.diagnostic_printer.emit(&diagnostic).await?;
         }
         if num_errors > 0 {
             return Err(FailedWithErrors {
@@ -573,7 +571,10 @@ mod tests {
         "#;
 
         let (_input, _path, _file_id, translations, _diagnostics) = executor
-            .process_translation_file((input, input_path, file_id, raw_translations.into(), None), true)
+            .process_translation_file(
+                (input, input_path, file_id, raw_translations.into(), None),
+                true,
+            )
             .await
             .expect("process_translation_file should succeed");
 
@@ -592,8 +593,8 @@ mod tests {
         let printer = crate::diagnostics::Printer::default();
         let executor = Executor::new(&configs, printer);
 
-        let input = config::Input::new("translations/airtype/**/*.toml")
-            .with_prepend_relative_path(true);
+        let input =
+            config::Input::new("translations/airtype/**/*.toml").with_prepend_relative_path(true);
 
         let base_dir = PathBuf::from("/workspace/translations/airtype");
         let input_path = base_dir.join("dialogs/chat/too-many-files.toml");
@@ -605,7 +606,13 @@ mod tests {
 
         let (_input, _path, _file_id, translations, _diagnostics) = executor
             .process_translation_file(
-                (input, input_path, file_id, raw_translations.into(), Some(base_dir)),
+                (
+                    input,
+                    input_path,
+                    file_id,
+                    raw_translations.into(),
+                    Some(base_dir),
+                ),
                 true,
             )
             .await
@@ -617,7 +624,10 @@ mod tests {
             .map(|k| k.as_ref().as_str().to_string())
             .collect();
 
-        assert_eq!(keys, vec!["dialogs.chat.too-many-files.section".to_string()]);
+        assert_eq!(
+            keys,
+            vec!["dialogs.chat.too-many-files.section".to_string()]
+        );
     }
 
     #[tokio::test]
@@ -635,7 +645,10 @@ mod tests {
         "#;
 
         let (_input, _path, _file_id, translations, _diagnostics) = executor
-            .process_translation_file((input, input_path, file_id, raw_translations.into(), None), true)
+            .process_translation_file(
+                (input, input_path, file_id, raw_translations.into(), None),
+                true,
+            )
             .await
             .expect("process_translation_file should succeed");
 
@@ -648,4 +661,3 @@ mod tests {
         assert_eq!(keys, vec!["upload.message".to_string()]);
     }
 }
-

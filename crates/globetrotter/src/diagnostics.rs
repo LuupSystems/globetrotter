@@ -60,6 +60,7 @@ impl Printer {
 
     pub async fn emit(&self, diagnostic: &Diagnostic<usize>) -> Result<(), files::Error> {
         let mut writer = self.writer.lock().await;
+
         term::emit_to_write_style(
             &mut *writer,
             &self.diagnostic_config,

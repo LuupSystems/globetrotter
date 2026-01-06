@@ -79,6 +79,9 @@ pub enum Error {
 
     #[error(transparent)]
     Task(#[from] tokio::task::JoinError),
+
+    #[error("failed to emit diagnostic")]
+    Diagnostic(#[from] codespan_reporting::files::Error),
 }
 
 #[derive(thiserror::Error, Debug)]

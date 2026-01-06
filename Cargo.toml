@@ -5,6 +5,20 @@ members = [
   "crates/*",
 ]
 
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+unimplemented = "deny"
+todo = "deny"
+indexing_slicing = "deny"
+
 [workspace.package]
 version = "0.0.9"
 edition = "2024"

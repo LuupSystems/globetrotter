@@ -58,10 +58,10 @@ impl Globetrotter {
             .map(|config_path| async move {
                 let config_path = tokio::fs::canonicalize(&config_path)
                     .await
-                    .wrap_err_with(|| "failed to open: {config_path:?}")?;
+                    .wrap_err_with(|| eyre::eyre!("failed to open: {config_path:?}"))?;
                 let metadata = tokio::fs::metadata(&config_path)
                     .await
-                    .wrap_err_with(|| "failed to open: {config_path:?}")?;
+                    .wrap_err_with(|| eyre::eyre!("failed to open: {config_path:?}"))?;
 
                 if metadata.is_file() {
                     Ok(config_path.clone())

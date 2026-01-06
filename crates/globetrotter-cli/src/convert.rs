@@ -152,12 +152,13 @@ pub mod fmt {
             self.depth += 1;
 
             if old_depth == 0
-                && let Item::Value(Value::InlineTable(inline_table)) = node {
-                    let inline_table = std::mem::replace(inline_table, InlineTable::new());
-                    let mut table = inline_table.into_table();
-                    key.fmt();
-                    *node = Item::Table(table);
-                }
+                && let Item::Value(Value::InlineTable(inline_table)) = node
+            {
+                let inline_table = std::mem::replace(inline_table, InlineTable::new());
+                let mut table = inline_table.into_table();
+                key.fmt();
+                *node = Item::Table(table);
+            }
 
             // recurse further into the document tree.
             visit_table_like_kv_mut(self, key, node);
@@ -289,14 +290,12 @@ pub fn convert_str(
 pub async fn convert(mut options: options::ConvertOptions) -> eyre::Result<()> {
     let options = Arc::new(options);
     let translations = convert_file(&options.input_path, Arc::clone(&options)).await?;
-    dbg!(translations.len());
 
     if let Some(ref output_path) = options.output_path {
         use tokio::io::AsyncWriteExt;
 
         let doc: toml_edit::DocumentMut = to_document(&translations)?;
 
-        dbg!(&output_path);
         if let Some(parent) = output_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }

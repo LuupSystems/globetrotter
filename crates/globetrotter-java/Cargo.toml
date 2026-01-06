@@ -23,6 +23,9 @@ keywords = [
   "java",
 ]
 
+[lints]
+workspace = true
+
 [features]
 default = []
 
