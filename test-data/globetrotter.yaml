@@ -1,18 +1,16 @@
 version: 1
-# test:
-#   # aref: &aref A
-#   bref: !B &bref
-#     - 1
-#     - 2
-#   a: *aref
-#   # b: *bref
 configs:
-  # my-config-name: {}
-
-  my-config-name-other:
+  my-other-translations:
     languages: &languages ["en", "de", fr]
+    inputs:
+      - prefix: "other-a"
+        prepend_relative_path: true
+        path: ./translations/a.toml
+    outputs:
+      json:
+        - ./output/other_translations_{{language}}.json
 
-  my-config-name:
+  my-translations:
     languages: *languages
     engine: handlebars
     strict: true
@@ -23,8 +21,8 @@ configs:
 
         path: ./translations/a.toml
 
-      - path: ./translations/a.toml
-        prefix: "my-a"
+      - path: ./translations/b.toml
+        prefix: "my-b"
         prepend_filename: true
       - ./translations/media.toml
       - ./translations/upload.toml
@@ -33,7 +31,7 @@ configs:
       json:
         - ./output/translations_{{language}}.json
       typescript:
-        type: ./output/typescript1.ts
+        type: ./output/typescript_types.ts
         # type:
         #   - ./output/typescript1.ts
         #   - ./output/typescript2.ts
@@ -41,8 +39,8 @@ configs:
         #   - ./output/typescript1.ts
         #   - ./output/typescript2.ts
       rust:
-        - ./output/rust.rs
+        - ./output/rust_types.rs
       golang:
-        - ./output/golang.go
+        - ./output/golang_types.go
       python:
-        - ./output/python.py
+        - ./output/python_types.py
