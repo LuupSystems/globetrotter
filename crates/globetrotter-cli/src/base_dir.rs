@@ -6,9 +6,7 @@ use std::path::{Component, Path, PathBuf};
 /// If there is no common base, returns None.
 pub fn common_base_directory(paths: &[impl AsRef<Path>]) -> Option<PathBuf> {
     // Convert first path into a vector of components (use its parent directory)
-    let Some(first_path) = paths.first().map(AsRef::as_ref) else {
-        return None;
-    };
+    let first_path = paths.first().map(AsRef::as_ref)?;
     let mut common: Vec<Component> = match first_path.parent() {
         Some(parent) => parent.components().collect(),
         None => first_path.components().collect(),
@@ -23,7 +21,7 @@ pub fn common_base_directory(paths: &[impl AsRef<Path>]) -> Option<PathBuf> {
 
         // Find common prefix between `common` and `comps`
         let mut i = 0;
-        while i < common.len() && i < comps.len() && common[i] == comps[i] {
+        while i < common.len() && i < comps.len() && common.get(i) == comps.get(i) {
             i += 1;
         }
         common.truncate(i);

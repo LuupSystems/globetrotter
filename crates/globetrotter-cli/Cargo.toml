@@ -69,6 +69,7 @@ tracing.workspace = true
 tracing-subscriber = { version = "0", features = ["json", "env-filter"] }
 
 globetrotter.workspace = true
+handlebars.workspace = true
 
 # optional: convert from json
 serde = { workspace = true, optional = true }

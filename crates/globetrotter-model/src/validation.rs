@@ -48,13 +48,17 @@ impl Translations {
         config_name: &Spanned<String>,
         config_file_id: Option<FileId>,
         diagnostics: &mut Vec<Diagnostic<FileId>>,
-        options: ValidationOptions<'_>,
+        options: &ValidationOptions<'_>,
     ) {
         use rayon::prelude::*;
 
         tracing::trace!(
             num_translations = self.0.len(),
-            languages = ?options.required_languages.iter().map(Spanned::as_ref).collect::<Vec<_>>(),
+            languages = ?options
+                .required_languages
+                .iter()
+                .map(Spanned::as_ref)
+                .collect::<Vec<_>>(),
             check_templates = options.check_templates,
             "validating",
         );

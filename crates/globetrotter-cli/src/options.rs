@@ -7,9 +7,11 @@ use globetrotter::model::Language;
 use std::path::PathBuf;
 use strum::VariantNames;
 
+/// Options for the `format` subcommand.
 #[derive(Parser, Debug)]
 pub struct FormatOptions {}
 
+/// Supported input formats when converting translations.
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, strum::EnumString, strum::VariantNames,
 )]
@@ -20,6 +22,8 @@ pub enum InputFormat {
 }
 
 impl InputFormat {
+    /// Infer the input format from a file extension.
+    #[must_use]
     pub fn from_ext(extension: &str) -> Option<Self> {
         match extension.to_lowercase().as_str() {
             "json" => Some(Self::Json),
@@ -30,6 +34,7 @@ impl InputFormat {
     }
 }
 
+/// Styles for generated translation keys.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::VariantNames,
 )]
@@ -98,17 +103,18 @@ pub enum KeyStyle {
 pub struct CustomStyle(KeyStyle);
 
 fn input_format_parser() -> impl TypedValueParser {
-    PossibleValuesParser::new(InputFormat::VARIANTS).map(|s| s.parse::<InputFormat>().unwrap())
+    PossibleValuesParser::new(InputFormat::VARIANTS).try_map(|s| s.parse::<InputFormat>())
 }
 
 fn language_parser() -> impl TypedValueParser {
-    PossibleValuesParser::new(Language::VARIANTS).map(|s| s.parse::<Language>().unwrap())
+    PossibleValuesParser::new(Language::VARIANTS).try_map(|s| s.parse::<Language>())
 }
 
 fn style_parser() -> impl TypedValueParser {
-    PossibleValuesParser::new(KeyStyle::VARIANTS).map(|s| s.parse::<KeyStyle>().unwrap())
+    PossibleValuesParser::new(KeyStyle::VARIANTS).try_map(|s| s.parse::<KeyStyle>())
 }
 
+/// Options for the `convert` subcommand.
 #[derive(Parser, Debug, Default)]
 pub struct ConvertOptions {
     #[clap(short = 'i', long = "input")]
@@ -151,6 +157,7 @@ pub struct ConvertOptions {
     pub languages: Vec<Language>,
 }
 
+/// Top-level CLI commands.
 #[derive(Subcommand, Debug)]
 pub enum Command {
     #[command(name = "format", aliases = ["fmt"])]
@@ -161,6 +168,7 @@ pub enum Command {
     Convert(ConvertOptions),
 }
 
+/// Top-level CLI options for the `globetrotter` binary.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]

@@ -28,8 +28,7 @@ impl TryInto<convert_case::Case<'static>> for crate::options::KeyStyle {
             Self::Camel => Ok(Case::Camel),
             Self::UpperCamel => Ok(Case::UpperCamel),
             Self::Snake => Ok(Case::Snake),
-            Self::UpperSnake => Ok(Case::UpperSnake),
-            Self::ScreamingSnake => Ok(Case::UpperSnake),
+            Self::UpperSnake | Self::ScreamingSnake => Ok(Case::UpperSnake),
             Self::Kebab | Self::Hyphens => Ok(Case::Kebab),
             Self::UpperKebab | Self::UpperHyphens => Ok(Case::UpperKebab),
             Self::Cobol => Ok(Case::Cobol),
@@ -81,7 +80,7 @@ pub fn convert_json_mapping(
 }
 
 pub fn convert_json_entry(
-    value: serde_json::Value,
+    value: &serde_json::Value,
     languages: &HashSet<&Language>,
 ) -> eyre::Result<(Spanned<String>, Translation)> {
     if let Some((key, value)) = value.as_object().and_then(|object| {
@@ -126,7 +125,7 @@ pub fn parse_json_input(input: &str, languages: &HashSet<&Language>) -> eyre::Re
             .map(|entry| convert_json_mapping(entry, languages))
             .collect()),
         serde_json::Value::Array(array) => array
-            .into_iter()
+            .iter()
             .map(|entry| convert_json_entry(entry, languages))
             .collect::<Result<Translations, _>>(),
         other => Err(eyre::eyre!(
@@ -204,8 +203,8 @@ fn to_document(
 pub fn postprocess(
     mut translations: Translations,
     options: &options::ConvertOptions,
-) -> eyre::Result<Translations> {
-    for (k, t) in translations.iter() {
+) -> Translations {
+    for (k, t) in &translations {
         if t.is_empty() {
             tracing::warn!(key = k.display().to_string(), "empty translation");
         }
@@ -241,7 +240,7 @@ pub fn postprocess(
             })
             .collect();
     }
-    Ok(translations)
+    translations
 }
 
 pub async fn convert_file(
@@ -268,14 +267,14 @@ pub async fn convert_file(
 
     // let file_name = input_path.file_name().and_then(|name| name.to_str());
     let translations =
-        tokio::task::spawn_blocking(move || convert_str(&input, input_format, options)).await??;
+        tokio::task::spawn_blocking(move || convert_str(&input, input_format, &options)).await??;
     Ok(translations)
 }
 
 pub fn convert_str(
     value: &str,
     format: InputFormat,
-    options: Arc<options::ConvertOptions>,
+    options: &Arc<options::ConvertOptions>,
 ) -> eyre::Result<Translations> {
     let languages: HashSet<_> = options.languages.iter().collect();
     let translations = match format {
@@ -284,7 +283,7 @@ pub fn convert_str(
             "cannot convert input file with extension {other:?}"
         )),
     }?;
-    postprocess(translations, &options)
+    Ok(postprocess(translations, options))
 }
 
 pub async fn convert(mut options: options::ConvertOptions) -> eyre::Result<()> {
@@ -352,7 +351,7 @@ mod tests {
             languages: vec![Language::De, Language::En, Language::Fr],
             ..crate::options::ConvertOptions::default()
         });
-        let have = super::convert_str(&json_str, super::InputFormat::Json, options)?;
+        let have = super::convert_str(&json_str, super::InputFormat::Json, &options)?;
         dbg!(&have);
 
         let want: Translations = [
@@ -433,7 +432,7 @@ mod tests {
             languages: vec![Language::De, Language::En],
             ..crate::options::ConvertOptions::default()
         });
-        let have = super::convert_str(&json_str, super::InputFormat::Json, options)?;
+        let have = super::convert_str(&json_str, super::InputFormat::Json, &options)?;
         dbg!(&have);
 
         let want: Translations = [

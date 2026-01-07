@@ -33,6 +33,11 @@ pub enum JsonOutputError {
     Task(#[from] tokio::task::JoinError),
 }
 
+#[allow(clippy::cast_precision_loss)]
+fn human_readable_bytes(len: usize) -> String {
+    human_bytes::human_bytes(len as f64)
+}
+
 impl executor::Executor {
     fn resolve_json_output_path(
         &self,
@@ -124,25 +129,28 @@ impl executor::Executor {
                             self.logger.dry_run_would_write(&json_output_path),
                             format!(
                                 "({}, {} gzipped)",
-                                human_bytes::human_bytes(json.len() as f64),
-                                human_bytes::human_bytes(num_bytes_gzip as f64).bold()
+                                human_readable_bytes(json.len()),
+                                human_readable_bytes(num_bytes_gzip).bold()
                             )
                             .bright_black()
                         );
                     } else {
+                        let displayed_path = if self.logger.use_absolute_paths {
+                            json_output_path.display().to_string()
+                        } else {
+                            relative_to(
+                                self.global_base_dir_for_display.as_deref(),
+                                &json_output_path,
+                            )
+                            .display()
+                            .to_string()
+                        };
                         println!(
-                            "{} wrote {:?} ({}, {} gzipped)",
+                            "{} wrote {} ({}, {} gzipped)",
                             self.logger.language_log_prefix(&config.name, **language),
-                            if self.logger.use_absolute_paths {
-                                json_output_path
-                            } else {
-                                relative_to(
-                                    self.global_base_dir_for_display.as_deref(),
-                                    &json_output_path,
-                                )
-                            },
-                            human_bytes::human_bytes(json.len() as f64),
-                            human_bytes::human_bytes(num_bytes_gzip as f64)
+                            displayed_path,
+                            human_readable_bytes(json.len()),
+                            human_readable_bytes(num_bytes_gzip)
                                 .bold()
                                 .magenta()
                         );

@@ -7,6 +7,10 @@ pub mod iter {
         ///
         /// This mirrors `Iterator::unzip` in that the destination collections can be
         /// any types implementing `Default + Extend`.
+        ///
+        /// # Errors
+        ///
+        /// Propagates the first error produced by the underlying iterator.
         fn try_unzip<A, B, C1, C2, E>(self) -> Result<(C1, C2), E>
         where
             Self: Sized + Iterator<Item = Result<(A, B), E>>,
@@ -26,6 +30,10 @@ pub mod iter {
         }
 
         /// Convenience helper that always returns `Vec`s.
+        ///
+        /// # Errors
+        ///
+        /// Propagates the first error produced by the underlying iterator.
         fn try_unzip_vec<A, B, E>(self) -> Result<(Vec<A>, Vec<B>), E>
         where
             Self: Sized + Iterator<Item = Result<(A, B), E>>,

@@ -64,6 +64,9 @@ clap = { version = "4", features = ["derive", "env"]}
 # Diagnostics
 codespan-reporting = "0.13"
 
+# templating
+handlebars = "6"
+
 # workspace crates
 globetrotter = { path = "./crates/globetrotter/" }
 globetrotter-model = { path = "./crates/globetrotter-model/" }

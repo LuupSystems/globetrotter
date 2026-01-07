@@ -38,6 +38,12 @@ pub fn config_file_names() -> impl Iterator<Item = &'static str> {
     [".globetrotter.yaml", "globetrotter.yaml"].into_iter()
 }
 
+/// Search for a globetrotter configuration file in the given directory.
+///
+/// # Errors
+///
+/// Returns an error if accessing the filesystem fails while probing for the
+/// supported configuration file names.
 pub async fn find_config_file(dir: &Path) -> std::io::Result<Option<PathBuf>> {
     use futures::{StreamExt, TryStreamExt, stream};
     let mut found = stream::iter(config_file_names().map(|path| dir.join(path)))
@@ -60,6 +66,13 @@ pub async fn find_config_file(dir: &Path) -> std::io::Result<Option<PathBuf>> {
 }
 
 #[allow(dead_code)]
+/// Synchronously search for a globetrotter configuration file in the given
+/// directory.
+///
+/// # Errors
+///
+/// Returns an error if accessing the filesystem fails while probing for the
+/// supported configuration file names.
 pub fn find_config_file_sync(dir: &Path) -> std::io::Result<Option<PathBuf>> {
     for path in config_file_names().map(|path| dir.join(path)) {
         match std::fs::exists(&path) {
@@ -73,6 +86,12 @@ pub fn find_config_file_sync(dir: &Path) -> std::io::Result<Option<PathBuf>> {
     Ok(None)
 }
 
+/// Parse a raw YAML configuration string into typed `Configs`.
+///
+/// # Errors
+///
+/// Returns an error if the YAML cannot be parsed or if the configuration
+/// schema is invalid for the detected version.
 pub fn from_str<F: Copy + PartialEq>(
     raw_config: &str,
     config_dir: &Path,
@@ -167,6 +186,12 @@ impl ToDiagnostics for ConfigError {
     }
 }
 
+/// Parse the configuration `version` field from the given YAML value.
+///
+/// # Errors
+///
+/// Returns an error if the `version` field is present but cannot be parsed
+/// into a supported `Version` value.
 pub fn parse_version<F>(
     value: &yaml_spanned::Spanned<Value>,
     file_id: F,
@@ -217,28 +242,28 @@ mod tests {
         let have = parse_version_wrapper(
             Value::Mapping([("version".into(), 1.into())].into_iter().collect()),
             true,
-        );
+        )?;
         sim_assert_eq!(
-            have: have.ok(),
-            want: Some(super::Version::V1)
+            have: have,
+            want: super::Version::V1
         );
 
         let have = parse_version_wrapper(
             Value::Mapping([("version".into(), "1".into())].into_iter().collect()),
             true,
-        );
+        )?;
         sim_assert_eq!(
-            have: have.ok(),
-            want: Some(super::Version::V1)
+            have: have,
+            want: super::Version::V1
         );
 
         let have = parse_version_wrapper(
             Value::Mapping([("version".into(), "v1".into())].into_iter().collect()),
             true,
-        );
+        )?;
         sim_assert_eq!(
-            have: have.ok(),
-            want: Some(super::Version::V1)
+            have: have,
+            want: super::Version::V1
         );
         Ok(())
     }

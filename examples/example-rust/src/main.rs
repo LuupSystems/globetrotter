@@ -1,3 +1,7 @@
+//! Example application demonstrating how to use globetrotter-generated
+//! translations from Rust.
+
+/// Helper functions and Handlebars helpers used by the example.
 pub mod helpers;
 
 use clap::{
@@ -8,13 +12,15 @@ use color_eyre::eyre;
 use globetrotter_model as model;
 use handlebars::Handlebars;
 
-/// The generated translations as JSON.
+/// The generated translations as JSON for the German locale.
 ///
-/// Of course, you could dynamically load them from the file system too..
+/// Of course, you could dynamically load them from the file system too.
 pub static JSON_TRANSLATIONS_DE: &str =
     include_str!(concat!(env!("OUT_DIR"), "/translations_de.json"));
+/// The generated translations as JSON for the English locale.
 pub static JSON_TRANSLATIONS_EN: &str =
     include_str!(concat!(env!("OUT_DIR"), "/translations_en.json"));
+/// The generated translations as JSON for the French locale.
 pub static JSON_TRANSLATIONS_FR: &str =
     include_str!(concat!(env!("OUT_DIR"), "/translations_fr.json"));
 
@@ -28,7 +34,9 @@ pub mod generated {
 }
 pub use generated::Translation;
 
+/// Trait for types that can be used as translation keys in the example.
 pub trait TranslationKey: Clone + std::fmt::Debug {
+    /// Get the string key for this translation.
     fn key(&self) -> &'static str;
 }
 
@@ -38,6 +46,7 @@ impl TranslationKey for Translation<'_> {
     }
 }
 
+/// Simple translation engine that wraps the generated model and Handlebars.
 #[derive(Debug, Clone)]
 pub struct MyTranslator<K> {
     translations: model::json::Translations,
@@ -46,6 +55,11 @@ pub struct MyTranslator<K> {
 }
 
 impl<K> MyTranslator<K> {
+    /// Construct a translator from a JSON reader containing translations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JSON is malformed or cannot be parsed.
     pub fn from_reader(reader: impl std::io::BufRead) -> eyre::Result<Self> {
         let mut handlebars = Handlebars::new();
 
@@ -72,6 +86,7 @@ where
     K: TranslationKey + serde::Serialize,
 {
     #[must_use]
+    /// Translate a key plus arguments into a localized string.
     pub fn translate(&self, key_with_args: &K) -> Option<Result<String, handlebars::RenderError>> {
         let key = key_with_args.key();
         let translation = self.translations.translations.get(key)?;
@@ -84,26 +99,33 @@ where
     }
 }
 
+/// Supported languages for the example CLI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::VariantNames)]
 pub enum Language {
+    /// German.
     #[strum(serialize = "de")]
     De,
+    /// English.
     #[strum(serialize = "en")]
     En,
+    /// French.
     #[strum(serialize = "fr")]
     Fr,
 }
 
 fn language_parser() -> impl TypedValueParser {
     use strum::VariantNames;
-    PossibleValuesParser::new(Language::VARIANTS).map(|s| s.parse::<Language>().unwrap())
+    PossibleValuesParser::new(Language::VARIANTS).try_map(|s| s.parse::<Language>())
 }
 
+/// Command-line options for the example program.
 #[derive(Parser, Debug)]
 pub struct Options {
+    /// Language to use for translations.
     #[clap(short = 'l', long = "language", value_parser = language_parser())]
     pub language: Language,
 
+    /// Name to use in the greeting.
     #[clap(short = 'n', long = "name")]
     pub name: String,
 }

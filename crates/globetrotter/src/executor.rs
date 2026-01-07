@@ -120,16 +120,20 @@ pub(crate) fn resolve_input_paths<'a>(
     valid_entries
 }
 
+type OutputFuture<'a> = Pin<Box<dyn Future<Output = Result<(), OutputError>> + 'a>>;
+
+type TranslationResult = (
+    config::Input,
+    PathBuf,
+    usize,
+    model::Translations,
+    Vec<Diagnostic<FileId>>,
+);
+
 fn combine_translations(
-    translations: Vec<(
-        config::Input,
-        PathBuf,
-        usize,
-        model::Translations,
-        Vec<Diagnostic<FileId>>,
-    )>,
+    translations: Vec<TranslationResult>,
     diagnostics: &mut Vec<Diagnostic<FileId>>,
-) -> Result<model::Translations, Error> {
+) -> model::Translations {
     // check for duplicate keys across translation files
     let duplicate_keys = translations
         .iter()
@@ -151,13 +155,12 @@ fn combine_translations(
     }
 
     // combine all the translations
-    let translations = model::Translations(
+    model::Translations(
         translations
             .into_iter()
             .flat_map(|res| (res.3).0.into_iter())
             .collect(),
-    );
-    Ok(translations)
+    )
 }
 
 pub struct Executor {
@@ -227,7 +230,7 @@ impl Executor {
         ))
     }
 
-    async fn process_translation_file<'a>(
+    async fn process_translation_file(
         &self,
         input: (config::Input, PathBuf, FileId, String, Option<PathBuf>),
         strict: bool,
@@ -266,44 +269,46 @@ impl Executor {
                 .copied()
                 .unwrap_or(false)
             {
-                if let Some(base_dir) = relative_base_dir.as_ref() {
-                    if let Some(rel_path) = pathdiff::diff_paths(&input_path, base_dir) {
-                        let mut components: Vec<String> = rel_path
-                            .components()
-                            .filter_map(|c| {
-                                use std::path::Component;
-                                match c {
-                                    Component::Normal(os) => Some(os.to_string_lossy().to_string()),
-                                    _ => None,
-                                }
-                            })
-                            .collect();
-
-                        if let Some(last) = components.last_mut() {
-                            if let Some(stripped) = Path::new(last).file_stem() {
-                                *last = stripped.to_string_lossy().to_string();
+                if let Some(base_dir) = relative_base_dir.as_ref()
+                    && let Some(rel_path) = pathdiff::diff_paths(&input_path, base_dir)
+                {
+                    let mut components: Vec<String> = rel_path
+                        .components()
+                        .filter_map(|c| {
+                            use std::path::Component;
+                            match c {
+                                Component::Normal(os) => Some(os.to_string_lossy().to_string()),
+                                _ => None,
                             }
-                        }
+                        })
+                        .collect();
 
-                        prefix.extend(components.into_iter().filter(|p| !p.is_empty()));
+                    if let Some(last) = components.last_mut()
+                        && let Some(stripped) = Path::new(last).file_stem()
+                    {
+                        *last = stripped.to_string_lossy().to_string();
                     }
+
+                    prefix.extend(components.into_iter().filter(|p| !p.is_empty()));
                 }
             } else if input.prepend_filename.as_deref().copied().unwrap_or(false) {
                 let file_stem = input_path
                     .file_stem()
                     .map(|name| name.to_string_lossy().to_string());
-                if let Some(file_stem) = file_stem {
-                    if !file_stem.is_empty() {
-                        prefix.push(file_stem);
-                    }
+                if let Some(file_stem) = file_stem
+                    && !file_stem.is_empty()
+                {
+                    prefix.push(file_stem);
                 }
             }
 
-            if let Some(extra_prefix) = input.prefix.as_ref().map(|prefix| prefix.as_ref().as_str())
+            if let Some(extra_prefix) = input
+                .prefix
+                .as_ref()
+                .map(|prefix| prefix.as_ref().as_str())
+                .filter(|extra_prefix| !extra_prefix.is_empty())
             {
-                if !extra_prefix.is_empty() {
-                    prefix.push(extra_prefix.to_string());
-                }
+                prefix.push(extra_prefix.to_string());
             }
 
             let separator = input
@@ -318,7 +323,7 @@ impl Executor {
                     .map(|(key, value)| {
                         let prefixed_key = prefix
                             .iter()
-                            .map(|s| s.as_str())
+                            .map(String::as_str)
                             .chain([key.as_ref().as_str()])
                             .join(separator);
                         (Spanned::new(key.span, prefixed_key), value)
@@ -333,7 +338,6 @@ impl Executor {
     }
 
     fn unique_input_paths<'a>(
-        &'a self,
         inputs: &'a [config::Input],
         base_dir: Option<&'a Path>,
         strict: bool,
@@ -382,6 +386,14 @@ impl Executor {
             })
     }
 
+    /// Execute a single configuration and generate all configured outputs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if resolving or reading input files, parsing or
+    /// validating translations, emitting diagnostics, or generating any
+    /// outputs fails.
+    #[allow(clippy::too_many_lines)]
     pub async fn execute_config(
         &self,
         config_file: Arc<config::ConfigFile<FileId>>,
@@ -396,7 +408,7 @@ impl Executor {
 
         let mut diagnostics = vec![];
 
-        let inputs = self.unique_input_paths(
+        let inputs = Self::unique_input_paths(
             &config_file.config.inputs,
             config_file.config_dir.as_deref(),
             strict,
@@ -441,7 +453,7 @@ impl Executor {
 
         let (translations, mut diagnostics) = tokio::task::spawn_blocking(|| {
             let mut diagnostics: Vec<Diagnostic<FileId>> = vec![];
-            let translations = combine_translations(translations, &mut diagnostics)?;
+            let translations = combine_translations(translations, &mut diagnostics);
             Ok::<_, Error>((Arc::new(translations), diagnostics))
         })
         .await??;
@@ -454,7 +466,7 @@ impl Executor {
                 Severity::Warning => num_warnings += 1,
                 Severity::Note | Severity::Help => {}
             }
-            let _ = self.diagnostic_printer.emit(&diagnostic);
+            self.diagnostic_printer.emit(&diagnostic).await?;
         }
         if num_errors > 0 {
             return Err(FailedWithErrors {
@@ -470,22 +482,23 @@ impl Executor {
             let config_file = Arc::clone(&config_file);
             move || {
                 let mut diagnostics = vec![];
+                let options = ValidationOptions {
+                    required_languages: &config_file.config.languages,
+                    template_engine: config_file.config.template_engine.as_ref(),
+                    strict,
+                    check_templates,
+                };
                 translations.validate(
                     &config_file.config.name,
                     config_file.file_id,
                     &mut diagnostics,
-                    ValidationOptions {
-                        required_languages: &config_file.config.languages,
-                        template_engine: config_file.config.template_engine.as_ref(),
-                        strict,
-                        check_templates,
-                    },
+                    &options,
                 );
                 Ok::<_, Error>(diagnostics)
             }
         });
 
-        let output_futures: Vec<Pin<Box<dyn Future<Output = Result<(), OutputError>>>>> = vec![
+        let output_futures: Vec<OutputFuture<'_>> = vec![
             Box::pin(
                 self.generate_json_outputs(&*config_file, &translations, strict)
                     .map_err(OutputError::from),
@@ -520,7 +533,7 @@ impl Executor {
                 Severity::Warning => num_warnings += 1,
                 Severity::Note | Severity::Help => {}
             }
-            let _ = self.diagnostic_printer.emit(&diagnostic);
+            let _ = self.diagnostic_printer.emit(&diagnostic).await;
         }
         if num_errors > 0 {
             return Err(FailedWithErrors {
@@ -539,6 +552,12 @@ impl Executor {
         Ok(())
     }
 
+    /// Execute all configurations in the given list and generate outputs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if reading translation files, validating configurations,
+    /// emitting diagnostics, or generating any of the configured outputs fails.
     pub async fn execute(self, configs: config::Configs<FileId>) -> Result<Self, Error> {
         tracing::trace!(num_configs = configs.len(), "executing");
 
@@ -555,9 +574,10 @@ impl Executor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use color_eyre::eyre;
 
     #[tokio::test]
-    async fn prepend_filename_prefixes_with_file_stem() {
+    async fn prepend_filename_prefixes_with_file_stem() -> eyre::Result<()> {
         let configs: config::Configs<FileId> = vec![];
         let printer = crate::diagnostics::Printer::default();
         let executor = Executor::new(&configs, printer);
@@ -575,8 +595,7 @@ mod tests {
                 (input, input_path, file_id, raw_translations.into(), None),
                 true,
             )
-            .await
-            .expect("process_translation_file should succeed");
+            .await?;
 
         let keys: Vec<_> = translations
             .0
@@ -585,10 +604,12 @@ mod tests {
             .collect();
 
         assert_eq!(keys, vec!["delete-user.section".to_string()]);
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn prepend_relative_path_prefixes_with_full_path_segments() {
+    async fn prepend_relative_path_prefixes_with_full_path_segments() -> eyre::Result<()> {
         let configs: config::Configs<FileId> = vec![];
         let printer = crate::diagnostics::Printer::default();
         let executor = Executor::new(&configs, printer);
@@ -615,8 +636,7 @@ mod tests {
                 ),
                 true,
             )
-            .await
-            .expect("process_translation_file should succeed");
+            .await?;
 
         let keys: Vec<_> = translations
             .0
@@ -628,10 +648,12 @@ mod tests {
             keys,
             vec!["dialogs.chat.too-many-files.section".to_string()]
         );
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn prepend_relative_path_disabled_preserves_existing_behavior() {
+    async fn prepend_relative_path_disabled_preserves_existing_behavior() -> eyre::Result<()> {
         let configs: config::Configs<FileId> = vec![];
         let printer = crate::diagnostics::Printer::default();
         let executor = Executor::new(&configs, printer);
@@ -649,8 +671,7 @@ mod tests {
                 (input, input_path, file_id, raw_translations.into(), None),
                 true,
             )
-            .await
-            .expect("process_translation_file should succeed");
+            .await?;
 
         let keys: Vec<_> = translations
             .0
@@ -659,5 +680,7 @@ mod tests {
             .collect();
 
         assert_eq!(keys, vec!["upload.message".to_string()]);
+
+        Ok(())
     }
 }

@@ -17,6 +17,12 @@ pub struct ConfigFile<F> {
 
 pub type Configs<F> = Vec<ConfigFile<F>>;
 
+/// Parse the `languages` configuration for a single config.
+///
+/// # Errors
+///
+/// Returns an error if the languages section is present but not a sequence, or if
+/// any language value cannot be deserialized into a Language enum variant.
 pub fn parse_languages<F>(
     value: &yaml_spanned::Spanned<Value>,
     file_id: F,
@@ -49,6 +55,11 @@ pub fn parse_languages<F>(
     }
 }
 
+/// Parse a typed value from YAML.
+///
+/// # Errors
+///
+/// Returns an error if the value cannot be deserialized into the target type.
 pub fn parse<T: serde::de::DeserializeOwned>(
     value: &yaml_spanned::Spanned<Value>,
 ) -> Result<Spanned<T>, ConfigError> {
@@ -59,12 +70,24 @@ pub fn parse<T: serde::de::DeserializeOwned>(
     Ok(Spanned::new(value.span, inner))
 }
 
+/// Parse an optional typed value from YAML.
+///
+/// # Errors
+///
+/// Returns an error if the value is present but cannot be deserialized into
+/// the target type.
 pub fn parse_optional<T: serde::de::DeserializeOwned>(
     value: Option<&yaml_spanned::Spanned<Value>>,
 ) -> Result<Option<Spanned<T>>, ConfigError> {
     value.map(|value| parse(value)).transpose()
 }
 
+/// Parse a single input entry from YAML.
+///
+/// # Errors
+///
+/// Returns an error if the input entry has an unexpected type or is missing
+/// required fields.
 pub fn parse_input<F>(
     value: &yaml_spanned::Spanned<Value>,
     file_id: F,
@@ -136,6 +159,11 @@ pub fn parse_input<F>(
     }
 }
 
+/// Expect a YAML value to be a sequence.
+///
+/// # Errors
+///
+/// Returns an error if the value is not a sequence.
 pub fn expect_sequence(value: &yaml_spanned::Spanned<Value>) -> Result<&Sequence, ConfigError> {
     value
         .as_sequence()
@@ -147,6 +175,11 @@ pub fn expect_sequence(value: &yaml_spanned::Spanned<Value>) -> Result<&Sequence
         })
 }
 
+/// Expect a YAML value to be a mapping.
+///
+/// # Errors
+///
+/// Returns an error if the value is not a mapping.
 pub fn expect_mapping(
     value: &yaml_spanned::Spanned<Value>,
 ) -> Result<(&yaml_spanned::spanned::Span, &Mapping), ConfigError> {
@@ -162,6 +195,12 @@ pub fn expect_mapping(
 }
 
 #[cfg(feature = "rust")]
+/// Parse the Rust output configuration.
+///
+/// # Errors
+///
+/// Returns an error if the `rust`/`rs` output configuration has an unexpected
+/// type or contains invalid output paths.
 pub fn parse_rust_outputs(
     value: &Mapping,
 ) -> Result<Option<globetrotter_rust::OutputConfig>, ConfigError> {
@@ -199,6 +238,12 @@ pub fn parse_rust_outputs(
 }
 
 #[cfg(feature = "typescript")]
+/// Parse the TypeScript output configuration.
+///
+/// # Errors
+///
+/// Returns an error if the `typescript`/`ts` output configuration has an
+/// unexpected type or contains invalid output paths.
 pub fn parse_typescript_outputs(
     value: &Mapping,
 ) -> Result<Option<globetrotter_typescript::OutputConfig>, ConfigError> {
@@ -247,6 +292,12 @@ pub fn parse_typescript_outputs(
     }))
 }
 
+/// Parse the JSON output configuration.
+///
+/// # Errors
+///
+/// Returns an error if the `json`/`translations` output configuration has an
+/// unexpected type or is missing required fields.
 pub fn parse_json_outputs(value: &Mapping) -> Result<Vec<JsonOutputConfig>, ConfigError> {
     let Some(outputs) = value.get("json").or_else(|| value.get("translations")) else {
         return Ok(vec![]);
@@ -291,6 +342,12 @@ pub fn parse_json_outputs(value: &Mapping) -> Result<Vec<JsonOutputConfig>, Conf
     }
 }
 
+/// Parse the `inputs`/`translations` configuration for a single config.
+///
+/// # Errors
+///
+/// Returns an error if the inputs section is present but not a sequence, or if
+/// any input entry has an unexpected structure.
 pub fn parse_inputs<F: Copy + PartialEq>(
     value: &yaml_spanned::Spanned<Value>,
     config_span: Option<yaml_spanned::spanned::Span>,
@@ -323,6 +380,12 @@ pub fn parse_inputs<F: Copy + PartialEq>(
     Ok(inputs)
 }
 
+/// Parse the `outputs` configuration for a single config.
+///
+/// # Errors
+///
+/// Returns an error if the `outputs` field is present but not a mapping, or if
+/// any output sub-configuration has an unexpected shape.
 pub fn parse_outputs<F: Copy + PartialEq>(
     value: &yaml_spanned::Spanned<Value>,
     config_span: Option<yaml_spanned::spanned::Span>,
@@ -355,6 +418,12 @@ pub fn parse_outputs<F: Copy + PartialEq>(
     })
 }
 
+/// Parse a single configuration entry.
+///
+/// # Errors
+///
+/// Returns an error if required fields are missing, if fields have unexpected
+/// types, or if nested `inputs`/`outputs` parsing fails.
 pub fn parse_config<F: Copy + PartialEq>(
     name: Spanned<String>,
     config_span: Option<yaml_spanned::spanned::Span>,
@@ -385,6 +454,12 @@ pub fn parse_config<F: Copy + PartialEq>(
     })
 }
 
+/// Parse the top-level configuration structure into a list of configs.
+///
+/// # Errors
+///
+/// Returns an error if the `config`/`configs` section has an unexpected type or
+/// if any contained configuration cannot be parsed.
 pub fn parse_configs<F: Copy + PartialEq>(
     value: &yaml_spanned::Spanned<Value>,
     config_dir: &Path,
@@ -499,11 +574,13 @@ impl Input {
         }
     }
 
+    #[must_use]
     pub fn with_exclude(mut self, exclude: impl IntoIterator<Item = PathOrGlobPattern>) -> Self {
         self.exclude = exclude.into_iter().map(Spanned::dummy).collect();
         self
     }
 
+    #[must_use]
     pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = Some(Spanned::dummy(prefix.into()));
         self
@@ -521,6 +598,7 @@ impl Input {
         self
     }
 
+    #[must_use]
     pub fn with_separator(mut self, separator: impl Into<String>) -> Self {
         self.separator = Some(Spanned::dummy(separator.into()));
         self
@@ -576,6 +654,7 @@ impl JsonOutputConfig {
         }
     }
 
+    #[must_use]
     pub fn with_style(mut self, style: impl Into<JsonOutputStyle>) -> Self {
         self.style = Some(Spanned::dummy(style.into()));
         self
@@ -609,12 +688,14 @@ impl Outputs {
         Self::default()
     }
 
+    #[must_use]
     pub fn with_json(mut self, json: impl IntoIterator<Item = JsonOutputConfig>) -> Self {
         self.json = json.into_iter().collect();
         self
     }
 
     #[cfg(feature = "typescript")]
+    #[must_use]
     pub fn with_typescript(
         mut self,
         typescript: impl Into<globetrotter_typescript::OutputConfig>,
@@ -624,18 +705,21 @@ impl Outputs {
     }
 
     #[cfg(feature = "rust")]
+    #[must_use]
     pub fn with_rust(mut self, rust: impl Into<globetrotter_rust::OutputConfig>) -> Self {
         self.rust = Some(rust.into());
         self
     }
 
     #[cfg(feature = "golang")]
+    #[must_use]
     pub fn with_golang(mut self, golang: impl Into<globetrotter_golang::OutputConfig>) -> Self {
         self.golang = Some(golang.into());
         self
     }
 
     #[cfg(feature = "python")]
+    #[must_use]
     pub fn with_python(mut self, python: impl Into<globetrotter_python::OutputConfig>) -> Self {
         self.python = Some(python.into());
         self
@@ -719,11 +803,13 @@ impl Config {
         }
     }
 
+    #[must_use]
     pub fn with_language(mut self, language: impl Into<model::Language>) -> Self {
         self.languages.push(Spanned::dummy(language.into()));
         self
     }
 
+    #[must_use]
     pub fn with_languages(mut self, languages: impl IntoIterator<Item = model::Language>) -> Self {
         self.languages.extend(
             languages
@@ -734,17 +820,19 @@ impl Config {
     }
 
     #[must_use] 
+    #[must_use]
     pub fn with_check_templates(mut self, check_templates: bool) -> Self {
         self.check_templates = Some(check_templates);
         self
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn with_strict(mut self, strict: bool) -> Self {
         self.strict = Some(strict);
         self
     }
 
+    #[must_use]
     pub fn with_template_engine(
         mut self,
         template_engine: impl Into<model::TemplateEngine>,
@@ -753,16 +841,19 @@ impl Config {
         self
     }
 
+    #[must_use]
     pub fn with_input(mut self, input: impl Into<Input>) -> Self {
         self.inputs.push(input.into());
         self
     }
 
+    #[must_use]
     pub fn with_inputs(mut self, inputs: impl IntoIterator<Item = Input>) -> Self {
         self.inputs.extend(inputs);
         self
     }
 
+    #[must_use]
     pub fn with_outputs(mut self, outputs: impl Into<Outputs>) -> Self {
         self.outputs = outputs.into();
         self

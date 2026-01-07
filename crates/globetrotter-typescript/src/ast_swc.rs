@@ -19,18 +19,16 @@ pub trait IntoAST<T> {
 impl IntoAST<ast::TsType> for model::ArgumentType {
     fn into_ast(self) -> ast::TsType {
         match self {
-            Self::String => ast::TsType::TsKeywordType(ast::TsKeywordType {
-                span: DUMMY_SP,
-                kind: ast::TsKeywordTypeKind::TsStringKeyword,
-            }),
             Self::Number => ast::TsType::TsKeywordType(ast::TsKeywordType {
                 span: DUMMY_SP,
                 kind: ast::TsKeywordTypeKind::TsNumberKeyword,
             }),
-            Self::Iso8601DateTimeString => ast::TsType::TsKeywordType(ast::TsKeywordType {
-                span: DUMMY_SP,
-                kind: ast::TsKeywordTypeKind::TsStringKeyword,
-            }),
+            Self::String | Self::Iso8601DateTimeString => {
+                ast::TsType::TsKeywordType(ast::TsKeywordType {
+                    span: DUMMY_SP,
+                    kind: ast::TsKeywordTypeKind::TsStringKeyword,
+                })
+            }
             Self::Any => ast::TsType::TsKeywordType(ast::TsKeywordType {
                 span: DUMMY_SP,
                 kind: ast::TsKeywordTypeKind::TsAnyKeyword,
@@ -40,14 +38,14 @@ impl IntoAST<ast::TsType> for model::ArgumentType {
 }
 
 fn emit_code(compiler: &Compiler, program: &ast::Program) -> Result<String, anyhow::Error> {
-    let compiled = compiler.print(
+    let printed = compiler.print(
         program,
         PrintArgs {
             preamble: &crate::preamble(),
             ..PrintArgs::default()
         },
     )?;
-    Ok(compiled.code)
+    Ok(printed.code)
 }
 
 fn type_annotation_for_translation(translation: &model::Translation) -> ast::TsType {
@@ -130,6 +128,11 @@ fn type_members(
     })
 }
 
+/// Generate a TypeScript `Translations` type for the given model.
+///
+/// # Errors
+///
+/// Returns an error if SWC fails to emit code for the constructed AST.
 pub fn generate_translations_type_export(
     translations: &model::Translations,
 ) -> Result<String, Error> {
@@ -155,7 +158,8 @@ pub fn generate_translations_type_export(
         shebang: None,
     });
 
-    let cm: swc_core::common::sync::Lrc<swc_core::common::SourceMap> = Default::default();
+    let cm: swc_core::common::sync::Lrc<swc_core::common::SourceMap> =
+        swc_core::common::sync::Lrc::default();
     let compiler = Compiler::new(cm);
 
     emit_code(&compiler, &program).map_err(Error::Codegen)
@@ -202,7 +206,9 @@ mod tests {
                 fm,
                 &handler,
                 swc_core::ecma::ast::EsVersion::Es2022,
-                swc_core::ecma::parser::Syntax::Typescript(Default::default()),
+                swc_core::ecma::parser::Syntax::Typescript(
+                    swc_core::ecma::parser::TsSyntax::default(),
+                ),
                 swc_core::base::config::IsModule::Unknown,
                 Some(compiler.comments()),
             )
@@ -282,17 +288,18 @@ mod tests {
             };
         "#};
 
-        let cm: swc_core::common::sync::Lrc<swc_core::common::SourceMap> = Default::default();
+        let cm: swc_core::common::sync::Lrc<swc_core::common::SourceMap> =
+            swc_core::common::sync::Lrc::default();
         let fm = cm.new_source_file(
             swc_core::common::FileName::Custom("./test.ts".to_string()).into(),
             source_code.to_string(),
         );
-        let compiler = Compiler::new(cm);
+        let ts_compiler = Compiler::new(cm);
 
-        let program = parse(&compiler, fm)?;
+        let program = parse(&ts_compiler, fm)?;
         dbg!(&program);
 
-        let have = super::emit_code(&compiler, &program).map_err(IntoEyre::into_eyre)?;
+        let have = super::emit_code(&ts_compiler, &program).map_err(IntoEyre::into_eyre)?;
         println!("{have}");
 
         let want = format!("{}{}", crate::preamble(), source_code);

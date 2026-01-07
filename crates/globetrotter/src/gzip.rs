@@ -1,6 +1,12 @@
 use flate2::{Compression, write::GzEncoder};
 use std::io::Write;
 
+/// Compute the size in bytes of the gzipped representation of the given value.
+///
+/// # Errors
+///
+/// Returns an error if compression fails while writing to the encoder or
+/// finishing the compressed stream.
 pub fn gzipped_size(value: impl AsRef<[u8]>) -> std::io::Result<usize> {
     #[derive(Debug, Default)]
     struct ByteCounter(pub usize);

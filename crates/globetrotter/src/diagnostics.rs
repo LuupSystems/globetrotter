@@ -58,6 +58,12 @@ impl Printer {
         files.add(name.to_source_name(), source)
     }
 
+    /// Emit a single diagnostic to the configured writer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if writing the formatted diagnostic to the underlying
+    /// output stream fails.
     pub async fn emit(&self, diagnostic: &Diagnostic<usize>) -> Result<(), files::Error> {
         let mut writer = self.writer.lock().await;
 

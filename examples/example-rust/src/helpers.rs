@@ -19,8 +19,18 @@ fn invalid_param_type(
     ))
 }
 
+/// Name of the registered Handlebars helper used for pluralization.
 pub const PLURALIZE_HELPER_NAME: &str = "pluralize";
 
+/// Handlebars helper that pluralizes a string based on a numeric count.
+///
+/// The first parameter is the value to pluralize, the second parameter is
+/// the numeric count determining whether the singular or plural form is
+/// emitted.
+///
+/// # Errors
+///
+/// Returns an error if the required parameters are missing or if rendering fails.
 pub fn pluralize(
     h: &Helper,
     _: &Handlebars,

@@ -78,8 +78,7 @@ pub fn setup_logging(
     // autodetect logging format
     let log_format = log_format.unwrap_or(LogFormat::PrettyCompact);
     let use_color = match color_choice {
-        ColorChoice::Always => true,
-        ColorChoice::AlwaysAnsi => true,
+        ColorChoice::Always | ColorChoice::AlwaysAnsi => true,
         ColorChoice::Never => false,
         ColorChoice::Auto => std::io::IsTerminal::is_terminal(&std::io::stdout()),
     };
@@ -101,13 +100,6 @@ pub fn setup_logging(
         .without_time()
         .with_ansi(use_color)
         .with_writer(std::io::stdout);
-
-    type BoxedFmtLayer = Box<
-        dyn tracing_subscriber::Layer<tracing_subscriber::registry::Registry>
-            + Send
-            + Sync
-            + 'static,
-    >;
 
     let subscriber = tracing_subscriber::registry()
         .with(if log_format == LogFormat::Json {

@@ -46,6 +46,11 @@ pub struct Globetrotter {
 }
 
 impl Globetrotter {
+    /// Create a new Globetrotter instance from command-line options.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if configuration files cannot be loaded or parsed.
     pub async fn new(options: options::Options) -> eyre::Result<Self> {
         let color_choice = options
             .logging
@@ -187,6 +192,12 @@ impl Globetrotter {
         })
     }
 
+    /// Execute the globetrotter command.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if configuration parsing, translation processing, or output
+    /// generation fails.
     pub async fn execute(self) -> Result<(), globetrotter::Error> {
         let start = std::time::Instant::now();
         let mut logger = Logger::new(&self.configs);
@@ -199,7 +210,7 @@ impl Globetrotter {
             global_base_dir_for_display: self.global_base_dir_for_display,
             logger: logger.clone(),
             diagnostic_printer: self.diagnostic_printer,
-            handlebars: Default::default(),
+            handlebars: handlebars::Handlebars::default(),
         };
 
         println!();
@@ -235,7 +246,7 @@ async fn main() -> eyre::Result<()> {
             globetrotter.execute().await?;
         }
         Some(options::Command::Format(format_options)) => {
-            globetrotter.format().await?;
+            globetrotter.format()?;
         }
         #[cfg(feature = "convert")]
         Some(options::Command::Convert(convert_options)) => {

@@ -1,3 +1,6 @@
+//! Rust bindings code generation for globetrotter translations.
+
+/// Rust code generation configuration types.
 pub mod config;
 
 pub use config::OutputConfig;
@@ -7,6 +10,7 @@ use globetrotter_model as model;
 use globetrotter_model::ext::iter::TryUnzipExt;
 use quote::{format_ident, quote};
 
+/// Common header inserted at the top of generated Rust files.
 #[must_use]
 pub fn preamble() -> String {
     indoc::formatdoc!(
@@ -37,16 +41,12 @@ trait IntoTokenStream {
 impl IntoTokenStream for model::ArgumentType {
     fn into_token_stream(self) -> (proc_macro2::TokenStream, bool) {
         match self {
-            Self::String => {
-                let tokens = quote! {&'a str};
-                (tokens, true)
-            }
             Self::Number => {
                 let tokens = quote! {i64};
                 (tokens, false)
             }
             // TODO(roman): create our own globetrotter type for this
-            Self::Iso8601DateTimeString => {
+            Self::String | Self::Iso8601DateTimeString => {
                 let tokens = quote! {&'a str};
                 (tokens, true)
             }
@@ -58,6 +58,8 @@ impl IntoTokenStream for model::ArgumentType {
     }
 }
 
+/// Error raised when multiple translation keys map to the same Rust enum variant
+/// identifier.
 #[derive(thiserror::Error, Debug)]
 pub struct DuplicateIdentifierError {
     identifier: String,
@@ -75,6 +77,8 @@ impl std::fmt::Display for DuplicateIdentifierError {
     }
 }
 
+/// Error raised when multiple translation arguments would produce the same
+/// Rust struct field name.
 #[derive(thiserror::Error, Debug)]
 pub struct DuplicateFieldError {
     field: String,
@@ -100,16 +104,30 @@ impl std::fmt::Display for DuplicateFieldError {
     }
 }
 
+/// Errors that can occur while generating Rust translation bindings.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    /// Duplicate Rust enum identifier derived from translation keys.
     #[error(transparent)]
     DuplicateIdentifier(#[from] DuplicateIdentifierError),
+    /// Duplicate Rust struct field derived from translation arguments.
     #[error(transparent)]
     DuplicateField(#[from] DuplicateFieldError),
+    /// Error originating from the `syn` crate when pretty-printing generated code.
     #[error("{0}")]
     Syn(String),
 }
 
+/// Generate a Rust `Translation` enum for the given translations model.
+///
+/// The generated code includes a `key` method that maps each variant back to
+/// its original translation key.
+///
+/// # Errors
+///
+/// Returns an error if translation keys or argument names would result in
+/// duplicate Rust identifiers, or if the generated code cannot be parsed by
+/// `syn` for pretty-printing.
 pub fn generate_translation_enum(translations: &model::Translations) -> Result<String, Error> {
     use itertools::Itertools;
 
@@ -127,8 +145,8 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
         .duplicates_by(|(safe_key, _, _)| safe_key)
         .collect();
 
-    if !duplicates.is_empty() {
-        let identifier = duplicates[0].0.clone();
+    if let Some(first) = duplicates.first() {
+        let identifier = first.0.clone();
         let keys = duplicates
             .into_iter()
             .map(|(_, key, _)| key.to_string())
@@ -151,8 +169,8 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
                 .duplicates_by(|(safe_name, _, _)| safe_name)
                 .collect();
 
-            if !duplicates.is_empty() {
-                let field = duplicates[0].0.clone();
+            if let Some(first) = duplicates.first() {
+                let field = first.0.clone();
                 let arguments = duplicates
                     .into_iter()
                     .map(|(_, key, _)| (*key).clone())

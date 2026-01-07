@@ -99,9 +99,12 @@ impl executor::Executor {
         strict: bool,
     ) -> Result<(), PythonOutputError> {
         let config = &config_file.config;
-        let Some(ref python_config) = config.outputs.python else {
+        if config.outputs.python.is_none() {
             return Ok(());
-        };
+        }
+
+        // Placeholder to keep this async until Python codegen is implemented.
+        tokio::task::yield_now().await;
         Ok(())
     }
 
@@ -113,9 +116,12 @@ impl executor::Executor {
         strict: bool,
     ) -> Result<(), GolangOutputError> {
         let config = &config_file.config;
-        let Some(ref golang_config) = config.outputs.golang else {
+        if config.outputs.golang.is_none() {
             return Ok(());
-        };
+        }
+
+        // Placeholder to keep this async until Golang codegen is implemented.
+        tokio::task::yield_now().await;
         Ok(())
     }
 
@@ -152,17 +158,20 @@ impl executor::Executor {
                         );
                     } else {
                         executor::write_to_file(&output_path, code.as_bytes()).await?;
+                        let displayed_path = if self.logger.use_absolute_paths {
+                            output_path.display().to_string()
+                        } else {
+                            relative_to(
+                                self.global_base_dir_for_display.as_deref(),
+                                &output_path,
+                            )
+                            .display()
+                            .to_string()
+                        };
                         println!(
-                            "{} wrote {:?}",
+                            "{} wrote {}",
                             self.logger.target_log_prefix(&config.name, Target::Rust),
-                            if self.logger.use_absolute_paths {
-                                output_path
-                            } else {
-                                relative_to(
-                                    self.global_base_dir_for_display.as_deref(),
-                                    &output_path,
-                                )
-                            }
+                            displayed_path,
                         );
                     }
 
@@ -206,18 +215,21 @@ impl executor::Executor {
                         );
                     } else {
                         executor::write_to_file(&output_path, code.as_bytes()).await?;
+                        let displayed_path = if self.logger.use_absolute_paths {
+                            output_path.display().to_string()
+                        } else {
+                            relative_to(
+                                self.global_base_dir_for_display.as_deref(),
+                                &output_path,
+                            )
+                            .display()
+                            .to_string()
+                        };
                         println!(
-                            "{} wrote {:?}",
+                            "{} wrote {}",
                             self.logger
                                 .target_log_prefix(&config.name, Target::Typescript),
-                            if self.logger.use_absolute_paths {
-                                output_path
-                            } else {
-                                relative_to(
-                                    self.global_base_dir_for_display.as_deref(),
-                                    &output_path,
-                                )
-                            }
+                            displayed_path,
                         );
                     }
                     Ok::<_, TypescriptOutputError>(())

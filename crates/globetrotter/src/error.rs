@@ -124,37 +124,38 @@ where
 {
     #[must_use]
     pub fn to_diagnostics(&self, all: bool) -> Vec<Diagnostic<F>> {
-        assert!(
-            self.occurrences.len() >= 2,
-            "duplicated key must have at least two occurrences"
-        );
-
         let mut labels = vec![];
-        if all {
-            labels.extend(self.occurrences[..self.occurrences.len() - 1].iter().map(
-                |(span, file_id)| {
-                    Label::secondary(*file_id, span.clone())
-                        .with_message(format!("previous use of key `{}`", self.key))
-                },
-            ));
-        } else {
-            let (span, file_id) = &self.occurrences[self.occurrences.len() - 2];
-            let label = Label::secondary(*file_id, span.clone()).with_message(format!(
-                "first use of key `{}`{}",
-                self.key,
-                if self.occurrences.len() > 2 {
-                    format!(" (duplicated {} more time)", self.occurrences.len() - 2)
-                } else {
-                    String::new()
-                },
-            ));
-            labels.push(label);
-        }
 
-        let (span, file_id) = &self.occurrences[self.occurrences.len() - 1];
-        labels.push(
-            Label::primary(*file_id, span.clone()).with_message("cannot set the same key twice"),
-        );
+        match self.occurrences.split_last() {
+            None => {
+                // No occurrences recorded; nothing to highlight.
+            }
+            Some((last, rest)) => {
+                if all {
+                    labels.extend(rest.iter().map(|(span, file_id)| {
+                        Label::secondary(*file_id, span.clone())
+                            .with_message(format!("previous use of key `{}`", self.key))
+                    }));
+                } else if let Some((span, file_id)) = rest.last() {
+                    let label = Label::secondary(*file_id, span.clone()).with_message(format!(
+                        "first use of key `{}`{}",
+                        self.key,
+                        if rest.len() > 1 {
+                            format!(" (duplicated {} more time)", rest.len() - 1)
+                        } else {
+                            String::new()
+                        },
+                    ));
+                    labels.push(label);
+                }
+
+                let (span, file_id) = last;
+                labels.push(
+                    Label::primary(*file_id, span.clone())
+                        .with_message("cannot set the same key twice"),
+                );
+            }
+        }
 
         vec![
             Diagnostic::error()

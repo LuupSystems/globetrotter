@@ -1,3 +1,5 @@
+//! Build script for the example crate that generates JSON translations and Rust bindings.
+
 use color_eyre::eyre;
 use globetrotter::{
     Language,

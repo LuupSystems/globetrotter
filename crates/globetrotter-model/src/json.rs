@@ -42,6 +42,12 @@ pub struct Translations {
 }
 
 impl crate::Translations {
+    /// Write translations for a single language as pretty-printed JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if JSON serialization fails or if a required
+    /// translation is missing while `strict` is enabled.
     pub fn write_translations_json(
         &self,
         language: Language,
@@ -54,6 +60,12 @@ impl crate::Translations {
         Ok(translations)
     }
 
+    /// Build the JSON representation for a single language without writing it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a required translation is missing while `strict`
+    /// is enabled.
     pub fn translations_json(
         &self,
         language: Language,

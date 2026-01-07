@@ -15,6 +15,10 @@ pub enum Error {
         found: ValueKind,
         span: Span,
     },
+    #[error("missing language key {language}")]
+    MissingLanguageKey {
+        language: String,
+    },
     #[error("{message}")]
     TODO {
         message: String,
@@ -65,6 +69,14 @@ mod diagnostics {
                            found type `{found:?}`
                         "
                         ))]);
+                    vec![diagnostic]
+                }
+                Self::MissingLanguageKey { language } => {
+                    let diagnostic = Diagnostic::error()
+                        .with_message(self.to_string())
+                        .with_notes(vec![format!(
+                            "language key `{language}` was referenced but not found in table"
+                        )]);
                     vec![diagnostic]
                 }
                 Self::TODO {
@@ -127,6 +139,13 @@ impl<'de> From<&toml_span::value::ValueInner<'de>> for ValueKind {
     }
 }
 
+/// Parse a single translation table from a TOML value.
+///
+/// # Errors
+///
+/// Returns an error if the TOML structure does not match the expected
+/// translation layout (for example, if argument or language values have
+/// an unexpected type).
 pub fn parse_translation(
     table: &mut toml_span::value::Table,
     file_id: FileId,
@@ -193,8 +212,9 @@ pub fn parse_translation(
         .into_iter()
         .map(|language| {
             // // skip non-terminal values
-            let (language_value, translation_value) =
-                table.remove_entry(language.as_str()).expect("remove key");
+            let (language_value, translation_value) = table
+                .remove_entry(language.as_str())
+                .ok_or(Error::MissingLanguageKey { language: language.clone() })?;
 
             let translation = translation_value
                 .as_str()
@@ -309,6 +329,12 @@ fn flatten_toml_span(
 }
 
 impl crate::Translations {
+    /// Construct translations from a parsed TOML value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the TOML data contains values of an unexpected
+    /// type or otherwise cannot be converted into translations.
     pub fn from_value(
         mut value: toml_span::Value,
         file_id: FileId,
@@ -328,6 +354,12 @@ impl crate::Translations {
         Ok(translations)
     }
 
+    /// Parse translations from a raw TOML string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the string is not valid TOML or if any values
+    /// cannot be converted into translations.
     pub fn from_str(
         raw_translations: &str,
         file_id: FileId,
