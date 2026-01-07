@@ -23,3 +23,9 @@ FlateDecode = "FlateDecode"
 [default.extend-words]
 # allow ".typ" file extension
 typ = "typ"
+
+[type.readme]
+extend-glob = ["README.md"]
+
+[type.readme.extend-words]
+Elemente = "Elemente"
