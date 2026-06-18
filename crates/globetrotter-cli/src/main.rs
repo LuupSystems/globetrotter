@@ -4,8 +4,6 @@
 //! a shared set of translation files and configuration.
 
 mod base_dir;
-#[cfg(feature = "convert")]
-mod convert;
 mod format;
 mod options;
 mod telemetry;
@@ -241,10 +239,6 @@ async fn main() -> eyre::Result<()> {
         }
         Some(options::Command::Format(_format_options)) => {
             globetrotter.format()?;
-        }
-        #[cfg(feature = "convert")]
-        Some(options::Command::Convert(convert_options)) => {
-            convert::convert(convert_options).await?;
         }
     }
 

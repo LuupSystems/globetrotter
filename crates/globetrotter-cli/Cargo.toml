@@ -31,13 +31,11 @@ default = [
   "rust",
   "golang",
   "python",
-  "convert",
 ]
 typescript = ["globetrotter/typescript"]
 rust = ["globetrotter/rust"]
 golang = ["globetrotter/golang"]
 python = ["globetrotter/python"]
-convert = ["dep:serde", "dep:serde_json", "dep:toml_edit", "dep:convert_case"]
 
 [package.metadata.cargo-feature-combinations]
 exclude_features = ["default"]
@@ -70,13 +68,6 @@ tracing-subscriber = { version = "0", features = ["json", "env-filter"] }
 
 globetrotter.workspace = true
 handlebars.workspace = true
-
-# optional: convert from json
-serde = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
-toml_edit = { version = "0", features = ["serde"], optional = true }
-convert_case = { version = "0", optional = true }
-# toml-span = { version = "0", features = ["reporting", "serde"], optional = true }
 
 [target.'cfg(target_env = "musl")'.dependencies]
 mimalloc = "0"
