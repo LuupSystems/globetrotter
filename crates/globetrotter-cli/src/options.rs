@@ -44,7 +44,7 @@ pub struct Options {
     pub logging: crate::telemetry::LoggingOptions,
 
     /// Paths to globetrotter config files or directories to search for one.
-    #[clap(short = 'c', long = "config")]
+    #[clap(short = 'c', long = "config", global = true)]
     pub config_paths: Vec<PathBuf>,
 
     /// Paths to translation files to process.
@@ -52,6 +52,7 @@ pub struct Options {
         short = 'i',
         long = "translation",
         aliases = ["input"],
+        global = true,
     )]
     pub translations: Vec<PathBuf>,
 
@@ -59,6 +60,7 @@ pub struct Options {
     #[clap(
         long = "engine",
         aliases = ["template-engine"],
+        global = true,
     )]
     pub template_engine: Option<model::TemplateEngine>,
 
@@ -66,10 +68,15 @@ pub struct Options {
     #[clap(
         long = "strict",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub strict: Option<bool>,
 
     /// Validate that all templates render successfully.
+    //
+    // Not `global`: its `--check` long flag would collide with the `format`
+    // subcommand's `--check`, and template checking only applies to the default
+    // generation flow, which has no subcommand.
     #[clap(
         long = "check",
         aliases = ["check-templates"],
@@ -82,6 +89,7 @@ pub struct Options {
         long = "absolute",
         aliases = ["print-absolute", "print-absolute-paths"],
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub print_absolute_paths: Option<bool>,
 
@@ -89,6 +97,7 @@ pub struct Options {
     #[clap(
         long = "dry-run",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub dry_run: Option<bool>,
 

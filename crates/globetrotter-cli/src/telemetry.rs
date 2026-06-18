@@ -11,12 +11,13 @@ pub enum LogFormat {
 
 #[derive(clap::Parser, Debug)]
 pub struct LoggingOptions {
-    #[arg(long = "log", env = "LOG_LEVEL", aliases = ["log-level"],  help = "Log level. When using a more sophisticated logging setup using RUST_LOG environment variable, this option is overwritten.")]
+    #[arg(long = "log", env = "LOG_LEVEL", aliases = ["log-level"], global = true, help = "Log level. When using a more sophisticated logging setup using RUST_LOG environment variable, this option is overwritten.")]
     pub log_level: Option<tracing::metadata::Level>,
 
     #[arg(
         long = "log-format",
         env = "LOG_FORMAT",
+        global = true,
         help = "log format (json or pretty)"
     )]
     pub log_format: Option<crate::telemetry::LogFormat>,
@@ -24,6 +25,7 @@ pub struct LoggingOptions {
     #[arg(
         long = "color",
         env = "GLOBETROTTER_COLOR",
+        global = true,
         help = "enable or disable color"
     )]
     pub color_choice: Option<termcolor::ColorChoice>,
