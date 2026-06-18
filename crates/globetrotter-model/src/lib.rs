@@ -12,6 +12,8 @@ pub mod ext;
 pub mod json;
 /// Supported languages.
 pub mod language;
+/// Linting of translation files.
+pub mod lint;
 /// TOML parsing of translation files.
 pub mod toml;
 /// Validation of translations against a set of options.
@@ -116,7 +118,7 @@ pub type Arguments = IndexMap<String, ArgumentType>;
 pub type LanguageTranslations = IndexMap<Language, Spanned<String>>;
 
 /// A single translation entry: its per-language strings and template arguments.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct Translation {
     /// The translated string for each language.
     #[serde(flatten)]
@@ -127,6 +129,10 @@ pub struct Translation {
     /// The id of the source file this translation was parsed from.
     #[serde(skip)]
     pub file_id: FileId,
+    /// Lint codes explicitly allowed (suppressed) for this translation key,
+    /// declared via an `allow` key in the translation file.
+    #[serde(skip)]
+    pub allow: std::collections::BTreeSet<String>,
 }
 
 impl std::fmt::Display for Translation {

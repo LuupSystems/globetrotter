@@ -232,6 +232,7 @@ mod tests {
                         .collect(),
                         arguments: [].into_iter().collect(),
                         file_id: 0,
+                        allow: std::collections::BTreeSet::new(),
                     },
                 ),
                 (
@@ -251,6 +252,7 @@ mod tests {
                         .into_iter()
                         .collect(),
                         file_id: 0,
+                        allow: std::collections::BTreeSet::new(),
                     },
                 ),
             ]

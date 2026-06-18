@@ -6,6 +6,8 @@
 
 /// Configuration file discovery, parsing, and versioned schema types.
 pub mod config;
+/// Detection of translation keys unused in a source tree.
+pub mod dead_keys;
 /// Diagnostic rendering and source-file management.
 pub mod diagnostics;
 /// Error types surfaced while loading and generating outputs.

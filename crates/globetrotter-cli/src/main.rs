@@ -5,6 +5,7 @@
 
 mod base_dir;
 mod format;
+mod lint;
 mod options;
 mod telemetry;
 
@@ -239,6 +240,9 @@ async fn main() -> eyre::Result<()> {
         }
         Some(options::Command::Format(format_options)) => {
             globetrotter.format(&format_options).await?;
+        }
+        Some(options::Command::Lint(lint_options)) => {
+            globetrotter.lint(&lint_options).await?;
         }
     }
 

@@ -26,12 +26,30 @@ pub struct FormatOptions {
     pub check: bool,
 }
 
+/// Options for the `lint` subcommand.
+#[derive(Parser, Debug)]
+pub struct LintOptions {
+    /// Report translation keys never referenced in this source directory.
+    ///
+    /// Repeatable. When omitted, the unused-key check is skipped.
+    #[clap(long = "usages", value_name = "DIR")]
+    pub usages: Vec<PathBuf>,
+
+    /// Disable duplicate-translation detection entirely.
+    #[clap(long = "no-duplicates", action = clap::ArgAction::SetTrue)]
+    pub no_duplicates: bool,
+}
+
 /// Top-level CLI commands.
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Format translation files in place.
     #[command(name = "format", aliases = ["fmt"])]
     Format(FormatOptions),
+
+    /// Lint translation files and report any issues.
+    #[command(name = "lint")]
+    Lint(LintOptions),
 }
 
 /// Top-level CLI options for the `globetrotter` binary.

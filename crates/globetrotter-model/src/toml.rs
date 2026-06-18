@@ -160,6 +160,42 @@ impl<'de> From<&toml_span::value::ValueInner<'de>> for ValueKind {
     }
 }
 
+/// Parse the optional `allow` key listing lint codes to suppress for a key.
+///
+/// # Errors
+///
+/// Returns an error if `allow` is present but is not a string or an array of
+/// strings.
+fn parse_allow(
+    table: &mut toml_span::value::Table,
+) -> Result<std::collections::BTreeSet<String>, Error> {
+    let Some(value) = table.remove("allow") else {
+        return Ok(std::collections::BTreeSet::new());
+    };
+    match value.as_ref() {
+        toml_span::value::ValueInner::String(code) => Ok([code.to_string()].into_iter().collect()),
+        toml_span::value::ValueInner::Array(codes) => codes
+            .iter()
+            .map(|code| {
+                code.as_str()
+                    .map(std::string::ToString::to_string)
+                    .ok_or_else(|| Error::UnexpectedType {
+                        message: "allow entries must be strings".to_string(),
+                        expected: vec![ValueKind::String],
+                        found: code.into(),
+                        span: code.span.into(),
+                    })
+            })
+            .collect(),
+        _other => Err(Error::UnexpectedType {
+            message: "allow must be a string or an array of strings".to_string(),
+            expected: vec![ValueKind::String, ValueKind::Array],
+            found: value.as_ref().into(),
+            span: value.span.into(),
+        }),
+    }
+}
+
 /// Parse a single translation table from a TOML value.
 ///
 /// # Errors
@@ -217,6 +253,9 @@ pub fn parse_translation(
         })
         .transpose()?;
 
+    // removed before language parsing so it is not mistaken for a language entry.
+    let allow = parse_allow(table)?;
+
     let languages: Vec<String> = table
         .iter()
         .filter_map(|(language_value, translation_value)| {
@@ -268,6 +307,7 @@ pub fn parse_translation(
             language,
             arguments: arguments.unwrap_or_default(),
             file_id,
+            allow,
         }))
     }
 }

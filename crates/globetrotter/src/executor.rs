@@ -9,13 +9,24 @@ use futures::future::{Future, TryFutureExt};
 use futures::stream::{self, StreamExt, TryStreamExt};
 use globetrotter_model::{
     diagnostics::{DiagnosticExt, FileId, Spanned, ToDiagnostics},
+    lint::LintOptions,
     validation::ValidationOptions,
 };
 use itertools::Itertools;
 use normalize_path::NormalizePath;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
+
+/// Parameters for the cross-cutting lint checks beyond per-key validation.
+#[derive(Debug, Clone, Default)]
+pub struct LintParams {
+    /// Whether to report duplicate translations (across keys and within a key).
+    pub detect_duplicates: bool,
+    /// Source directories to scan for unused keys; empty disables the check.
+    pub usages: Vec<PathBuf>,
+}
 
 pub(crate) async fn write_to_file(path: &Path, data: impl AsRef<[u8]>) -> Result<PathBuf, IoError> {
     use tokio::io::AsyncWriteExt;
@@ -155,6 +166,14 @@ fn combine_translations(
             .flat_map(|res| (res.3).0.into_iter())
             .collect(),
     )
+}
+
+fn tally(severity: Severity, num_errors: &mut usize, num_warnings: &mut usize) {
+    match severity {
+        Severity::Bug | Severity::Error => *num_errors += 1,
+        Severity::Warning => *num_warnings += 1,
+        Severity::Note | Severity::Help => {}
+    }
 }
 
 /// Drives loading, validation, and output generation for a set of configs.
@@ -365,14 +384,8 @@ impl Executor {
                 let exclude: HashSet<PathBuf> = input
                     .exclude
                     .iter()
-                    .flat_map(|_exclude| {
-                        resolve_input_paths(
-                            base_dir,
-                            &input.path_or_glob_pattern,
-                            file_id,
-                            strict,
-                            diagnostics,
-                        )
+                    .flat_map(|exclude| {
+                        resolve_input_paths(base_dir, exclude, file_id, strict, diagnostics)
                     })
                     .filter_map(Result::ok)
                     .collect();
@@ -387,6 +400,41 @@ impl Executor {
                 (Ok(a), Ok(b)) => a == b,
                 _ => false,
             })
+    }
+
+    /// Resolve, read, and parse all input translation files for a config.
+    ///
+    /// Diagnostics from input resolution are pushed onto `diagnostics`; per-file
+    /// parse diagnostics travel in the returned tuples.
+    async fn load_translations(
+        &self,
+        config_file: &config::ConfigFile<FileId>,
+        strict: bool,
+        diagnostics: &mut Vec<Diagnostic<FileId>>,
+    ) -> Result<Vec<TranslationResult>, Error> {
+        let inputs: Vec<_> = Self::unique_input_paths(
+            &config_file.config.inputs,
+            config_file.config_dir.as_deref(),
+            strict,
+            config_file.file_id,
+            diagnostics,
+        )
+        .collect();
+
+        stream::iter(inputs)
+            .map(|input| async {
+                let (input, input_path) = input?;
+                let input_path = tokio::fs::canonicalize(&input_path)
+                    .await
+                    .map_err(|source| IoError::new(input_path, source))?;
+                let relative_base_dir = config_file.config_dir.clone();
+                Ok::<_, Error>((input, input_path, relative_base_dir))
+            })
+            .buffer_unordered(16)
+            .and_then(|input| async { self.read_translation_file(input).await })
+            .and_then(|input| async { self.process_translation_file(input, strict).await })
+            .try_collect::<Vec<_>>()
+            .await
     }
 
     /// Execute a single configuration and generate all configured outputs.
@@ -413,27 +461,8 @@ impl Executor {
             .unwrap_or(true);
 
         let mut diagnostics = vec![];
-
-        let inputs = Self::unique_input_paths(
-            &config_file.config.inputs,
-            config_file.config_dir.as_deref(),
-            strict,
-            config_file.file_id,
-            &mut diagnostics,
-        );
-        let mut translations = stream::iter(inputs)
-            .map(|input| async {
-                let (input, input_path) = input?;
-                let input_path = tokio::fs::canonicalize(&input_path)
-                    .await
-                    .map_err(|source| IoError::new(input_path, source))?;
-                let relative_base_dir = config_file.config_dir.clone();
-                Ok::<_, Error>((input, input_path, relative_base_dir))
-            })
-            .buffer_unordered(16)
-            .and_then(|input| async { self.read_translation_file(input).await })
-            .and_then(|input| async { self.process_translation_file(input, strict).await })
-            .try_collect::<Vec<_>>()
+        let mut translations = self
+            .load_translations(&config_file, strict, &mut diagnostics)
             .await?;
 
         let mut num_errors = 0;
@@ -575,6 +604,229 @@ impl Executor {
 
         Ok(self)
     }
+
+    /// Lint a single configuration's translation files, emitting diagnostics.
+    ///
+    /// Unlike [`Self::execute_config`], no outputs are generated. Returns the
+    /// number of error and warning diagnostics emitted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if input files cannot be read or parsed, a spawned task
+    /// fails to join, or emitting a diagnostic fails.
+    pub async fn lint_config(
+        &self,
+        config_file: Arc<config::ConfigFile<FileId>>,
+        params: &LintParams,
+    ) -> Result<(usize, usize, Arc<model::Translations>), Error> {
+        tracing::debug!(name = config_file.config.name.as_ref(), "linting");
+
+        // lint reports warnings by default regardless of the config's `strict`
+        // (which governs generation); only an explicit `--strict` escalates.
+        let strict = self.strict.unwrap_or(false);
+
+        let mut diagnostics = vec![];
+        let mut translations = self
+            .load_translations(&config_file, strict, &mut diagnostics)
+            .await?;
+
+        let mut num_errors = 0;
+        let mut num_warnings = 0;
+
+        for diagnostic in diagnostics
+            .drain(..)
+            .chain(translations.iter_mut().flat_map(|res| res.4.drain(..)))
+        {
+            tally(diagnostic.severity, &mut num_errors, &mut num_warnings);
+            self.diagnostic_printer.emit(&diagnostic).await?;
+        }
+
+        let (translations, combine_diagnostics) = tokio::task::spawn_blocking(move || {
+            let mut diagnostics = vec![];
+            let translations = combine_translations(translations, &mut diagnostics);
+            (Arc::new(translations), diagnostics)
+        })
+        .await?;
+
+        for diagnostic in &combine_diagnostics {
+            tally(diagnostic.severity, &mut num_errors, &mut num_warnings);
+            self.diagnostic_printer.emit(diagnostic).await?;
+        }
+
+        let lint_diagnostics = tokio::task::spawn_blocking({
+            let translations = Arc::clone(&translations);
+            let config_file = Arc::clone(&config_file);
+            let detect_duplicates = params.detect_duplicates;
+            move || {
+                let mut diagnostics = vec![];
+                let options = LintOptions {
+                    required_languages: &config_file.config.languages,
+                    template_engine: config_file.config.template_engine.as_ref(),
+                    strict,
+                    detect_duplicates,
+                };
+                translations.lint(&mut diagnostics, &options);
+                diagnostics
+            }
+        })
+        .await?;
+
+        for diagnostic in &lint_diagnostics {
+            tally(diagnostic.severity, &mut num_errors, &mut num_warnings);
+            self.diagnostic_printer.emit(diagnostic).await?;
+        }
+
+        Ok((num_errors, num_warnings, translations))
+    }
+
+    /// Lint all configurations' translation files.
+    ///
+    /// Every configuration is linted and its diagnostics emitted. When
+    /// [`LintParams::usages`] is non-empty, keys not referenced anywhere in
+    /// those directories are reported too. The call then fails if any issues
+    /// (warnings or errors) were found.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if loading or parsing fails, scanning for usages fails,
+    /// or — via [`FailedWithErrors`] — if any lint issues were found.
+    pub async fn lint(
+        self,
+        configs: config::Configs<FileId>,
+        params: &LintParams,
+    ) -> Result<Self, Error> {
+        tracing::trace!(num_configs = configs.len(), "linting");
+
+        let scan_usages = !params.usages.is_empty();
+        let excluded = if scan_usages {
+            output_dirs(&configs)
+        } else {
+            BTreeSet::new()
+        };
+
+        let mut num_errors = 0;
+        let mut num_warnings = 0;
+        let mut defined_keys: Vec<crate::dead_keys::DefinedKey> = Vec::new();
+
+        for config_file in configs {
+            let config_file = Arc::new(config_file);
+            let (errors, warnings, translations) =
+                self.lint_config(Arc::clone(&config_file), params).await?;
+            num_errors += errors;
+            num_warnings += warnings;
+
+            if scan_usages {
+                for (key, translation) in &translations.0 {
+                    defined_keys.push(crate::dead_keys::DefinedKey {
+                        key: key.as_ref().clone(),
+                        forms: key_forms(&config_file.config, key.as_ref()),
+                        file_id: translation.file_id,
+                        span: key.span.clone(),
+                        allow: translation.allow.clone(),
+                    });
+                }
+            }
+        }
+
+        if scan_usages {
+            let strict = self.strict.unwrap_or(false);
+            let usages = params.usages.clone();
+            let dead_diagnostics = tokio::task::spawn_blocking(move || {
+                crate::dead_keys::find_unused_keys(&defined_keys, &usages, &excluded, strict)
+            })
+            .await?
+            .map_err(|source| IoError::new("<usages>", source))?;
+
+            for diagnostic in &dead_diagnostics {
+                tally(diagnostic.severity, &mut num_errors, &mut num_warnings);
+                self.diagnostic_printer.emit(diagnostic).await?;
+            }
+        }
+
+        if num_errors > 0 || num_warnings > 0 {
+            return Err(FailedWithErrors {
+                num_errors,
+                num_warnings,
+            }
+            .into());
+        }
+
+        Ok(self)
+    }
+}
+
+/// All canonical forms a usage of `key` may take across a config's enabled
+/// output targets: the dotted key (used by JSON/TypeScript) plus each target's
+/// generated identifier (e.g. the Rust enum variant `TranslationGreeting`).
+fn key_forms(config: &config::Config, key: &str) -> Vec<String> {
+    let mut forms = vec![key.to_string()];
+    forms.extend(target_identifiers(config, key));
+    forms
+}
+
+/// The generated identifiers for `key` across the config's typed output targets.
+#[cfg(feature = "rust")]
+fn target_identifiers(config: &config::Config, key: &str) -> Vec<String> {
+    let mut identifiers = Vec::new();
+    if config.outputs.rust.is_some() {
+        identifiers.push(crate::rust::key_to_rust_enum_variant(key));
+    }
+    identifiers
+}
+
+#[cfg(not(feature = "rust"))]
+fn target_identifiers(_config: &config::Config, _key: &str) -> Vec<String> {
+    Vec::new()
+}
+
+fn insert_output_dir(dirs: &mut BTreeSet<PathBuf>, base: Option<&Path>, path: &Path) {
+    let path = resolve_path(base, path);
+    if let Some(parent) = path.parent()
+        && let Ok(canonical) = parent.canonicalize()
+    {
+        dirs.insert(canonical);
+    }
+}
+
+/// Canonicalized directories holding generated output, excluded from the
+/// dead-key scan so generated files do not mark every key as used.
+fn output_dirs(configs: &config::Configs<FileId>) -> BTreeSet<PathBuf> {
+    let mut dirs = BTreeSet::new();
+    for config_file in configs {
+        let base = config_file.config_dir.as_deref();
+        for output in &config_file.config.outputs.json {
+            insert_output_dir(&mut dirs, base, output.path.as_ref());
+        }
+
+        #[cfg(feature = "typescript")]
+        if let Some(output) = &config_file.config.outputs.typescript {
+            for interface in &output.interface_type {
+                insert_output_dir(&mut dirs, base, &interface.path);
+            }
+        }
+
+        #[cfg(feature = "rust")]
+        if let Some(output) = &config_file.config.outputs.rust {
+            for path in &output.output_paths {
+                insert_output_dir(&mut dirs, base, path);
+            }
+        }
+
+        #[cfg(feature = "golang")]
+        if let Some(output) = &config_file.config.outputs.golang {
+            for path in &output.output_paths {
+                insert_output_dir(&mut dirs, base, path);
+            }
+        }
+
+        #[cfg(feature = "python")]
+        if let Some(output) = &config_file.config.outputs.python {
+            for path in &output.output_paths {
+                insert_output_dir(&mut dirs, base, path);
+            }
+        }
+    }
+    dirs
 }
 
 /// Resolve all unique translation input file paths referenced by `configs`.
@@ -610,6 +862,23 @@ pub fn resolve_input_files(
 mod tests {
     use super::*;
     use color_eyre::eyre;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    fn temp_dir(prefix: &str) -> eyre::Result<PathBuf> {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+
+        let unique = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "globetrotter-{prefix}-{}-{nanos}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&path)?;
+        Ok(path)
+    }
 
     #[tokio::test]
     async fn prepend_filename_prefixes_with_file_stem() -> eyre::Result<()> {
@@ -716,6 +985,129 @@ mod tests {
 
         assert_eq!(keys, vec!["upload.message".to_string()]);
 
+        Ok(())
+    }
+
+    #[test]
+    fn unique_input_paths_respects_exclude_patterns() -> eyre::Result<()> {
+        let dir = temp_dir("exclude-patterns")?;
+        let keep = dir.join("keep.toml");
+        let skip = dir.join("skip.toml");
+        std::fs::write(&keep, "[a]\nen = \"Hello\"\n")?;
+        std::fs::write(&skip, "[b]\nen = \"Bye\"\n")?;
+
+        let input = config::Input::new(dir.join("*.toml").to_string_lossy().into_owned())
+            .with_exclude([skip.to_string_lossy().into_owned()]);
+        let mut diagnostics = Vec::new();
+
+        let mut resolved: Vec<PathBuf> =
+            Executor::unique_input_paths(&[input], None, true, None, &mut diagnostics)
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .map(|(_input, path)| path)
+                .collect();
+        resolved.sort();
+
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(resolved, vec![keep]);
+
+        std::fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[test]
+    fn output_dirs_include_all_generated_output_parents() -> eyre::Result<()> {
+        let base = temp_dir("output-dirs")?;
+
+        let json_dir = base.join("generated/json");
+        std::fs::create_dir_all(&json_dir)?;
+
+        #[cfg(feature = "typescript")]
+        let ts_dir = {
+            let dir = base.join("generated/ts");
+            std::fs::create_dir_all(&dir)?;
+            dir
+        };
+
+        #[cfg(feature = "rust")]
+        let rust_dir = {
+            let dir = base.join("generated/rust");
+            std::fs::create_dir_all(&dir)?;
+            dir
+        };
+
+        #[cfg(feature = "golang")]
+        let go_dir = {
+            let dir = base.join("generated/go");
+            std::fs::create_dir_all(&dir)?;
+            dir
+        };
+
+        #[cfg(feature = "python")]
+        let py_dir = {
+            let dir = base.join("generated/python");
+            std::fs::create_dir_all(&dir)?;
+            dir
+        };
+
+        let mut outputs = config::Outputs::new()
+            .with_json([config::JsonOutputConfig::new("generated/json/en.json")]);
+
+        #[cfg(feature = "typescript")]
+        {
+            outputs = outputs.with_typescript(globetrotter_typescript::OutputConfig {
+                interface_type: vec![globetrotter_typescript::config::InterfaceTypeOutputConfig {
+                    path: PathBuf::from("generated/ts/translations.d.ts"),
+                }],
+            });
+        }
+
+        #[cfg(feature = "rust")]
+        {
+            outputs = outputs.with_rust(globetrotter_rust::OutputConfig::new([PathBuf::from(
+                "generated/rust/translations.rs",
+            )]));
+        }
+
+        #[cfg(feature = "golang")]
+        {
+            outputs = outputs.with_golang(globetrotter_golang::OutputConfig {
+                output_paths: vec![PathBuf::from("generated/go/translations.go")],
+            });
+        }
+
+        #[cfg(feature = "python")]
+        {
+            outputs = outputs.with_python(globetrotter_python::OutputConfig {
+                output_paths: vec![PathBuf::from("generated/python/translations.py")],
+            });
+        }
+
+        let configs = vec![config::ConfigFile {
+            file_id: None,
+            config_dir: Some(base.clone()),
+            config: config::Config::new("demo")
+                .with_input(config::Input::new("translations/*.toml"))
+                .with_outputs(outputs),
+        }];
+
+        let dirs = output_dirs(&configs);
+
+        assert!(dirs.contains(&json_dir.canonicalize()?));
+
+        #[cfg(feature = "typescript")]
+        assert!(dirs.contains(&ts_dir.canonicalize()?));
+
+        #[cfg(feature = "rust")]
+        assert!(dirs.contains(&rust_dir.canonicalize()?));
+
+        #[cfg(feature = "golang")]
+        assert!(dirs.contains(&go_dir.canonicalize()?));
+
+        #[cfg(feature = "python")]
+        assert!(dirs.contains(&py_dir.canonicalize()?));
+
+        std::fs::remove_dir_all(base)?;
         Ok(())
     }
 }

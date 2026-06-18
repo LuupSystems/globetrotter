@@ -29,7 +29,10 @@ fn argument_to_rust_field_name(name: &str) -> String {
     field_name.to_case(Case::Snake)
 }
 
-fn key_to_rust_enum_variant(key: &str) -> String {
+/// The Rust enum variant identifier generated for a translation key, e.g.
+/// `translation.greeting` becomes `TranslationGreeting`.
+#[must_use]
+pub fn key_to_rust_enum_variant(key: &str) -> String {
     let variant_name = key.replace(' ', "").replace(['-', '.'], "_");
     variant_name.to_case(Case::UpperCamel)
 }
@@ -290,6 +293,7 @@ mod tests {
                     .collect(),
                     arguments: [].into_iter().collect(),
                     file_id: 0,
+                    allow: std::collections::BTreeSet::new(),
                 },
             ),
             (
@@ -309,6 +313,7 @@ mod tests {
                     .into_iter()
                     .collect(),
                     file_id: 0,
+                    allow: std::collections::BTreeSet::new(),
                 },
             ),
         ];
@@ -369,6 +374,7 @@ mod tests {
                     .collect(),
                     arguments: [].into_iter().collect(),
                     file_id: 0,
+                    allow: std::collections::BTreeSet::new(),
                 },
             ),
             (
@@ -384,6 +390,7 @@ mod tests {
                         .into_iter()
                         .collect(),
                     file_id: 0,
+                    allow: std::collections::BTreeSet::new(),
                 },
             ),
         ];
