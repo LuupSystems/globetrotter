@@ -28,6 +28,7 @@ workspace = true
 
 [features]
 default = []
+serde = ["dep:serde"]
 
 [package.metadata.cargo-feature-combinations]
 exclude_features = ["default"]
@@ -37,4 +38,4 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-serde.workspace = true
+serde = { workspace = true, optional = true }

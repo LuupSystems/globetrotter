@@ -5,20 +5,6 @@ members = [
   "crates/*",
 ]
 
-[workspace.lints.rust]
-unsafe_code = "deny"
-unused_must_use = "deny"
-missing_docs = "warn"
-
-[workspace.lints.clippy]
-unwrap_used = "deny"
-expect_used = "deny"
-panic = "deny"
-unreachable = "deny"
-unimplemented = "deny"
-todo = "deny"
-indexing_slicing = "deny"
-
 [workspace.package]
 version = "0.0.10"
 edition = "2024"
@@ -29,6 +15,25 @@ readme = "README.md"
 homepage = "https://github.com/LuupSystems/globetrotter"
 repository = "https://github.com/LuupSystems/globetrotter"
 
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+# Warn-only: keep iteration fast during development; CI/review still adds the docs.
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+unimplemented = "deny"
+todo = "deny"
+indexing_slicing = "deny"
+# Every `#[allow(...)]` must carry a `reason = "..."` justifying the escape hatch.
+allow_attributes_without_reason = "deny"
+
 [profile.dev]
 debug = 1
 
@@ -36,7 +41,7 @@ debug = 1
 opt-level = 3
 lto = true
 codegen-units = 1
-strip = "symbols"
+strip = true
 
 [workspace.dependencies]
 thiserror = "2"

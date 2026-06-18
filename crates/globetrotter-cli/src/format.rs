@@ -4,7 +4,7 @@ impl crate::Globetrotter {
     /// # Errors
     ///
     /// Returns an error if formatting fails.
-    #[allow(clippy::todo)]
+    #[allow(clippy::todo, reason = "the format subcommand is not yet implemented")]
     pub fn format(self) -> Result<(), globetrotter::Error> {
         todo!();
     }

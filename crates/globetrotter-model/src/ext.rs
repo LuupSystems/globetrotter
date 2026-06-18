@@ -1,4 +1,6 @@
+/// Iterator extension traits.
 pub mod iter {
+    /// Fallible [`Iterator::unzip`] over iterators of `Result<(A, B), E>`.
     pub trait TryUnzipExt: Iterator {
         /// Try to unzip an iterator of `Result<(A, B), E>` into two collections.
         ///

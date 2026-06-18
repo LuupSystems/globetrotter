@@ -1,22 +1,16 @@
 use crate::{
-    config::{
-        config_file_names,
-        v1::{self as config, PathOrGlobPattern},
-    },
+    config::v1::{self as config, PathOrGlobPattern},
     error::{self, Error, FailedWithErrors, IoError, OutputError},
     model,
     progress::Logger,
-    target::Target,
 };
 use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
-use colored::Colorize;
 use futures::future::{Future, TryFutureExt};
-use futures::stream::{self, Stream, StreamExt, TryStreamExt};
+use futures::stream::{self, StreamExt, TryStreamExt};
 use globetrotter_model::{
-    diagnostics::{DiagnosticExt, FileId, Span, Spanned, ToDiagnostics},
+    diagnostics::{DiagnosticExt, FileId, Spanned, ToDiagnostics},
     validation::ValidationOptions,
 };
-use handlebars::Handlebars;
 use itertools::Itertools;
 use normalize_path::NormalizePath;
 use std::path::{Path, PathBuf};
@@ -151,7 +145,7 @@ fn combine_translations(
             occurrences,
         };
 
-        diagnostics.extend(diagnostic.to_diagnostics(true).into_iter());
+        diagnostics.extend(diagnostic.to_diagnostics(true));
     }
 
     // combine all the translations
@@ -163,17 +157,26 @@ fn combine_translations(
     )
 }
 
+/// Drives loading, validation, and output generation for a set of configs.
 pub struct Executor {
+    /// Overrides each config's `strict` setting when set.
     pub strict: Option<bool>,
+    /// Overrides each config's `check_templates` setting when set.
     pub check_templates: Option<bool>,
+    /// When set, outputs are computed and logged but not written to disk.
     pub dry_run: bool,
+    /// Base directory used to render output paths relative for display.
     pub global_base_dir_for_display: Option<PathBuf>,
+    /// Handlebars engine used to template output paths.
     pub handlebars: handlebars::Handlebars<'static>,
+    /// Renders diagnostics produced during execution.
     pub diagnostic_printer: crate::diagnostics::Printer,
+    /// Formats progress log lines.
     pub logger: Logger,
 }
 
 impl Executor {
+    /// Create a new executor for the given configs and diagnostic printer.
     #[must_use]
     pub fn new<F>(
         configs: &config::Configs<F>,
@@ -350,7 +353,7 @@ impl Executor {
                 use std::collections::HashSet;
 
                 // resolve input files
-                let mut input_paths = resolve_input_paths(
+                let input_paths = resolve_input_paths(
                     base_dir,
                     &input.path_or_glob_pattern,
                     file_id,
@@ -362,7 +365,7 @@ impl Executor {
                 let exclude: HashSet<PathBuf> = input
                     .exclude
                     .iter()
-                    .flat_map(|exclude| {
+                    .flat_map(|_exclude| {
                         resolve_input_paths(
                             base_dir,
                             &input.path_or_glob_pattern,
@@ -393,7 +396,10 @@ impl Executor {
     /// Returns an error if resolving or reading input files, parsing or
     /// validating translations, emitting diagnostics, or generating any
     /// outputs fails.
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "single linear pipeline for one config; splitting would obscure the sequential flow"
+    )]
     pub async fn execute_config(
         &self,
         config_file: Arc<config::ConfigFile<FileId>>,
@@ -561,7 +567,7 @@ impl Executor {
     pub async fn execute(self, configs: config::Configs<FileId>) -> Result<Self, Error> {
         tracing::trace!(num_configs = configs.len(), "executing");
 
-        stream::iter(configs.into_iter())
+        stream::iter(configs)
             .map(|config_file| async move { Ok(Arc::new(config_file)) })
             .buffer_unordered(8)
             .try_for_each(|config| async { self.execute_config(config).await })

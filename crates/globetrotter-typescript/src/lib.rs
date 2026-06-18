@@ -1,5 +1,6 @@
-#![allow(warnings)]
+//! TypeScript bindings code generation for globetrotter translations.
 
+/// TypeScript code generation configuration types.
 pub mod config;
 
 #[cfg(feature = "swc")]
@@ -12,6 +13,7 @@ pub use ast_swc::generate_translations_type_export;
 
 pub use config::OutputConfig;
 
+/// Common header inserted at the top of generated TypeScript files.
 #[must_use]
 pub fn preamble() -> String {
     unindent::unindent(&format!(
@@ -25,10 +27,9 @@ pub fn preamble() -> String {
     ))
 }
 
-#[cfg(test)]
-pub mod tests {
-    use color_eyre::eyre;
-
+// Only consumed by the `swc`-gated AST tests.
+#[cfg(all(test, feature = "swc"))]
+pub(crate) mod tests {
     static INIT: std::sync::Once = std::sync::Once::new();
 
     /// Initialize test

@@ -1,18 +1,21 @@
 use globetrotter_model as model;
-use std::sync::Arc;
 use swc_core::{
     base::{Compiler, PrintArgs},
     common::DUMMY_SP,
     ecma::ast,
 };
 
+/// Errors that can occur while generating TypeScript translation bindings.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    /// Error originating from SWC while emitting code for the generated AST.
     #[error(transparent)]
     Codegen(anyhow::Error),
 }
 
+/// Conversion from a model type into its TypeScript AST representation.
 pub trait IntoAST<T> {
+    /// Convert `self` into the corresponding TypeScript AST node.
     fn into_ast(self) -> T;
 }
 
@@ -172,11 +175,7 @@ mod tests {
     use indoc::indoc;
     use similar_asserts::assert_eq as sim_assert_eq;
     use std::sync::Arc;
-    use swc_core::{
-        base::{Compiler, PrintArgs},
-        common::DUMMY_SP,
-        ecma::ast,
-    };
+    use swc_core::{base::Compiler, ecma::ast};
 
     trait IntoEyre {
         fn into_eyre(self) -> eyre::Report;

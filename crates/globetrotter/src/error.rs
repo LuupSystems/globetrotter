@@ -1,24 +1,19 @@
-use crate::{
-    config::{
-        config_file_names,
-        v1::{self as config, PathOrGlobPattern},
-    },
-    model,
-    progress::Logger,
-    target::{self, Target},
-};
-use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
-use globetrotter_model::diagnostics::{DiagnosticExt, FileId, Span, Spanned, ToDiagnostics};
-use std::path::{Path, PathBuf};
+use codespan_reporting::diagnostic::{Diagnostic, Label};
+use globetrotter_model::diagnostics::Span;
+use std::path::PathBuf;
 
+/// An I/O error annotated with the path that produced it.
 #[derive(thiserror::Error, Debug)]
 #[error("{path}: {inner}")]
 pub struct IoError {
+    /// The path that was being operated on.
     pub path: PathBuf,
+    /// The underlying I/O error.
     pub inner: std::io::Error,
 }
 
 impl IoError {
+    /// Create a new [`IoError`] for the given path and source error.
     pub fn new(path: impl Into<PathBuf>, source: std::io::Error) -> Self {
         Self {
             inner: source,
@@ -27,66 +22,89 @@ impl IoError {
     }
 }
 
+/// An error produced while generating one of the configured outputs.
 #[derive(thiserror::Error, Debug)]
 pub enum OutputError {
+    /// Generating JSON output failed.
     #[error("failed to generate JSON output")]
     Json(#[from] crate::json::JsonOutputError),
 
+    /// Generating TypeScript output failed.
     #[cfg(feature = "typescript")]
     #[error("failed to generate typescript output")]
-    Typescript(#[from] target::TypescriptOutputError),
+    Typescript(#[from] crate::target::TypescriptOutputError),
 
+    /// Generating Rust output failed.
     #[cfg(feature = "rust")]
     #[error("failed to generate rust output")]
-    Rust(#[from] target::RustOutputError),
+    Rust(#[from] crate::target::RustOutputError),
 
+    /// Generating Go output failed.
     #[cfg(feature = "golang")]
     #[error("failed to generate golang output")]
-    Golang(#[from] target::GolangOutputError),
+    Golang(#[from] crate::target::GolangOutputError),
 
+    /// Generating Python output failed.
     #[cfg(feature = "python")]
     #[error("failed to generate python output")]
-    Python(#[from] target::PythonOutputError),
+    Python(#[from] crate::target::PythonOutputError),
 }
 
+/// The top-level error type returned by the executor.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    /// An input glob pattern was malformed.
     #[error("invalid glob pattern {path:?}")]
     Pattern {
+        /// The underlying pattern error.
         #[source]
         source: glob::PatternError,
+        /// The pattern that could not be compiled.
         path: String,
     },
 
+    /// Iterating the matches of a glob pattern failed.
     #[error("failed to glob for pattern {path}")]
     Glob {
+        /// The underlying glob error.
         #[source]
         source: glob::GlobError,
+        /// The pattern that was being expanded.
         path: String,
     },
 
+    /// An I/O operation failed.
     #[error(transparent)]
     Io(#[from] IoError),
 
+    /// Generating an output failed.
     #[error(transparent)]
     Output(#[from] OutputError),
 
+    /// Parsing TOML translation input failed.
     #[error(transparent)]
     Toml(#[from] crate::model::toml::Error),
 
+    /// Processing finished with diagnostic errors.
     #[error(transparent)]
     Failed(#[from] FailedWithErrors),
 
+    /// A spawned task failed to join.
     #[error(transparent)]
     Task(#[from] tokio::task::JoinError),
 
+    /// Emitting a diagnostic to the output failed.
     #[error("failed to emit diagnostic")]
     Diagnostic(#[from] codespan_reporting::files::Error),
 }
 
+/// Indicates that processing completed but surfaced one or more error
+/// diagnostics.
 #[derive(thiserror::Error, Debug)]
 pub struct FailedWithErrors {
+    /// The number of error diagnostics emitted.
     pub num_errors: usize,
+    /// The number of warning diagnostics emitted.
     pub num_warnings: usize,
 }
 
@@ -111,10 +129,13 @@ impl std::fmt::Display for FailedWithErrors {
     }
 }
 
+/// A translation key that was defined more than once across input files.
 #[derive(thiserror::Error, Debug)]
 #[error("duplicate key {key:?}")]
 pub struct DuplicateKeyError<F: Copy + PartialEq> {
+    /// The duplicated key.
     pub key: String,
+    /// The spans and file ids where the key was defined.
     pub occurrences: Vec<(Span, F)>,
 }
 
@@ -122,6 +143,10 @@ impl<F> DuplicateKeyError<F>
 where
     F: Copy + PartialEq,
 {
+    /// Render this duplicate-key error into diagnostics.
+    ///
+    /// When `all` is set, every prior occurrence is highlighted; otherwise only
+    /// the first occurrence is labelled.
     #[must_use]
     pub fn to_diagnostics(&self, all: bool) -> Vec<Diagnostic<F>> {
         let mut labels = vec![];

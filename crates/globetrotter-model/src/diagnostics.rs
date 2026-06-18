@@ -1,16 +1,23 @@
-use codespan_reporting::diagnostic::{self, Diagnostic, Label, Severity};
-use indexmap::IndexMap;
+use codespan_reporting::diagnostic::{Diagnostic, Severity};
 
+/// Identifier for a source file, used when emitting diagnostics.
 pub type FileId = usize;
+/// A byte range within a source file.
 pub type Span = std::ops::Range<usize>;
 
+/// Conversion of a value into a list of diagnostics for a given source file.
 pub trait ToDiagnostics {
+    /// Convert `self` into diagnostics labelled with `file_id`.
     fn to_diagnostics<F: Copy + PartialEq>(&self, file_id: F) -> Vec<Diagnostic<F>>;
 }
 
+/// Convenience helpers for working with [`Diagnostic`] severities.
 pub trait DiagnosticExt {
+    /// Returns `true` if this diagnostic has error severity.
     fn is_error(&self) -> bool;
+    /// Returns `true` if this diagnostic has warning severity.
     fn is_warning(&self) -> bool;
+    /// Construct an error diagnostic when `strict`, otherwise a warning.
     fn warning_or_error(strict: bool) -> Self;
 }
 
@@ -38,6 +45,8 @@ impl<F> DiagnosticExt for Diagnostic<F> {
     }
 }
 
+/// A wrapper that renders its inner value using [`std::fmt::Display`] for
+/// both its `Display` and `Debug` implementations.
 pub struct DisplayRepr<'a, T>(pub &'a T);
 
 // impl<'a, T> tracing::Value for DisplayRepr<'a, T> {
@@ -64,9 +73,12 @@ where
     }
 }
 
+/// A value paired with its source [`Span`].
 #[derive(Debug, Clone)]
 pub struct Spanned<T> {
+    /// The wrapped value.
     pub inner: T,
+    /// The source span the value originated from.
     pub span: Span,
 }
 
@@ -96,6 +108,7 @@ impl<T> AsRef<T> for Spanned<T> {
 }
 
 impl<T> Spanned<T> {
+    /// Create a new spanned value from a span and a value.
     pub fn new(span: impl Into<Span>, value: T) -> Self {
         Self {
             span: span.into(),
@@ -103,6 +116,7 @@ impl<T> Spanned<T> {
         }
     }
 
+    /// Create a spanned value with an empty (dummy) span.
     pub fn dummy(value: T) -> Self {
         Self {
             span: Span::default(),
@@ -110,10 +124,12 @@ impl<T> Spanned<T> {
         }
     }
 
+    /// Consume the wrapper and return the inner value.
     pub fn into_inner(self) -> T {
         self.inner
     }
 
+    /// Returns a [`std::fmt::Display`] adapter for the inner value.
     pub fn display(&self) -> DisplayRepr<'_, Self> {
         DisplayRepr(self)
     }

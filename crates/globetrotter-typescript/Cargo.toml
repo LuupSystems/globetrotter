@@ -29,6 +29,7 @@ workspace = true
 [features]
 default = ["swc"]
 swc = ["dep:swc_core", "dep:anyhow"]
+serde = ["dep:serde"]
 
 [package.metadata.cargo-feature-combinations]
 exclude_features = ["default"]
@@ -50,7 +51,7 @@ swc_core = { version = "69", features = ["base", "common", "ecma_ast"], optional
 anyhow = { version = "1", optional = true }
 
 # serialization
-serde = { workspace = true }
+serde = { workspace = true, optional = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]

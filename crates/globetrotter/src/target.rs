@@ -1,18 +1,27 @@
+#[cfg(any(
+    feature = "typescript",
+    feature = "rust",
+    feature = "golang",
+    feature = "python"
+))]
 use crate::{
-    config::{
-        config_file_names,
-        v1::{self as config, PathOrGlobPattern},
-    },
-    error::{self, Error, IoError},
-    executor, model,
-    progress::{Logger, relative_to},
+    config::v1::{self as config},
+    error::IoError,
+    model,
 };
-use colored::Colorize;
-use futures::stream::{self, Stream, StreamExt, TryStreamExt};
-use std::path::{Path, PathBuf};
+#[cfg(any(feature = "rust", feature = "typescript"))]
+use crate::{executor, progress::relative_to};
+#[cfg(any(feature = "rust", feature = "typescript"))]
+use futures::stream::{self, StreamExt, TryStreamExt};
+#[cfg(any(
+    feature = "typescript",
+    feature = "rust",
+    feature = "golang",
+    feature = "python"
+))]
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 
+/// A code generation target language.
 #[derive(
     Debug,
     Clone,
@@ -28,75 +37,94 @@ use tokio::io::AsyncWriteExt;
     strum::EnumIter,
 )]
 pub enum Target {
+    /// TypeScript output.
     Typescript,
+    /// Rust output.
     Rust,
+    /// Go output.
     Golang,
+    /// Python output.
     Python,
 }
 
 impl Target {
+    /// Iterate over all target variants.
     #[must_use]
     pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
         <Self as strum::IntoEnumIterator>::iter()
     }
 }
 
+/// An error produced while generating Rust output.
 #[cfg(feature = "rust")]
 #[derive(thiserror::Error, Debug)]
 pub enum RustOutputError {
+    /// Writing the generated code to disk failed.
     #[error(transparent)]
     Io(#[from] IoError),
 
+    /// Generating the Rust code failed.
     #[error(transparent)]
     Codegen(#[from] globetrotter_rust::Error),
 
+    /// A spawned task failed to join.
     #[error(transparent)]
     Task(#[from] tokio::task::JoinError),
 }
 
+/// An error produced while generating TypeScript output.
 #[cfg(feature = "typescript")]
 #[derive(thiserror::Error, Debug)]
 pub enum TypescriptOutputError {
+    /// Writing the generated code to disk failed.
     #[error(transparent)]
     Io(#[from] IoError),
 
+    /// Generating the TypeScript code failed.
     #[error(transparent)]
     Codegen(#[from] globetrotter_typescript::Error),
 
+    /// A spawned task failed to join.
     #[error(transparent)]
     Task(#[from] tokio::task::JoinError),
 }
 
+/// An error produced while generating Go output.
 #[cfg(feature = "golang")]
 #[derive(thiserror::Error, Debug)]
 pub enum GolangOutputError {
+    /// Writing the generated code to disk failed.
     #[error(transparent)]
     Io(#[from] IoError),
 
     // #[error(transparent)]
     // Codegen(#[from] globetrotter_typescript::Error),
+    /// A spawned task failed to join.
     #[error(transparent)]
     Task(#[from] tokio::task::JoinError),
 }
 
+/// An error produced while generating Python output.
 #[cfg(feature = "python")]
 #[derive(thiserror::Error, Debug)]
 pub enum PythonOutputError {
+    /// Writing the generated code to disk failed.
     #[error(transparent)]
     Io(#[from] IoError),
     // #[error(transparent)]
     // Codegen(#[from] globetrotter_typescript::Error),
+    /// A spawned task failed to join.
     #[error(transparent)]
     Task(#[from] tokio::task::JoinError),
 }
 
-impl executor::Executor {
+impl crate::executor::Executor {
     #[cfg(feature = "python")]
     pub(crate) async fn generate_python_outputs<F>(
         &self,
         config_file: &config::ConfigFile<F>,
-        translations: &Arc<model::Translations>,
-        strict: bool,
+        _translations: &Arc<model::Translations>,
+        _strict: bool,
     ) -> Result<(), PythonOutputError> {
         let config = &config_file.config;
         if config.outputs.python.is_none() {
@@ -112,8 +140,8 @@ impl executor::Executor {
     pub(crate) async fn generate_golang_outputs<F>(
         &self,
         config_file: &config::ConfigFile<F>,
-        translations: &Arc<model::Translations>,
-        strict: bool,
+        _translations: &Arc<model::Translations>,
+        _strict: bool,
     ) -> Result<(), GolangOutputError> {
         let config = &config_file.config;
         if config.outputs.golang.is_none() {
@@ -130,7 +158,7 @@ impl executor::Executor {
         &self,
         config_file: &config::ConfigFile<F>,
         translations: &Arc<model::Translations>,
-        strict: bool,
+        _strict: bool,
     ) -> Result<(), RustOutputError> {
         let config = &config_file.config;
         let Some(ref rust_config) = config.outputs.rust else {
@@ -161,12 +189,9 @@ impl executor::Executor {
                         let displayed_path = if self.logger.use_absolute_paths {
                             output_path.display().to_string()
                         } else {
-                            relative_to(
-                                self.global_base_dir_for_display.as_deref(),
-                                &output_path,
-                            )
-                            .display()
-                            .to_string()
+                            relative_to(self.global_base_dir_for_display.as_deref(), &output_path)
+                                .display()
+                                .to_string()
                         };
                         println!(
                             "{} wrote {}",
@@ -186,7 +211,7 @@ impl executor::Executor {
         &self,
         config_file: &config::ConfigFile<F>,
         translations: &Arc<model::Translations>,
-        strict: bool,
+        _strict: bool,
     ) -> Result<(), TypescriptOutputError> {
         let config = &config_file.config;
         let Some(ref typescript_config) = config.outputs.typescript else {
@@ -218,12 +243,9 @@ impl executor::Executor {
                         let displayed_path = if self.logger.use_absolute_paths {
                             output_path.display().to_string()
                         } else {
-                            relative_to(
-                                self.global_base_dir_for_display.as_deref(),
-                                &output_path,
-                            )
-                            .display()
-                            .to_string()
+                            relative_to(self.global_base_dir_for_display.as_deref(), &output_path)
+                                .display()
+                                .to_string()
                         };
                         println!(
                             "{} wrote {}",

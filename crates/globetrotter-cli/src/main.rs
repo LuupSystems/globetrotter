@@ -1,4 +1,7 @@
-#![allow(warnings)]
+//! `globetrotter` command-line interface.
+//!
+//! Generates type-safe translation bindings for multiple target languages from
+//! a shared set of translation files and configuration.
 
 mod base_dir;
 #[cfg(feature = "convert")]
@@ -8,40 +11,31 @@ mod options;
 mod telemetry;
 
 use clap::Parser;
-use codespan_reporting::diagnostic::{self, Diagnostic, Severity};
+use codespan_reporting::diagnostic::{Diagnostic, Severity};
 use color_eyre::eyre::{self, WrapErr};
-use futures::stream::{Stream, StreamExt, TryStream, TryStreamExt};
+use futures::stream::{StreamExt, TryStreamExt};
 use globetrotter::{
     config,
     diagnostics::Printer as DiagnosticsPrinter,
-    model::{
-        self, Language,
-        diagnostics::{FileId, Spanned, ToDiagnostics},
-    },
+    model::diagnostics::{FileId, ToDiagnostics},
     progress::Logger,
 };
-use std::collections::HashMap;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[cfg(target_env = "musl")]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-trait Invert {
-    fn invert(self) -> Self;
-}
-
-impl Invert for Option<bool> {
-    fn invert(self) -> Self {
-        self.map(|value| !value)
-    }
-}
-
+/// Top-level application state, holding parsed options, the diagnostics printer,
+/// and the loaded configurations.
 pub struct Globetrotter {
+    /// Parsed command-line options.
     pub options: options::Options,
+    /// Printer used to emit diagnostics for configuration files.
     pub diagnostic_printer: DiagnosticsPrinter,
+    /// Common base directory of all config files, used to shorten displayed paths.
     pub global_base_dir_for_display: Option<PathBuf>,
+    /// Loaded and validated configurations.
     pub configs: config::v1::Configs<FileId>,
 }
 
@@ -233,7 +227,7 @@ async fn main() -> eyre::Result<()> {
         .color_choice
         .unwrap_or(termcolor::ColorChoice::Auto);
 
-    let (log_format, use_color) = telemetry::setup_logging(
+    telemetry::setup_logging(
         options.logging.log_level,
         options.logging.log_format,
         color_choice,
@@ -245,7 +239,7 @@ async fn main() -> eyre::Result<()> {
         None => {
             globetrotter.execute().await?;
         }
-        Some(options::Command::Format(format_options)) => {
+        Some(options::Command::Format(_format_options)) => {
             globetrotter.format()?;
         }
         #[cfg(feature = "convert")]
@@ -260,6 +254,8 @@ async fn main() -> eyre::Result<()> {
 
 #[cfg(test)]
 pub mod tests {
+    //! Shared test helpers.
+
     static INIT: std::sync::Once = std::sync::Once::new();
 
     /// Initialize test

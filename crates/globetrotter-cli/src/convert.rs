@@ -1,14 +1,10 @@
 use crate::options::{self, InputFormat};
-use clap::builder::PossibleValuesParser;
-use color_eyre::eyre::{self, WrapErr};
-use futures::AsyncWriteExt;
+use color_eyre::eyre;
 use globetrotter::error::IoError;
-use globetrotter::model::{
-    Arguments, Language, LanguageTranslations, Translation, Translations, diagnostics::Spanned,
-};
+use globetrotter::model::{Arguments, Language, Translation, Translations, diagnostics::Spanned};
 use serde_json::Value;
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 #[derive(thiserror::Error, Debug)]
@@ -137,7 +133,7 @@ pub fn parse_json_input(input: &str, languages: &HashSet<&Language>) -> eyre::Re
 
 pub mod fmt {
     use toml_edit::visit_mut::{VisitMut, visit_table_like_kv_mut};
-    use toml_edit::{InlineTable, Item, KeyMut, Table, Value};
+    use toml_edit::{InlineTable, Item, KeyMut, Value};
 
     #[derive(Debug)]
     struct DocumentFormatter {
@@ -154,7 +150,7 @@ pub mod fmt {
                 && let Item::Value(Value::InlineTable(inline_table)) = node
             {
                 let inline_table = std::mem::replace(inline_table, InlineTable::new());
-                let mut table = inline_table.into_table();
+                let table = inline_table.into_table();
                 key.fmt();
                 *node = Item::Table(table);
             }
@@ -286,7 +282,7 @@ pub fn convert_str(
     Ok(postprocess(translations, options))
 }
 
-pub async fn convert(mut options: options::ConvertOptions) -> eyre::Result<()> {
+pub async fn convert(options: options::ConvertOptions) -> eyre::Result<()> {
     let options = Arc::new(options);
     let translations = convert_file(&options.input_path, Arc::clone(&options)).await?;
 
@@ -316,11 +312,10 @@ pub async fn convert(mut options: options::ConvertOptions) -> eyre::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        Spanned,
-        model::{ArgumentType, Arguments, Language, Translation, Translations},
-    };
     use color_eyre::eyre;
+    use globetrotter::model::{
+        ArgumentType, Arguments, Language, Translation, Translations, diagnostics::Spanned,
+    };
     use similar_asserts::assert_eq as sim_assert_eq;
     use std::sync::Arc;
 

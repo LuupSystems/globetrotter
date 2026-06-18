@@ -2,17 +2,23 @@ use crate::{Language, TemplateEngine, diagnostics::Spanned};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
+/// A single translation in the JSON output for one language.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Translation {
+    /// A plain, non-templated string.
     #[serde(rename = "literal")]
     Literal(String),
+    /// A template string to be rendered by a template engine.
     #[serde(rename = "template")]
     Template(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
-#[derive(Default)]
+/// Schema version of the JSON translation output.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize, Default,
+)]
 pub enum Version {
+    /// Version 1 of the schema.
     #[serde(rename = "1", alias = "v1")]
     #[default]
     V1,
@@ -20,24 +26,33 @@ pub enum Version {
     // Latest,
 }
 
-
+/// Errors that can occur while producing JSON translations.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    /// A required translation key was missing for the requested language.
     #[error("missing translation of key {key:?} for language {language:?}")]
     MissingKey {
+        /// The key that was missing a translation.
         key: Spanned<String>,
+        /// The language the translation was missing for.
         language: Language,
     },
+    /// JSON serialization failed.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
 }
 
+/// The JSON representation of all translations for a single language.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Translations {
+    /// The schema version.
     #[serde(default)]
     pub version: Version,
+    /// The template engine used to render template translations, if any.
     pub template_engine: Option<TemplateEngine>,
+    /// The language these translations are for.
     pub language: Language,
+    /// The translations, keyed by their dotted key path.
     pub translations: IndexMap<String, Translation>,
 }
 

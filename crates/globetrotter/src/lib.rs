@@ -1,12 +1,24 @@
-#![allow(warnings)]
+//! Polyglot, type-safe internationalization.
+//!
+//! This crate parses globetrotter configuration files, reads translation
+//! sources, validates them, and generates JSON and language-specific outputs
+//! (TypeScript, Rust, Go, Python) for the enabled feature targets.
 
+/// Configuration file discovery, parsing, and versioned schema types.
 pub mod config;
+/// Diagnostic rendering and source-file management.
 pub mod diagnostics;
+/// Error types surfaced while loading and generating outputs.
 pub mod error;
+/// Orchestration of translation loading, validation, and output generation.
 pub mod executor;
+/// Gzip size estimation for generated JSON outputs.
 pub mod gzip;
+/// JSON translation output generation.
 pub mod json;
+/// Progress logging and output path formatting.
 pub mod progress;
+/// Code generation targets and their per-target output errors.
 pub mod target;
 
 #[cfg(feature = "typescript")]

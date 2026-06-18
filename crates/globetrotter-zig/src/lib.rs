@@ -1,5 +1,6 @@
-#![allow(warnings)]
+//! Zig bindings code generation for globetrotter translations.
 
+/// Zig code generation configuration types.
 pub mod config;
 
 pub use config::OutputConfig;

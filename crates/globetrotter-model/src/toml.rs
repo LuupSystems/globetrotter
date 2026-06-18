@@ -4,36 +4,51 @@ use crate::{
 };
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use indexmap::IndexMap;
-use std::path::{Path, PathBuf};
 
+/// Errors that can occur while parsing translations from TOML.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    /// A value had a type other than the one expected.
     #[error("{message}")]
     UnexpectedType {
+        /// Human-readable description of the mismatch.
         message: String,
+        /// The value kinds that would have been accepted.
         expected: Vec<ValueKind>,
+        /// The value kind that was actually found.
         found: ValueKind,
+        /// The source span of the offending value.
         span: Span,
     },
+    /// A language key was referenced but not present in the table.
     #[error("missing language key {language}")]
     MissingLanguageKey {
+        /// The missing language key.
         language: String,
     },
+    /// A not-yet-handled TOML structure was encountered.
     #[error("{message}")]
     TODO {
+        /// Human-readable description of the unhandled case.
         message: String,
         // expected: Vec<ValueKind>,
         // found: ValueKind,
+        /// The source span of the offending value.
         span: Span,
     },
+    /// Deserializing a value via serde failed.
     #[error("{source}")]
     Serde {
+        /// The underlying serde error.
         #[source]
         source: serde_json::Error,
+        /// The source span of the offending value.
         span: Span,
     },
+    /// Parsing the raw TOML document failed.
     #[error("{source}")]
     TOML {
+        /// The underlying TOML parse error.
         #[source]
         source: toml_span::Error,
     },
@@ -41,7 +56,7 @@ pub enum Error {
 
 mod diagnostics {
     use crate::diagnostics::ToDiagnostics;
-    use codespan_reporting::diagnostic::{self, Diagnostic, Label};
+    use codespan_reporting::diagnostic::{Diagnostic, Label};
 
     impl ToDiagnostics for super::Error {
         fn to_diagnostics<F: Copy + PartialEq>(&self, file_id: F) -> Vec<Diagnostic<F>> {
@@ -80,7 +95,6 @@ mod diagnostics {
                     vec![diagnostic]
                 }
                 Self::TODO {
-                    message,
                     // expected,
                     // found,
                     span,
@@ -109,13 +123,20 @@ mod diagnostics {
     }
 }
 
+/// The kind of a TOML value, used to describe type mismatches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ValueKind {
+    /// A string value.
     String,
+    /// An integer value.
     Integer,
+    /// A floating-point value.
     Float,
+    /// A boolean value.
     Boolean,
+    /// An array value.
     Array,
+    /// A table value.
     Table,
 }
 
@@ -187,7 +208,7 @@ pub fn parse_translation(
                     Ok((name, typ))
                 })
                 .collect::<Result<IndexMap<_, _>, _>>(),
-            other => Err(Error::UnexpectedType {
+            _other => Err(Error::UnexpectedType {
                 message: "arguments must be a array or table".to_string(),
                 expected: vec![ValueKind::Array, ValueKind::Table],
                 found: arguments.as_ref().into(),
@@ -212,9 +233,12 @@ pub fn parse_translation(
         .into_iter()
         .map(|language| {
             // // skip non-terminal values
-            let (language_value, translation_value) = table
-                .remove_entry(language.as_str())
-                .ok_or(Error::MissingLanguageKey { language: language.clone() })?;
+            let (language_value, translation_value) =
+                table
+                    .remove_entry(language.as_str())
+                    .ok_or(Error::MissingLanguageKey {
+                        language: language.clone(),
+                    })?;
 
             let translation = translation_value
                 .as_str()

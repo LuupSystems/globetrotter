@@ -1,6 +1,5 @@
 use color_eyre::eyre;
 use termcolor::ColorChoice;
-use tracing::{info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -87,7 +86,7 @@ pub fn setup_logging(
         .pretty()
         .without_time()
         .with_ansi(use_color)
-        .fmt_fields(tracing_subscriber::fmt::format::PrettyFields::new().with_ansi(use_color))
+        .fmt_fields(tracing_subscriber::fmt::format::PrettyFields::new())
         .with_writer(std::io::stdout);
     let fmt_layer_pretty_compact = tracing_subscriber::fmt::Layer::new()
         .compact()

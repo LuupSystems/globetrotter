@@ -25,9 +25,13 @@ pub static JSON_TRANSLATIONS_FR: &str =
     include_str!(concat!(env!("OUT_DIR"), "/translations_fr.json"));
 
 /// The generated rust bindings for the translations
-#[allow(clippy::all, clippy::pedantic)]
-#[allow(unreachable_pub)]
-#[allow(missing_docs)]
+#[allow(
+    clippy::all,
+    clippy::pedantic,
+    unreachable_pub,
+    missing_docs,
+    reason = "machine-generated code included verbatim from OUT_DIR; its style and visibility are not under our control"
+)]
 #[rustfmt::skip]
 pub mod generated {
     include!(concat!(env!("OUT_DIR"), "/translations.rs"));

@@ -1,5 +1,6 @@
-#![allow(warnings)]
+//! Kotlin bindings code generation for globetrotter translations.
 
+/// Kotlin code generation configuration types.
 pub mod config;
 
 pub use config::OutputConfig;

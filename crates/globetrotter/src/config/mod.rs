@@ -1,3 +1,4 @@
+/// Version 1 of the configuration schema and its parsing routines.
 pub mod v1;
 
 #[cfg(feature = "python")]
@@ -14,26 +15,26 @@ pub use globetrotter_golang as golang;
 
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
-use globetrotter_model::{
-    self as model,
-    diagnostics::{self, DiagnosticExt, Span, ToDiagnostics},
-};
+use globetrotter_model::diagnostics::{DiagnosticExt, Span, ToDiagnostics};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use yaml_spanned::{Spanned, Value};
+use yaml_spanned::Value;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
-#[derive(Default)]
+/// The configuration schema version.
+#[derive(
+    Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize, Default,
+)]
 pub enum Version {
+    /// Version 1 of the configuration schema.
     #[serde(rename = "1", alias = "v1", alias = "V1")]
     V1,
+    /// The latest supported schema version.
     #[serde(rename = "latest")]
     #[default]
     Latest,
 }
 
-
+/// The supported configuration file names, in search order.
 pub fn config_file_names() -> impl Iterator<Item = &'static str> {
     [".globetrotter.yaml", "globetrotter.yaml"].into_iter()
 }
@@ -65,7 +66,6 @@ pub async fn find_config_file(dir: &Path) -> std::io::Result<Option<PathBuf>> {
     Ok(None)
 }
 
-#[allow(dead_code)]
 /// Synchronously search for a globetrotter configuration file in the given
 /// directory.
 ///
@@ -109,27 +109,41 @@ pub fn from_str<F: Copy + PartialEq>(
     }
 }
 
+/// An error that can occur while parsing a configuration file.
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
+    /// A required key was missing from the configuration.
     #[error("{message}")]
     MissingKey {
+        /// The name of the missing key.
         key: String,
+        /// A human-readable description of the problem.
         message: String,
+        /// The span of the surrounding value.
         span: Span,
     },
+    /// A value had a type other than the one expected.
     #[error("{message}")]
     UnexpectedType {
+        /// A human-readable description of the problem.
         message: String,
+        /// The kinds that would have been accepted.
         expected: Vec<yaml_spanned::value::Kind>,
+        /// The kind that was actually found.
         found: yaml_spanned::value::Kind,
+        /// The span of the offending value.
         span: Span,
     },
+    /// Deserialization of a value into a typed representation failed.
     #[error("{source}")]
     Serde {
+        /// The underlying deserialization error.
         #[source]
         source: yaml_spanned::error::SerdeError,
+        /// The span of the offending value.
         span: Span,
     },
+    /// The underlying YAML could not be parsed.
     #[error(transparent)]
     YAML(#[from] yaml_spanned::Error),
 }
@@ -223,10 +237,9 @@ pub fn parse_version<F>(
 #[cfg(test)]
 mod tests {
     use super::ConfigError;
-    use codespan_reporting::diagnostic::Diagnostic;
     use color_eyre::eyre;
     use similar_asserts::assert_eq as sim_assert_eq;
-    use yaml_spanned::{Mapping, Spanned, Value};
+    use yaml_spanned::{Spanned, Value};
 
     #[test]
     fn test_parse_version() -> eyre::Result<()> {

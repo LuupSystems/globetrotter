@@ -1,39 +1,45 @@
 use crate::{
-    config::{
-        config_file_names,
-        v1::{self as config, PathOrGlobPattern},
-    },
-    error::{self, Error, IoError},
+    config::v1::{self as config},
+    error::IoError,
     executor, model,
-    progress::{Logger, relative_to},
-    target::Target,
+    progress::relative_to,
 };
 use colored::Colorize;
-use futures::stream::{self, Stream, StreamExt, TryStreamExt};
+use futures::stream::{self, StreamExt, TryStreamExt};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+/// An error produced while generating JSON translation output.
 #[derive(thiserror::Error, Debug)]
 pub enum JsonOutputError {
+    /// Writing the JSON output to disk failed.
     #[error(transparent)]
     Io(#[from] IoError),
 
+    /// Serializing the translations to JSON failed.
     #[error(transparent)]
     Json(#[from] model::json::Error),
 
+    /// Rendering the output path template failed.
     #[error("failed to template {template:?}")]
     Template {
+        /// The template that could not be rendered.
         template: String,
+        /// The underlying render error.
         #[source]
         source: handlebars::RenderError,
     },
 
+    /// A spawned task failed to join.
     #[error(transparent)]
     Task(#[from] tokio::task::JoinError),
 }
 
-#[allow(clippy::cast_precision_loss)]
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "byte counts are well within f64's exact-integer range; precision loss is irrelevant for human-readable display"
+)]
 fn human_readable_bytes(len: usize) -> String {
     human_bytes::human_bytes(len as f64)
 }
@@ -75,7 +81,7 @@ impl executor::Executor {
             .try_for_each(|res| {
                 let translations = Arc::clone(translations);
                 async move {
-                    let (json_config, json_output_path, language) = res;
+                    let (_json_config, json_output_path, language) = res;
                     let json_output_path = executor::resolve_path(
                         config_file.config_dir.as_deref(),
                         &json_output_path,
@@ -150,9 +156,7 @@ impl executor::Executor {
                             self.logger.language_log_prefix(&config.name, **language),
                             displayed_path,
                             human_readable_bytes(json.len()),
-                            human_readable_bytes(num_bytes_gzip)
-                                .bold()
-                                .magenta()
+                            human_readable_bytes(num_bytes_gzip).bold().magenta()
                         );
                     }
 

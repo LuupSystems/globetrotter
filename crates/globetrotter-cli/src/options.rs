@@ -16,20 +16,24 @@ pub struct FormatOptions {}
     Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, strum::EnumString, strum::VariantNames,
 )]
 pub enum InputFormat {
+    /// JSON input.
     Json,
+    /// Comma-separated values input.
     Csv,
+    /// Plain-text input.
     Txt,
 }
 
 impl InputFormat {
     /// Infer the input format from a file extension.
+    #[cfg(feature = "convert")]
     #[must_use]
     pub fn from_ext(extension: &str) -> Option<Self> {
         match extension.to_lowercase().as_str() {
             "json" => Some(Self::Json),
             "txt" => Some(Self::Txt),
             "csv" => Some(Self::Csv),
-            other => None,
+            _ => None,
         }
     }
 }
@@ -40,67 +44,63 @@ impl InputFormat {
 )]
 pub enum KeyStyle {
     /// my.variable.name
-    #[strum(to_string = "dotted", serialize = "dotted")]
+    #[strum(to_string = "dotted")]
     Dotted,
     /// MY.VARIABLE.NAME
-    #[strum(to_string = "upper-dotted", serialize = "upper-dotted")]
+    #[strum(to_string = "upper-dotted")]
     UpperDotted,
     /// MY VARIABLE NAME
-    #[strum(to_string = "upper", serialize = "upper")]
+    #[strum(to_string = "upper")]
     Upper,
     /// my variable name
-    #[strum(to_string = "lower", serialize = "lower")]
+    #[strum(to_string = "lower")]
     Lower,
     /// My Variable Name
-    #[strum(to_string = "title", serialize = "title")]
+    #[strum(to_string = "title")]
     Title,
     /// `MyVariableName`
-    #[strum(to_string = "pascal", serialize = "pascal")]
+    #[strum(to_string = "pascal")]
     Pascal,
     /// myVariableName
-    #[strum(to_string = "camel", serialize = "camel")]
+    #[strum(to_string = "camel")]
     Camel,
     /// alias for `Pascal`
-    #[strum(to_string = "upper-camel", serialize = "upper-camel")]
+    #[strum(to_string = "upper-camel")]
     UpperCamel,
     /// `my_variable_name`
-    #[strum(to_string = "snake", serialize = "snake")]
+    #[strum(to_string = "snake")]
     Snake,
     /// `MY_VARIABLE_NAME`
-    #[strum(to_string = "upper-snake", serialize = "upper-snake")]
+    #[strum(to_string = "upper-snake")]
     UpperSnake,
     /// alias for `UpperSnake`
-    #[strum(to_string = "screaming-snake", serialize = "screaming-snake")]
+    #[strum(to_string = "screaming-snake")]
     ScreamingSnake,
     /// my-variable-name
-    #[strum(to_string = "kebab", serialize = "kebab")]
+    #[strum(to_string = "kebab")]
     Kebab,
     /// MY-VARIABLE-NAME
-    #[strum(to_string = "upper-kebab", serialize = "upper-kebab")]
+    #[strum(to_string = "upper-kebab")]
     UpperKebab,
     /// alias for `Kebab`
-    #[strum(to_string = "hyphens", serialize = "hyphens")]
+    #[strum(to_string = "hyphens")]
     Hyphens,
     /// alias for `UpperKebab`
-    #[strum(to_string = "upper-hyphens", serialize = "upper-hyphens")]
+    #[strum(to_string = "upper-hyphens")]
     UpperHyphens,
     /// alias for `UpperKebab`
-    #[strum(to_string = "cobol", serialize = "cobol")]
+    #[strum(to_string = "cobol")]
     Cobol,
     /// My-Variable-Name
-    #[strum(to_string = "train", serialize = "train")]
+    #[strum(to_string = "train")]
     Train,
     /// myvariablename
-    #[strum(to_string = "flat", serialize = "flat")]
+    #[strum(to_string = "flat")]
     Flat,
     /// MYVARIABLENAME
-    #[strum(to_string = "upper-flat", serialize = "upper-flat")]
+    #[strum(to_string = "upper-flat")]
     UpperFlat,
 }
-
-#[derive(thiserror::Error, Debug)]
-#[error("custom key style {0:?}")]
-pub struct CustomStyle(KeyStyle);
 
 fn input_format_parser() -> impl TypedValueParser {
     PossibleValuesParser::new(InputFormat::VARIANTS).try_map(|s| s.parse::<InputFormat>())
@@ -117,12 +117,15 @@ fn style_parser() -> impl TypedValueParser {
 /// Options for the `convert` subcommand.
 #[derive(Parser, Debug, Default)]
 pub struct ConvertOptions {
+    /// Path to the input file to convert.
     #[clap(short = 'i', long = "input")]
     pub input_path: PathBuf,
 
+    /// Path to write the converted output to.
     #[clap(short = 'o', long = "output")]
     pub output_path: Option<PathBuf>,
 
+    /// Sort translations, languages, and arguments.
     #[clap(
         short = 's',
         long = "sort",
@@ -130,17 +133,21 @@ pub struct ConvertOptions {
     )]
     pub sort: Option<bool>,
 
+    /// Desired translation key style.
     #[clap(long = "style",
         value_parser = style_parser(),
         help = "desired translation key style")]
     pub style: Option<KeyStyle>,
 
+    /// Desired translation key prefix.
     #[clap(long = "prefix", help = "desired translation key prefix")]
     pub prefix: Option<String>,
 
+    /// Desired translation key separator.
     #[clap(long = "separator", help = "desired translation key prefix")]
     pub separator: Option<String>,
 
+    /// Format of the input file. Inferred from the file extension when omitted.
     #[clap(
         short = 'f',
         long = "format",
@@ -148,6 +155,7 @@ pub struct ConvertOptions {
     )]
     pub input_format: Option<InputFormat>,
 
+    /// Languages to extract translations for.
     #[clap(
         short = 'l',
         long = "lang",
@@ -160,9 +168,11 @@ pub struct ConvertOptions {
 /// Top-level CLI commands.
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// Format translation files in place.
     #[command(name = "format", aliases = ["fmt"])]
     Format(FormatOptions),
 
+    /// Convert translations from another format into a globetrotter file.
     #[cfg(feature = "convert")]
     #[command(name = "convert")]
     Convert(ConvertOptions),
@@ -173,12 +183,15 @@ pub enum Command {
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 pub struct Options {
+    /// Logging and color output options.
     #[clap(flatten)]
     pub logging: crate::telemetry::LoggingOptions,
 
+    /// Paths to globetrotter config files or directories to search for one.
     #[clap(short = 'c', long = "config")]
     pub config_paths: Vec<PathBuf>,
 
+    /// Paths to translation files to process.
     #[clap(
         short = 'i',
         long = "translation",
@@ -186,18 +199,21 @@ pub struct Options {
     )]
     pub translations: Vec<PathBuf>,
 
+    /// Template engine to use for rendering translations.
     #[clap(
         long = "engine",
         aliases = ["template-engine"],
     )]
     pub template_engine: Option<model::TemplateEngine>,
 
+    /// Treat warnings as errors.
     #[clap(
         long = "strict",
         action = clap::ArgAction::SetTrue,
     )]
     pub strict: Option<bool>,
 
+    /// Validate that all templates render successfully.
     #[clap(
         long = "check",
         aliases = ["check-templates"],
@@ -205,6 +221,7 @@ pub struct Options {
     )]
     pub check_templates: Option<bool>,
 
+    /// Print absolute paths instead of paths relative to the common base directory.
     #[clap(
         long = "absolute",
         aliases = ["print-absolute", "print-absolute-paths"],
@@ -212,12 +229,14 @@ pub struct Options {
     )]
     pub print_absolute_paths: Option<bool>,
 
+    /// Run without writing any output files.
     #[clap(
         long = "dry-run",
         action = clap::ArgAction::SetTrue,
     )]
     pub dry_run: Option<bool>,
 
+    /// Subcommand to execute. Runs the default generation flow when omitted.
     #[clap(subcommand)]
     pub command: Option<Command>,
 }

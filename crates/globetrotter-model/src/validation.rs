@@ -1,10 +1,16 @@
+use crate::{Language, TemplateEngine, Translations, diagnostics::Spanned};
+
+#[cfg(feature = "rayon")]
 use crate::{
-    Language, TemplateEngine, Translation, Translations,
-    diagnostics::{DiagnosticExt, FileId, Spanned},
+    Translation,
+    diagnostics::{DiagnosticExt, FileId},
 };
+#[cfg(feature = "rayon")]
 use codespan_reporting::diagnostic::{Diagnostic, Label};
+#[cfg(feature = "rayon")]
 use itertools::Itertools;
 
+#[cfg(feature = "rayon")]
 fn validate_handlebars_template(translation: &Translation, errors: &mut Vec<Diagnostic<FileId>>) {
     errors.extend(
         translation
@@ -33,15 +39,21 @@ fn validate_handlebars_template(translation: &Translation, errors: &mut Vec<Diag
     );
 }
 
+/// Options controlling how translations are validated.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ValidationOptions<'a> {
+    /// Languages that every translation key is required to provide.
     pub required_languages: &'a [Spanned<Language>],
+    /// The template engine used to compile template translations, if any.
     pub template_engine: Option<&'a Spanned<TemplateEngine>>,
+    /// Whether validation issues are reported as errors rather than warnings.
     pub strict: bool,
+    /// Whether template translations are compiled to check for errors.
     pub check_templates: bool,
 }
 
 impl Translations {
+    /// Validate the translations, pushing any issues onto `diagnostics`.
     #[cfg(feature = "rayon")]
     pub fn validate(
         &self,
@@ -62,10 +74,13 @@ impl Translations {
             check_templates = options.check_templates,
             "validating",
         );
-        let partial_diagnostics = self.0.par_iter().flat_map(|(key, translation)| {
+        let partial_diagnostics = self.0.par_iter().flat_map(|(_key, translation)| {
             let mut diagnostics = vec![];
             diagnostics.extend(options.required_languages.iter().unique().filter_map(|lang| {
-                #[allow(clippy::if_same_then_else)]
+                #[allow(
+                    clippy::if_same_then_else,
+                    reason = "placeholder: the else branch will emit a MissingLanguage diagnostic once that validation is implemented"
+                )]
                 if translation.language.contains_key(lang.as_ref()) {
                     None
                 } else {

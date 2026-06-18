@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 use tokio::sync::{Mutex, RwLock};
 
+/// Renders diagnostics to a terminal and tracks the source files they refer to.
 #[derive(Clone)]
 pub struct Printer {
     writer: Arc<Mutex<term::StylesWriter<'static, term::termcolor::StandardStream>>>,
@@ -10,7 +11,9 @@ pub struct Printer {
     files: Arc<RwLock<files::SimpleFiles<String, String>>>,
 }
 
+/// Converts a value into the display name used for a registered source file.
 pub trait ToSourceName {
+    /// Returns the source name for this value.
     fn to_source_name(self) -> String;
 }
 
@@ -41,6 +44,7 @@ impl Default for Printer {
 static DEFAULT_STYLES: LazyLock<term::Styles> = LazyLock::new(term::Styles::default);
 
 impl Printer {
+    /// Create a new printer that writes to stderr using the given color choice.
     #[must_use]
     pub fn new(color_choice: term::termcolor::ColorChoice) -> Self {
         let writer = term::termcolor::StandardStream::stderr(color_choice);
@@ -53,6 +57,7 @@ impl Printer {
         }
     }
 
+    /// Register a source file and return its id for use in diagnostic labels.
     pub async fn add_source_file(&self, name: impl ToSourceName, source: String) -> usize {
         let mut files = self.files.write().await;
         files.add(name.to_source_name(), source)
