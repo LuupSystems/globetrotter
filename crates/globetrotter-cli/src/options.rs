@@ -2,9 +2,29 @@ use clap::{Parser, Subcommand};
 use globetrotter::model;
 use std::path::PathBuf;
 
+/// Order in which translation keys are sorted when formatting.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum SortOrder {
+    /// Sort keys from A to Z.
+    #[default]
+    Ascending,
+    /// Sort keys from Z to A.
+    Descending,
+}
+
 /// Options for the `format` subcommand.
 #[derive(Parser, Debug)]
-pub struct FormatOptions {}
+pub struct FormatOptions {
+    /// Order in which translation keys are sorted.
+    #[clap(long = "order", value_enum, default_value_t = SortOrder::Ascending)]
+    pub order: SortOrder,
+
+    /// Check whether files are already formatted instead of rewriting them.
+    ///
+    /// Exits with a non-zero status if any file would be reformatted.
+    #[clap(long = "check", action = clap::ArgAction::SetTrue)]
+    pub check: bool,
+}
 
 /// Top-level CLI commands.
 #[derive(Subcommand, Debug)]

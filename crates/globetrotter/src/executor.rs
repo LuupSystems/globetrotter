@@ -577,6 +577,35 @@ impl Executor {
     }
 }
 
+/// Resolve all unique translation input file paths referenced by `configs`.
+///
+/// Patterns that match no files push a diagnostic into `diagnostics`. The
+/// returned paths are sorted and de-duplicated but not canonicalized.
+#[must_use]
+pub fn resolve_input_files(
+    configs: &config::Configs<FileId>,
+    strict: bool,
+    diagnostics: &mut Vec<Diagnostic<FileId>>,
+) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for config_file in configs {
+        let resolved: Vec<PathBuf> = Executor::unique_input_paths(
+            &config_file.config.inputs,
+            config_file.config_dir.as_deref(),
+            strict,
+            config_file.file_id,
+            diagnostics,
+        )
+        .filter_map(Result::ok)
+        .map(|(_input, path)| path)
+        .collect();
+        paths.extend(resolved);
+    }
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

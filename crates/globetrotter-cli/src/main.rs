@@ -237,8 +237,8 @@ async fn main() -> eyre::Result<()> {
         None => {
             globetrotter.execute().await?;
         }
-        Some(options::Command::Format(_format_options)) => {
-            globetrotter.format()?;
+        Some(options::Command::Format(format_options)) => {
+            globetrotter.format(&format_options).await?;
         }
     }
 

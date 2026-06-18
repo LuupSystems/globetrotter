@@ -69,6 +69,9 @@ tracing-subscriber = { version = "0", features = ["json", "env-filter"] }
 globetrotter.workspace = true
 handlebars.workspace = true
 
+# format: sort translation files while preserving comments
+toml_edit = "0"
+
 [target.'cfg(target_env = "musl")'.dependencies]
 mimalloc = "0"
 
