@@ -26,6 +26,153 @@ pub struct FormatOptions {
     pub check: bool,
 }
 
+/// Cross-lingual model used for `--semantic`.
+#[cfg(feature = "semantic")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum SemanticModel {
+    /// `intfloat/multilingual-e5-small` — small, fast bi-encoder (~470 MB).
+    #[clap(name = "e5-small", alias = "e5")]
+    E5Small,
+    /// `sentence-transformers/LaBSE` — bi-encoder purpose-built for cross-lingual
+    /// matching (~1.9 GB); the default and the most reliable single model.
+    #[default]
+    #[clap(name = "labse")]
+    Labse,
+    /// `BAAI/bge-reranker-v2-m3` — cross-encoder reranker (~2.3 GB).
+    #[clap(name = "bge-reranker", aliases = ["reranker", "bge"])]
+    BgeRerankerV2M3,
+    /// `MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli` — NLI cross-encoder
+    /// scoring semantic entailment (~430 MB).
+    #[clap(name = "minilm-nli", aliases = ["nli", "minilm"])]
+    MultilingualMiniLmNli,
+    /// `MoritzLaurer/mDeBERTa-v3-base-mnli-xnli` — NLI cross-encoder on a
+    /// DeBERTa-v3 backbone (~560 MB). Note: NLI models score cross-lingual
+    /// *sentences* poorly (correct translations look like contradictions).
+    #[clap(name = "mdeberta-nli", aliases = ["mdeberta", "deberta"])]
+    MdebertaV3Nli,
+}
+
+#[cfg(feature = "semantic")]
+impl From<SemanticModel> for globetrotter::executor::SemanticModel {
+    fn from(model: SemanticModel) -> Self {
+        match model {
+            SemanticModel::E5Small => Self::MultilingualE5Small,
+            SemanticModel::Labse => Self::Labse,
+            SemanticModel::BgeRerankerV2M3 => Self::BgeRerankerV2M3,
+            SemanticModel::MultilingualMiniLmNli => Self::MultilingualMiniLmNli,
+            SemanticModel::MdebertaV3Nli => Self::MdebertaV3Nli,
+        }
+    }
+}
+
+/// Options for `--semantic` drift detection, flattened into [`LintOptions`].
+///
+/// Compiled in only with the `semantic` feature, so the whole flag group (and
+/// its embedding dependency) disappears cleanly when the feature is off.
+#[cfg(feature = "semantic")]
+#[derive(Parser, Debug)]
+pub struct SemanticOptions {
+    /// [experimental] Detect cross-lingual semantic drift between a key's
+    /// languages.
+    ///
+    /// Embeds each language string with a multilingual model (downloaded on
+    /// first use) and reports pairs whose meanings appear to have drifted. This
+    /// is a best-effort review aid printed as notes; it never fails the lint and
+    /// produces many false positives on legitimately divergent translations, so
+    /// every finding needs human review.
+    #[clap(long = "semantic", action = clap::ArgAction::SetTrue)]
+    pub enabled: bool,
+
+    /// Model used by `--semantic`.
+    #[clap(long = "semantic-model", value_enum, default_value_t = SemanticModel::default())]
+    pub model: SemanticModel,
+
+    /// Only report language pairs with similarity below this value.
+    #[clap(long = "semantic-threshold", value_name = "SIM", default_value_t = 0.6)]
+    pub threshold: f32,
+
+    /// Skip pairs where either string has fewer than this many words.
+    ///
+    /// Short labels (e.g. single words) are unreliable for every model, so the
+    /// default keeps the check to longer strings where drift is detectable. Set
+    /// to 0 or 1 to check everything. In `--semantic-hybrid` mode this is the
+    /// boundary between the word-level and multi-word routes instead.
+    #[clap(long = "semantic-min-words", value_name = "N", default_value_t = 3)]
+    pub min_words: usize,
+
+    /// Enable the hybrid router for short strings.
+    ///
+    /// Instead of skipping short strings, check them with a bilingual lexicon
+    /// (suppressing known translations) plus cross-lingual word vectors, which
+    /// are far more reliable than the transformer models on single words.
+    /// Requires `--semantic-data-dir`. Multi-word strings still use the model.
+    #[clap(long = "semantic-hybrid", action = clap::ArgAction::SetTrue)]
+    pub hybrid: bool,
+
+    /// Word-vector similarity threshold for short strings in hybrid mode.
+    #[clap(
+        long = "semantic-clwe-threshold",
+        value_name = "SIM",
+        default_value_t = 0.35
+    )]
+    pub clwe_threshold: f32,
+
+    /// Directory with the hybrid data files: `wiki.multi.<lang>.vec` aligned
+    /// word vectors and `<a>-<b>.txt` bilingual dictionaries.
+    #[clap(long = "semantic-data-dir", value_name = "DIR")]
+    pub data_dir: Option<PathBuf>,
+
+    /// User glossary of app-specific terms merged into the lexicon.
+    ///
+    /// Tab-separated; the first non-comment line is a language-code header
+    /// (e.g. `en<TAB>de<TAB>fr`) and each following row gives the term in each
+    /// column's language (empty cells allowed). Every pair of non-empty cells in
+    /// a row is treated as a correct translation in both directions.
+    #[clap(long = "semantic-glossary", value_name = "FILE")]
+    pub glossary: Option<PathBuf>,
+
+    /// Cap the number of findings reported (`0` = no cap, the default).
+    ///
+    /// Every language pair scoring below `--semantic-threshold` is reported, so
+    /// a file with many drifted keys lists them all. Set a positive value only
+    /// to truncate noisy output.
+    #[clap(long = "semantic-top", value_name = "N", default_value_t = 0)]
+    pub top: usize,
+}
+
+#[cfg(feature = "semantic")]
+impl SemanticOptions {
+    /// The executor parameters when `--semantic` is set, otherwise `None`.
+    ///
+    /// `explicit_cache` is `--cache-dir`/`GLOBETROTTER_CACHE_DIR` if the user set
+    /// it, `default_cache` the OS user-cache fallback. Models reuse the standard
+    /// Hugging Face cache unless an explicit cache is given; downloaded vectors
+    /// and dictionaries go in `<cache>/semantic-data`.
+    #[must_use]
+    pub fn params(
+        &self,
+        explicit_cache: Option<&std::path::Path>,
+        default_cache: &std::path::Path,
+    ) -> Option<globetrotter::executor::SemanticParams> {
+        let data_root = explicit_cache.unwrap_or(default_cache);
+        self.enabled
+            .then(|| globetrotter::executor::SemanticParams {
+                model: self.model.into(),
+                hybrid: self.hybrid,
+                threshold: self.threshold,
+                clwe_threshold: self.clwe_threshold,
+                min_words: self.min_words,
+                top: self.top,
+                data_dir: self
+                    .data_dir
+                    .clone()
+                    .or_else(|| self.hybrid.then(|| data_root.join("semantic-data"))),
+                glossary: self.glossary.clone(),
+                cache_dir: explicit_cache.map(|cache| cache.join("models")),
+            })
+    }
+}
+
 /// Options for the `lint` subcommand.
 #[derive(Parser, Debug)]
 pub struct LintOptions {
@@ -38,6 +185,11 @@ pub struct LintOptions {
     /// Disable duplicate-translation detection entirely.
     #[clap(long = "no-duplicates", action = clap::ArgAction::SetTrue)]
     pub no_duplicates: bool,
+
+    /// Semantic drift detection (only with the `semantic` feature).
+    #[cfg(feature = "semantic")]
+    #[clap(flatten)]
+    pub semantic: SemanticOptions,
 }
 
 /// Top-level CLI commands.
@@ -119,7 +271,31 @@ pub struct Options {
     )]
     pub dry_run: Option<bool>,
 
+    /// Directory for cached models and downloaded semantic data.
+    ///
+    /// Defaults to a `globetrotter` folder in the OS user cache directory
+    /// (e.g. `~/.cache/globetrotter` on Linux).
+    #[clap(
+        long = "cache-dir",
+        env = "GLOBETROTTER_CACHE_DIR",
+        value_name = "DIR",
+        global = true
+    )]
+    pub cache_dir: Option<PathBuf>,
+
     /// Subcommand to execute. Runs the default generation flow when omitted.
     #[clap(subcommand)]
     pub command: Option<Command>,
+}
+
+impl Options {
+    /// The resolved cache directory: `--cache-dir`/`GLOBETROTTER_CACHE_DIR` if
+    /// set, else `<os-cache>/globetrotter`, else a temp-dir fallback.
+    #[must_use]
+    pub fn cache_dir(&self) -> PathBuf {
+        self.cache_dir
+            .clone()
+            .or_else(|| dirs::cache_dir().map(|dir| dir.join("globetrotter")))
+            .unwrap_or_else(|| std::env::temp_dir().join("globetrotter"))
+    }
 }

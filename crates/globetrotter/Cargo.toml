@@ -32,11 +32,15 @@ default = [
   "golang",
   "python",
   "rayon",
+  "semantic",
 ]
 typescript = ["dep:globetrotter-typescript"]
 rust = ["dep:globetrotter-rust"]
 golang = ["dep:globetrotter-golang"]
 python = ["dep:globetrotter-python"]
+# Opt-in semantic drift detection during linting. Pulls in a CPU-only embedding
+# stack (candle); disable with `--no-default-features` for a lighter build.
+semantic = ["dep:globetrotter-semantic", "dep:indicatif"]
 
 [package.metadata.cargo-feature-combinations]
 exclude_features = ["default"]
@@ -87,6 +91,12 @@ globetrotter-typescript = { workspace = true, optional = true }
 globetrotter-rust = { workspace = true, optional = true }
 globetrotter-golang = { workspace = true, optional = true }
 globetrotter-python = { workspace = true, optional = true }
+
+# optional: semantic drift detection
+globetrotter-semantic = { workspace = true, optional = true }
+
+# optional: progress bars for the semantic phase
+indicatif = { version = "0.17", optional = true }
 
 # optional: rayon for parallel processing
 rayon = { version = "1", optional = true }

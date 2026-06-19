@@ -31,11 +31,17 @@ default = [
   "rust",
   "golang",
   "python",
+  "rayon",
+  "semantic",
 ]
 typescript = ["globetrotter/typescript"]
 rust = ["globetrotter/rust"]
 golang = ["globetrotter/golang"]
 python = ["globetrotter/python"]
+rayon = ["globetrotter/rayon"]
+# Disabling `semantic` drops the whole embedding stack (candle) from the build;
+# the `--semantic*` flags disappear with it.
+semantic = ["globetrotter/semantic"]
 
 [package.metadata.cargo-feature-combinations]
 exclude_features = ["default"]
@@ -66,8 +72,13 @@ clap.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0", features = ["json", "env-filter"] }
 
-globetrotter.workspace = true
+# default-features off so the CLI's own features fully control globetrotter's
+# (notably `semantic`, so disabling it drops the candle dependency).
+globetrotter = { path = "../globetrotter", default-features = false }
 handlebars.workspace = true
+
+# OS-standard user cache directory for models and downloaded data
+dirs = "6"
 
 # format: sort translation files while preserving comments
 toml_edit = "0"

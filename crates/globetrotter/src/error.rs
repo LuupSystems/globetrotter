@@ -96,6 +96,11 @@ pub enum Error {
     /// Emitting a diagnostic to the output failed.
     #[error("failed to emit diagnostic")]
     Diagnostic(#[from] codespan_reporting::files::Error),
+
+    /// Semantic drift analysis failed.
+    #[cfg(feature = "semantic")]
+    #[error(transparent)]
+    Semantic(#[from] globetrotter_semantic::Error),
 }
 
 /// Indicates that processing completed but surfaced one or more error

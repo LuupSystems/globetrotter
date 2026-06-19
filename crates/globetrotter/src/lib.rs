@@ -20,6 +20,9 @@ pub mod gzip;
 pub mod json;
 /// Progress logging and output path formatting.
 pub mod progress;
+/// Cross-lingual semantic drift detection during linting.
+#[cfg(feature = "semantic")]
+pub mod semantic;
 /// Code generation targets and their per-target output errors.
 pub mod target;
 

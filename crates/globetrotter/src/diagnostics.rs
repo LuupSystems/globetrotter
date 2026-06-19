@@ -63,6 +63,26 @@ impl Printer {
         files.add(name.to_source_name(), source)
     }
 
+    /// Render a diagnostic to an ANSI-colored string, for printing above a
+    /// progress bar (where the normal streaming writer cannot be used directly).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the diagnostic cannot be formatted.
+    pub async fn render(&self, diagnostic: &Diagnostic<usize>) -> Result<String, files::Error> {
+        let mut buffer = term::termcolor::Buffer::ansi();
+        {
+            let mut styled = term::StylesWriter::new(&mut buffer, &DEFAULT_STYLES);
+            term::emit_to_write_style(
+                &mut styled,
+                &self.diagnostic_config,
+                &*self.files.read().await,
+                diagnostic,
+            )?;
+        }
+        Ok(String::from_utf8_lossy(buffer.as_slice()).into_owned())
+    }
+
     /// Emit a single diagnostic to the configured writer.
     ///
     /// # Errors

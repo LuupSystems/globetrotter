@@ -215,7 +215,7 @@ impl Globetrotter {
 }
 
 #[tokio::main]
-async fn main() -> eyre::Result<()> {
+async fn main() -> eyre::Result<std::process::ExitCode> {
     color_eyre::install()?;
 
     let start = std::time::Instant::now();
@@ -234,20 +234,20 @@ async fn main() -> eyre::Result<()> {
 
     let command = options.command.take();
     let globetrotter = Globetrotter::new(options).await?;
-    match command {
+    let exit_code = match command {
         None => {
             globetrotter.execute().await?;
+            std::process::ExitCode::SUCCESS
         }
         Some(options::Command::Format(format_options)) => {
             globetrotter.format(&format_options).await?;
+            std::process::ExitCode::SUCCESS
         }
-        Some(options::Command::Lint(lint_options)) => {
-            globetrotter.lint(&lint_options).await?;
-        }
-    }
+        Some(options::Command::Lint(lint_options)) => globetrotter.lint(&lint_options).await?,
+    };
 
     tracing::debug!(elapsed = ?start.elapsed(), "completed");
-    Ok(())
+    Ok(exit_code)
 }
 
 #[cfg(test)]
