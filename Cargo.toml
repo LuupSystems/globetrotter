@@ -4,6 +4,9 @@ members = [
   "examples/example-rust",
   "crates/*",
 ]
+default-members = [
+  "crates/globetrotter-cli",
+]
 
 [workspace.package]
 version = "0.0.10"
