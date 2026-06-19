@@ -4,8 +4,8 @@
 //! missing or empty translations, stray whitespace, broken templates,
 //! inconsistent or undeclared template arguments, and duplicated strings.
 //!
-//! Every diagnostic carries a stable [code](codes); a translation key can
-//! suppress a code by listing it in an `allow` key, e.g.
+//! Every diagnostic carries a stable [`LintCode`]; a translation key can
+//! suppress a code by listing its kebab-case name in an `allow` key, e.g.
 //! `allow = ["duplicate"]` (or `allow = "all"` to silence the key entirely).
 
 use crate::{
@@ -17,30 +17,54 @@ use handlebars::template::{BlockParam, HelperTemplate, Parameter, Template, Temp
 use handlebars::{Path, PathSeg};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-/// Stable identifiers for each lint, shown in diagnostics (`warning[code]: …`)
-/// and usable in a translation key's `allow` list to suppress them.
-pub mod codes {
+/// A stable identifier for each lint, shown in diagnostics (`warning[code]: …`)
+/// and usable in a translation key's `allow` list to suppress it. The
+/// kebab-case string form (`missing-language`, `unused-key`, …) is derived via
+/// [`strum`].
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    strum::Display,
+    strum::EnumString,
+    strum::VariantNames,
+    strum::IntoStaticStr,
+    strum::EnumIter,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+pub enum LintCode {
     /// A key is missing a required (or otherwise expected) language.
-    pub const MISSING_LANGUAGE: &str = "missing-language";
+    MissingLanguage,
     /// A translation value is empty.
-    pub const EMPTY: &str = "empty";
+    Empty,
     /// A translation value has leading or trailing spaces/tabs.
-    pub const WHITESPACE: &str = "whitespace";
+    Whitespace,
     /// A template fails to compile.
-    pub const TEMPLATE: &str = "template";
+    Template,
     /// A placeholder is used in some languages but missing in another.
-    pub const PLACEHOLDER: &str = "placeholder";
+    Placeholder,
     /// A template uses a placeholder not declared in `arguments`.
-    pub const UNDECLARED_ARGUMENT: &str = "undeclared-argument";
+    UndeclaredArgument,
     /// A declared argument is never referenced by any template.
-    pub const UNUSED_ARGUMENT: &str = "unused-argument";
+    UnusedArgument,
     /// Two keys share an identical translation.
-    pub const DUPLICATE: &str = "duplicate";
+    Duplicate,
     /// Within one key, two or more languages have an identical translation
     /// (often a stale copy or an untranslated placeholder).
-    pub const IDENTICAL_LANGUAGES: &str = "identical-languages";
+    IdenticalLanguages,
     /// A key is never referenced in the scanned source (see `--usages`).
-    pub const UNUSED_KEY: &str = "unused-key";
+    UnusedKey,
+    /// Two languages of one key appear to have semantically drifted apart
+    /// (see `--semantic`).
+    SemanticDrift,
 }
 
 /// Options controlling how translations are linted.
@@ -58,16 +82,50 @@ pub struct LintOptions<'a> {
     pub detect_duplicates: bool,
 }
 
-/// `true` if `code` (or the catch-all `"all"`) is in the allow list.
+/// An entry in a translation key's `allow` list: a specific [`LintCode`] to
+/// suppress, or the catch-all `all` that suppresses every lint for the key.
+///
+/// `all` is intentionally *not* a [`LintCode`] variant — no diagnostic is ever
+/// emitted with code `all`; it is only meaningful as an allow directive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AllowEntry {
+    /// Suppress every lint for this key.
+    All,
+    /// Suppress one specific lint.
+    Code(LintCode),
+}
+
+impl std::fmt::Display for AllowEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::All => f.write_str("all"),
+            Self::Code(code) => std::fmt::Display::fmt(code, f),
+        }
+    }
+}
+
+impl std::str::FromStr for AllowEntry {
+    type Err = strum::ParseError;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        if text == "all" {
+            Ok(Self::All)
+        } else {
+            text.parse::<LintCode>().map(Self::Code)
+        }
+    }
+}
+
+/// `true` if `code` (or the catch-all [`AllowEntry::All`]) is in the allow list.
 #[must_use]
-pub fn is_allowed(allow: &BTreeSet<String>, code: &str) -> bool {
-    allow.contains(code) || allow.contains("all")
+pub fn is_allowed(allow: &BTreeSet<AllowEntry>, code: LintCode) -> bool {
+    allow.contains(&AllowEntry::All) || allow.contains(&AllowEntry::Code(code))
 }
 
 fn emit(
     diagnostics: &mut Vec<Diagnostic<FileId>>,
-    allow: &BTreeSet<String>,
-    code: &str,
+    allow: &BTreeSet<AllowEntry>,
+    code: LintCode,
     diagnostic: Diagnostic<FileId>,
 ) {
     if !is_allowed(allow, code) {
@@ -234,7 +292,7 @@ fn lint_identical_languages(
     strict: bool,
     diagnostics: &mut Vec<Diagnostic<FileId>>,
 ) {
-    if is_allowed(&translation.allow, codes::IDENTICAL_LANGUAGES) {
+    if is_allowed(&translation.allow, LintCode::IdenticalLanguages) {
         return;
     }
 
@@ -270,7 +328,7 @@ fn lint_identical_languages(
 
         diagnostics.push(
             Diagnostic::warning_or_error(strict)
-                .with_code(codes::IDENTICAL_LANGUAGES)
+                .with_code(LintCode::IdenticalLanguages)
                 .with_message(format!(
                     "{listed} translations are identical (possibly untranslated)"
                 ))
@@ -295,7 +353,7 @@ fn lint_translation(
             emit(
                 diagnostics,
                 allow,
-                codes::MISSING_LANGUAGE,
+                LintCode::MissingLanguage,
                 Diagnostic::warning_or_error(strict)
                     .with_message(format!("missing `{}` translation", language.code()))
                     .with_labels(vec![
@@ -315,7 +373,7 @@ fn lint_translation(
             emit(
                 diagnostics,
                 allow,
-                codes::EMPTY,
+                LintCode::Empty,
                 Diagnostic::warning_or_error(strict)
                     .with_message(format!("empty `{}` translation", language.code()))
                     .with_labels(vec![
@@ -329,7 +387,7 @@ fn lint_translation(
             emit(
                 diagnostics,
                 allow,
-                codes::WHITESPACE,
+                LintCode::Whitespace,
                 Diagnostic::warning_or_error(strict)
                     .with_message(format!(
                         "`{}` translation has surrounding whitespace",
@@ -364,7 +422,7 @@ fn lint_templates(
             None => emit(
                 diagnostics,
                 allow,
-                codes::TEMPLATE,
+                LintCode::Template,
                 Diagnostic::error()
                     .with_message(format!("`{}` template fails to compile", language.code()))
                     .with_labels(vec![
@@ -386,7 +444,7 @@ fn lint_templates(
             emit(
                 diagnostics,
                 allow,
-                codes::PLACEHOLDER,
+                LintCode::Placeholder,
                 Diagnostic::warning_or_error(strict)
                     .with_message(format!(
                         "placeholder `{}` is missing from the `{}` translation",
@@ -413,7 +471,7 @@ fn lint_templates(
             emit(
                 diagnostics,
                 allow,
-                codes::UNDECLARED_ARGUMENT,
+                LintCode::UndeclaredArgument,
                 Diagnostic::warning_or_error(strict)
                     .with_message(format!(
                         "template uses `{}` which is not declared in `arguments`",
@@ -434,7 +492,7 @@ fn lint_templates(
         emit(
             diagnostics,
             allow,
-            codes::UNUSED_ARGUMENT,
+            LintCode::UnusedArgument,
             Diagnostic::warning_or_error(strict)
                 .with_message(format!("argument `{unused}` is declared but never used"))
                 .with_labels(vec![
@@ -480,7 +538,7 @@ fn lint_duplicates(
         for (index, translation) in translations.0.values().enumerate() {
             // a key that allows the lint is excluded so the others can still be
             // reported among themselves.
-            if is_allowed(&translation.allow, codes::DUPLICATE) {
+            if is_allowed(&translation.allow, LintCode::Duplicate) {
                 continue;
             }
             if let Some(value) = translation.language.get(&language) {
@@ -519,7 +577,7 @@ fn lint_duplicates(
 
             diagnostics.push(
                 Diagnostic::warning_or_error(strict)
-                    .with_code(codes::DUPLICATE)
+                    .with_code(LintCode::Duplicate)
                     .with_message(format!(
                         "{} keys share an identical `{}` translation",
                         entries.len(),

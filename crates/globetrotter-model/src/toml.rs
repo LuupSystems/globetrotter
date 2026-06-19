@@ -26,6 +26,14 @@ pub enum Error {
         /// The missing language key.
         language: String,
     },
+    /// An `allow` entry was neither a known lint code nor the catch-all `all`.
+    #[error("unknown lint code `{code}` in `allow`")]
+    UnknownLintCode {
+        /// The unrecognized code.
+        code: String,
+        /// The source span of the offending entry.
+        span: Span,
+    },
     /// A not-yet-handled TOML structure was encountered.
     #[error("{message}")]
     TODO {
@@ -92,6 +100,23 @@ mod diagnostics {
                         .with_notes(vec![format!(
                             "language key `{language}` was referenced but not found in table"
                         )]);
+                    vec![diagnostic]
+                }
+                Self::UnknownLintCode { span, .. } => {
+                    use strum::VariantNames;
+                    let valid = crate::lint::LintCode::VARIANTS
+                        .iter()
+                        .map(|code| format!("`{code}`"))
+                        .chain(std::iter::once("`all`".to_string()))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let diagnostic = Diagnostic::error()
+                        .with_message(self.to_string())
+                        .with_labels(vec![
+                            Label::primary(file_id, span.clone())
+                                .with_message("not a known lint code"),
+                        ])
+                        .with_notes(vec![format!("valid codes are: {valid}")]);
                     vec![diagnostic]
                 }
                 Self::TODO {
@@ -165,26 +190,30 @@ impl<'de> From<&toml_span::value::ValueInner<'de>> for ValueKind {
 /// # Errors
 ///
 /// Returns an error if `allow` is present but is not a string or an array of
-/// strings.
+/// strings, or if any entry is not a known [`LintCode`](crate::lint::LintCode)
+/// (or the catch-all `all`).
 fn parse_allow(
     table: &mut toml_span::value::Table,
-) -> Result<std::collections::BTreeSet<String>, Error> {
+) -> Result<std::collections::BTreeSet<crate::lint::AllowEntry>, Error> {
     let Some(value) = table.remove("allow") else {
         return Ok(std::collections::BTreeSet::new());
     };
     match value.as_ref() {
-        toml_span::value::ValueInner::String(code) => Ok([code.to_string()].into_iter().collect()),
+        toml_span::value::ValueInner::String(code) => {
+            Ok([parse_allow_entry(code, value.span.into())?]
+                .into_iter()
+                .collect())
+        }
         toml_span::value::ValueInner::Array(codes) => codes
             .iter()
             .map(|code| {
-                code.as_str()
-                    .map(std::string::ToString::to_string)
-                    .ok_or_else(|| Error::UnexpectedType {
-                        message: "allow entries must be strings".to_string(),
-                        expected: vec![ValueKind::String],
-                        found: code.into(),
-                        span: code.span.into(),
-                    })
+                let text = code.as_str().ok_or_else(|| Error::UnexpectedType {
+                    message: "allow entries must be strings".to_string(),
+                    expected: vec![ValueKind::String],
+                    found: code.into(),
+                    span: code.span.into(),
+                })?;
+                parse_allow_entry(text, code.span.into())
             })
             .collect(),
         _other => Err(Error::UnexpectedType {
@@ -194,6 +223,17 @@ fn parse_allow(
             span: value.span.into(),
         }),
     }
+}
+
+/// Parse one `allow` entry into a typed [`AllowEntry`](crate::lint::AllowEntry),
+/// rejecting anything that is neither a known lint code nor `all` so typos fail
+/// loudly rather than silently doing nothing.
+fn parse_allow_entry(code: &str, span: Span) -> Result<crate::lint::AllowEntry, Error> {
+    code.parse::<crate::lint::AllowEntry>()
+        .map_err(|_| Error::UnknownLintCode {
+            code: code.to_string(),
+            span,
+        })
 }
 
 /// Parse a single translation table from a TOML value.
@@ -433,5 +473,41 @@ impl crate::Translations {
         let translations =
             toml_span::parse(raw_translations).map_err(|source| Error::TOML { source })?;
         Self::from_value(translations, file_id, strict, diagnostics)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+
+    fn parse(raw: &str) -> Result<crate::Translations, Error> {
+        let mut diagnostics = vec![];
+        crate::Translations::from_str(raw, 0, false, &mut diagnostics)
+    }
+
+    #[test]
+    fn rejects_unknown_allow_code() {
+        let result = parse("[greeting]\nen = \"Hi\"\nallow = [\"duplicat\"]\n");
+        assert!(
+            matches!(&result, Err(Error::UnknownLintCode { code, .. }) if code == "duplicat"),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn accepts_known_allow_codes_and_all() {
+        for code in ["duplicate", "semantic-drift", "missing-language", "all"] {
+            let raw = format!("[greeting]\nen = \"Hi\"\nallow = [\"{code}\"]\n");
+            assert!(parse(&raw).is_ok(), "{code}: {:?}", parse(&raw));
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_single_string_allow() {
+        let result = parse("[greeting]\nen = \"Hi\"\nallow = \"nope\"\n");
+        assert!(
+            matches!(result, Err(Error::UnknownLintCode { .. })),
+            "{result:?}"
+        );
     }
 }

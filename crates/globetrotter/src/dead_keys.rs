@@ -8,7 +8,7 @@
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use globetrotter_model::{
     diagnostics::{DiagnosticExt, FileId, Span},
-    lint::{codes, is_allowed},
+    lint::{AllowEntry, LintCode, is_allowed},
 };
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
@@ -53,7 +53,7 @@ pub struct DefinedKey {
     /// The span of the key within its source file.
     pub span: Span,
     /// Lint codes suppressed for this key.
-    pub allow: BTreeSet<String>,
+    pub allow: BTreeSet<AllowEntry>,
 }
 
 fn is_key_char(c: char) -> bool {
@@ -235,12 +235,12 @@ pub fn find_unused_keys(
             .iter()
             .any(|form| matched_forms.contains(form.as_str()))
             || dynamic.iter().any(|prefix| key.key.starts_with(prefix));
-        if referenced || is_allowed(&key.allow, codes::UNUSED_KEY) {
+        if referenced || is_allowed(&key.allow, LintCode::UnusedKey) {
             continue;
         }
         diagnostics.push(
             Diagnostic::warning_or_error(strict)
-                .with_code(codes::UNUSED_KEY)
+                .with_code(LintCode::UnusedKey)
                 .with_message(format!("translation key `{}` is never used", key.key))
                 .with_labels(vec![
                     Label::primary(key.file_id, key.span.clone())

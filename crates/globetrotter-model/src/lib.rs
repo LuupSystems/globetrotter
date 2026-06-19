@@ -132,7 +132,7 @@ pub struct Translation {
     /// Lint codes explicitly allowed (suppressed) for this translation key,
     /// declared via an `allow` key in the translation file.
     #[serde(skip)]
-    pub allow: std::collections::BTreeSet<String>,
+    pub allow: std::collections::BTreeSet<lint::AllowEntry>,
 }
 
 impl std::fmt::Display for Translation {
