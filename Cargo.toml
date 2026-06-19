@@ -78,6 +78,7 @@ handlebars = "6"
 # workspace crates
 globetrotter = { path = "./crates/globetrotter/" }
 globetrotter-model = { path = "./crates/globetrotter-model/" }
+globetrotter-semantic = { path = "./crates/globetrotter-semantic/" }
 globetrotter-cli = { path = "./crates/globetrotter-cli/" }
 globetrotter-rust = { path = "./crates/globetrotter-rust/" }
 globetrotter-php = { path = "./crates/globetrotter-php/" }
