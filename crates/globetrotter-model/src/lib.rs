@@ -49,8 +49,46 @@ pub enum TemplateEngine {
 impl std::str::FromStr for TemplateEngine {
     type Err = ::strum::ParseError;
 
+    /// Parses the serde names and aliases declared on the variants, preserving
+    /// any other non-empty name as [`TemplateEngine::Other`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`strum::ParseError::VariantNotFound`] only for an empty name.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse()
+        match s {
+            "handlebars" => Ok(Self::Handlebars),
+            "golang" | "go" => Ok(Self::Golang),
+            "mustache" => Ok(Self::Mustache),
+            "jinja2" => Ok(Self::Jinja2),
+            "" => Err(::strum::ParseError::VariantNotFound),
+            other => Ok(Self::Other(other.to_string())),
+        }
+    }
+}
+
+#[cfg(test)]
+mod template_engine_tests {
+    use super::TemplateEngine;
+
+    /// Parsing must terminate and map the documented names; a previous
+    /// implementation delegated to `s.parse()`, which resolved back to
+    /// itself and overflowed the stack on any input.
+    #[test]
+    fn parses_engine_names_without_recursing() {
+        assert_eq!("handlebars".parse(), Ok(TemplateEngine::Handlebars));
+        assert_eq!("golang".parse(), Ok(TemplateEngine::Golang));
+        assert_eq!("go".parse(), Ok(TemplateEngine::Golang));
+        assert_eq!("mustache".parse(), Ok(TemplateEngine::Mustache));
+        assert_eq!("jinja2".parse(), Ok(TemplateEngine::Jinja2));
+        assert_eq!(
+            "tera".parse(),
+            Ok(TemplateEngine::Other("tera".to_string()))
+        );
+        assert_eq!(
+            "".parse::<TemplateEngine>(),
+            Err(strum::ParseError::VariantNotFound)
+        );
     }
 }
 
