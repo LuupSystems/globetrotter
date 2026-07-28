@@ -139,9 +139,7 @@ impl Globetrotter {
         // configs.push(config::v1::Config {
         //     name: Spanned::dummy("default".to_string()),
         //     languages: vec![Spanned::dummy(Language::De)],
-        //     template_engine: options.template_engine.clone().map(Spanned::dummy),
-        //     check_templates: options.check_templates,
-        //     strict: options.strict,
+        //     settings: options.settings_layer(),
         //     inputs: vec![config::v1::Input {
         //         path_or_glob_pattern: Spanned::dummy("test".to_string()),
         //         exclude: vec![],
@@ -193,13 +191,10 @@ impl Globetrotter {
     /// generation fails.
     pub async fn execute(self) -> Result<(), globetrotter::Error> {
         let start = std::time::Instant::now();
-        let mut logger = Logger::new(&self.configs);
-        logger.use_absolute_paths = self.options.print_absolute_paths.unwrap_or(false);
+        let logger = Logger::new(&self.configs);
 
         let executor = globetrotter::Executor {
-            strict: self.options.strict,
-            check_templates: self.options.check_templates,
-            dry_run: self.options.dry_run.unwrap_or(false),
+            overrides: self.options.settings_layer(),
             global_base_dir_for_display: self.global_base_dir_for_display,
             logger: logger.clone(),
             diagnostic_printer: self.diagnostic_printer,

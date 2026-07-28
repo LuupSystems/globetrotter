@@ -5,7 +5,10 @@
     feature = "python"
 ))]
 use crate::{
-    config::v1::{self as config},
+    config::{
+        settings::Settings,
+        v1::{self as config},
+    },
     error::IoError,
     model,
 };
@@ -124,7 +127,7 @@ impl crate::executor::Executor {
         &self,
         config_file: &config::ConfigFile<F>,
         _translations: &Arc<model::Translations>,
-        _strict: bool,
+        _settings: &Settings,
     ) -> Result<(), PythonOutputError> {
         let config = &config_file.config;
         if config.outputs.python.is_none() {
@@ -141,7 +144,7 @@ impl crate::executor::Executor {
         &self,
         config_file: &config::ConfigFile<F>,
         _translations: &Arc<model::Translations>,
-        _strict: bool,
+        _settings: &Settings,
     ) -> Result<(), GolangOutputError> {
         let config = &config_file.config;
         if config.outputs.golang.is_none() {
@@ -158,7 +161,7 @@ impl crate::executor::Executor {
         &self,
         config_file: &config::ConfigFile<F>,
         translations: &Arc<model::Translations>,
-        _strict: bool,
+        settings: &Settings,
     ) -> Result<(), RustOutputError> {
         let config = &config_file.config;
         let Some(ref rust_config) = config.outputs.rust else {
@@ -178,7 +181,7 @@ impl crate::executor::Executor {
                     })
                     .await??;
 
-                    if self.dry_run {
+                    if settings.dry_run {
                         println!(
                             "{} {}",
                             self.logger.target_log_prefix(&config.name, Target::Rust),
@@ -186,7 +189,7 @@ impl crate::executor::Executor {
                         );
                     } else {
                         executor::write_to_file(&output_path, code.as_bytes()).await?;
-                        let displayed_path = if self.logger.use_absolute_paths {
+                        let displayed_path = if settings.print_absolute_paths {
                             output_path.display().to_string()
                         } else {
                             relative_to(self.global_base_dir_for_display.as_deref(), &output_path)
@@ -211,7 +214,7 @@ impl crate::executor::Executor {
         &self,
         config_file: &config::ConfigFile<F>,
         translations: &Arc<model::Translations>,
-        _strict: bool,
+        settings: &Settings,
     ) -> Result<(), TypescriptOutputError> {
         let config = &config_file.config;
         let Some(ref typescript_config) = config.outputs.typescript else {
@@ -231,7 +234,7 @@ impl crate::executor::Executor {
                     })
                     .await??;
 
-                    if self.dry_run {
+                    if settings.dry_run {
                         println!(
                             "{} {}",
                             self.logger
@@ -240,7 +243,7 @@ impl crate::executor::Executor {
                         );
                     } else {
                         executor::write_to_file(&output_path, code.as_bytes()).await?;
-                        let displayed_path = if self.logger.use_absolute_paths {
+                        let displayed_path = if settings.print_absolute_paths {
                             output_path.display().to_string()
                         } else {
                             relative_to(self.global_base_dir_for_display.as_deref(), &output_path)

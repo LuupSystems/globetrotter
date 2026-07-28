@@ -44,8 +44,6 @@ pub fn relative_to(base_dir: Option<&Path>, path: &Path) -> PathBuf {
 /// Formats aligned progress log lines for configs and targets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Logger {
-    /// Whether output paths are logged as absolute paths.
-    pub use_absolute_paths: bool,
     /// The width reserved for config names, for column alignment.
     pub longest_config_name: usize,
     /// The width reserved for target/language names, for column alignment.
@@ -73,9 +71,8 @@ impl Logger {
             .unwrap_or(0);
 
         Self {
-            use_absolute_paths: false,
-            longest_target_name,
             longest_config_name,
+            longest_target_name,
         }
     }
 

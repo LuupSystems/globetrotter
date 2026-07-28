@@ -1,5 +1,8 @@
+pub mod settings;
 /// Version 1 of the configuration schema and its parsing routines.
 pub mod v1;
+
+pub use settings::{Settings, SettingsLayer};
 
 #[cfg(feature = "python")]
 pub use globetrotter_python as python;
@@ -240,6 +243,46 @@ mod tests {
     use color_eyre::eyre;
     use similar_asserts::assert_eq as sim_assert_eq;
     use yaml_spanned::{Spanned, Value};
+
+    /// Every settings key parses into the config's [`SettingsLayer`],
+    /// including the `engine` and `absolute` spelling aliases.
+    #[test]
+    fn parses_settings_keys_and_aliases() -> eyre::Result<()> {
+        use globetrotter_model::{TemplateEngine, diagnostics::Spanned};
+
+        let raw = unindent::unindent(
+            r#"
+            version: 1
+            config:
+              languages: ["en"]
+              engine: handlebars
+              strict: true
+              check_templates: false
+              dry_run: true
+              absolute: true
+              inputs:
+                - ./translations/a.toml
+              outputs:
+                json:
+                  - ./out/{{language}}.json
+            "#,
+        );
+        let mut diagnostics = vec![];
+        let configs = super::from_str(&raw, std::path::Path::new("."), (), None, &mut diagnostics)?;
+
+        // Spanned comparisons ignore spans, so dummy spans match parsed ones.
+        sim_assert_eq!(
+            have: configs[0].config.settings,
+            want: super::SettingsLayer {
+                strict: Some(true),
+                check_templates: Some(false),
+                dry_run: Some(true),
+                print_absolute_paths: Some(true),
+                template_engine: Some(Spanned::dummy(TemplateEngine::Handlebars)),
+            }
+        );
+        Ok(())
+    }
 
     #[test]
     fn test_parse_version() -> eyre::Result<()> {

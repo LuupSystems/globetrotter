@@ -2,14 +2,16 @@ use crate::options::LintOptions;
 use color_eyre::eyre;
 use globetrotter::config::v1::{Config, ConfigFile, Input};
 use globetrotter::executor::LintParams;
-use globetrotter::model::TemplateEngine;
 use globetrotter::progress::Logger;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+/// One config with an input per `--translation` file.
+///
+/// Settings such as `--engine` are deliberately not copied into this config:
+/// they reach it through the executor's overrides layer, like any other config.
 fn ad_hoc_translation_config(
     translations: &[PathBuf],
-    template_engine: Option<&TemplateEngine>,
 ) -> Option<ConfigFile<globetrotter::model::diagnostics::FileId>> {
     if translations.is_empty() {
         return None;
@@ -18,15 +20,10 @@ fn ad_hoc_translation_config(
     let inputs = translations
         .iter()
         .map(|path| Input::new(path.to_string_lossy().into_owned()));
-    let mut config = Config::new("translations").with_inputs(inputs);
-    if let Some(template_engine) = template_engine.cloned() {
-        config = config.with_template_engine(template_engine);
-    }
-
     Some(ConfigFile {
         file_id: None,
         config_dir: None,
-        config,
+        config: Config::new("translations").with_inputs(inputs),
     })
 }
 
@@ -43,7 +40,7 @@ impl crate::Globetrotter {
     ///
     /// Returns [`ExitCode::FAILURE`] (with a one-line summary) if any issues
     /// were found, otherwise [`ExitCode::SUCCESS`]. Genuine errors (missing or
-    /// unparseable files) are returned as `Err` and reported normally.
+    /// unparsable files) are returned as `Err` and reported normally.
     ///
     /// # Errors
     ///
@@ -54,10 +51,7 @@ impl crate::Globetrotter {
         let mut configs = self.configs;
 
         // lint any files passed directly via `--translation` as an ad-hoc config.
-        if let Some(config) = ad_hoc_translation_config(
-            &self.options.translations,
-            self.options.template_engine.as_ref(),
-        ) {
+        if let Some(config) = ad_hoc_translation_config(&self.options.translations) {
             configs.push(config);
         }
 
@@ -69,9 +63,11 @@ impl crate::Globetrotter {
 
         let logger = Logger::new(&configs);
         let executor = globetrotter::Executor {
-            strict: self.options.strict,
-            check_templates: self.options.check_templates,
-            dry_run: true,
+            overrides: globetrotter::config::SettingsLayer {
+                // lint never writes outputs, so this is not a user-facing setting to resolve.
+                dry_run: Some(true),
+                ..self.options.settings_layer()
+            },
             global_base_dir_for_display: self.global_base_dir_for_display,
             logger,
             diagnostic_printer: self.diagnostic_printer,
@@ -142,23 +138,22 @@ fn format_duration(duration: std::time::Duration) -> String {
 #[cfg(test)]
 mod tests {
     use super::ad_hoc_translation_config;
-    use globetrotter::model::TemplateEngine;
     use std::path::PathBuf;
 
+    /// `--translation` files become one config with an input per file, with no
+    /// settings of their own: flags like `--engine` apply through the
+    /// executor's overrides layer instead.
     #[test]
-    fn ad_hoc_config_carries_template_engine() {
-        let translations = vec![PathBuf::from("translations/common.toml")];
-        let config =
-            ad_hoc_translation_config(&translations, Some(&TemplateEngine::Handlebars)).unwrap();
+    fn ad_hoc_config_collects_inputs_without_settings() {
+        assert!(ad_hoc_translation_config(&[]).is_none());
 
-        assert_eq!(
-            config
-                .config
-                .template_engine
-                .as_ref()
-                .map(std::convert::AsRef::as_ref),
-            Some(&TemplateEngine::Handlebars)
-        );
+        let translations = vec![PathBuf::from("translations/common.toml")];
+        let config = ad_hoc_translation_config(&translations).unwrap();
+
         assert_eq!(config.config.inputs.len(), 1);
+        assert_eq!(
+            config.config.settings,
+            globetrotter::config::SettingsLayer::default()
+        );
     }
 }

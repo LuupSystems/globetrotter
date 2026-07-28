@@ -1,4 +1,5 @@
 use super::ConfigError;
+use super::settings::SettingsLayer;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use globetrotter_model::{
     self as model,
@@ -444,15 +445,26 @@ pub fn parse_config<F: Copy + PartialEq>(
     )?;
     let check_templates =
         parse_optional::<bool>(value.get("check_templates"))?.map(Spanned::into_inner);
+    let dry_run = parse_optional::<bool>(value.get("dry_run"))?.map(Spanned::into_inner);
+    let print_absolute_paths = parse_optional::<bool>(
+        value
+            .get("print_absolute_paths")
+            .or_else(|| value.get("absolute")),
+    )?
+    .map(Spanned::into_inner);
     let inputs = parse_inputs(value, config_span, file_id, strict, diagnostics)?;
     let outputs = parse_outputs(value, config_span, file_id, strict, diagnostics)?;
 
     Ok(Config {
         name,
         languages,
-        template_engine,
-        check_templates,
-        strict: strict_config,
+        settings: SettingsLayer {
+            strict: strict_config,
+            check_templates,
+            dry_run,
+            print_absolute_paths,
+            template_engine,
+        },
         inputs,
         outputs,
     })
@@ -815,12 +827,14 @@ pub struct Config {
     pub name: Spanned<String>,
     /// The languages that must be present in the translations.
     pub languages: Vec<Spanned<model::Language>>,
-    /// The template engine used to render translation values.
-    pub template_engine: Option<Spanned<model::TemplateEngine>>,
-    /// Whether to validate that templates render successfully.
-    pub check_templates: Option<bool>,
-    /// Whether warnings are promoted to errors.
-    pub strict: Option<bool>,
+    /// This config's settings layer.
+    ///
+    /// These are raw, unresolved values: caller overrides and built-in
+    /// defaults are merged in by
+    /// [`Settings::resolve`](super::settings::Settings::resolve). Read settled
+    /// values from the resolved [`Settings`](super::settings::Settings), never
+    /// from here.
+    pub settings: SettingsLayer,
 
     /// The translation input sources.
     pub inputs: Vec<Input>,
@@ -834,9 +848,7 @@ impl Config {
         Self {
             name: Spanned::dummy(name.into()),
             languages: vec![],
-            template_engine: None,
-            check_templates: None,
-            strict: None,
+            settings: SettingsLayer::default(),
             inputs: vec![],
             outputs: Outputs::default(),
         }
@@ -860,14 +872,28 @@ impl Config {
     /// Set whether templates are validated.
     #[must_use]
     pub fn with_check_templates(mut self, check_templates: bool) -> Self {
-        self.check_templates = Some(check_templates);
+        self.settings.check_templates = Some(check_templates);
         self
     }
 
     /// Set whether warnings are promoted to errors.
     #[must_use]
     pub fn with_strict(mut self, strict: bool) -> Self {
-        self.strict = Some(strict);
+        self.settings.strict = Some(strict);
+        self
+    }
+
+    /// Set whether outputs are computed but not written to disk.
+    #[must_use]
+    pub fn with_dry_run(mut self, dry_run: bool) -> Self {
+        self.settings.dry_run = Some(dry_run);
+        self
+    }
+
+    /// Set whether output paths are logged as absolute paths.
+    #[must_use]
+    pub fn with_print_absolute_paths(mut self, print_absolute_paths: bool) -> Self {
+        self.settings.print_absolute_paths = Some(print_absolute_paths);
         self
     }
 
@@ -877,7 +903,7 @@ impl Config {
         mut self,
         template_engine: impl Into<model::TemplateEngine>,
     ) -> Self {
-        self.template_engine = Some(Spanned::dummy(template_engine.into()));
+        self.settings.template_engine = Some(Spanned::dummy(template_engine.into()));
         self
     }
 
@@ -917,10 +943,12 @@ impl std::fmt::Display for Config {
             )
             .field(
                 "template_engine",
-                &self.template_engine.as_ref().map(Spanned::display),
+                &self.settings.template_engine.as_ref().map(Spanned::display),
             )
-            .field("check_templates", &self.check_templates)
-            .field("strict", &self.strict)
+            .field("check_templates", &self.settings.check_templates)
+            .field("strict", &self.settings.strict)
+            .field("dry_run", &self.settings.dry_run)
+            .field("print_absolute_paths", &self.settings.print_absolute_paths)
             .field(
                 "inputs",
                 &self.inputs.iter().map(DisplayRepr).collect::<Vec<_>>(),

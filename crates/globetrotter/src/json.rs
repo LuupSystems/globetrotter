@@ -1,5 +1,8 @@
 use crate::{
-    config::v1::{self as config},
+    config::{
+        settings::Settings,
+        v1::{self as config},
+    },
     error::IoError,
     executor, model,
     progress::relative_to,
@@ -66,7 +69,7 @@ impl executor::Executor {
         &self,
         config_file: &config::ConfigFile<F>,
         translations: &Arc<model::Translations>,
-        strict: bool,
+        settings: &Settings,
     ) -> Result<(), JsonOutputError> {
         let config = &config_file.config;
         let json_output_paths = config.languages.iter().flat_map(|language| {
@@ -92,11 +95,11 @@ impl executor::Executor {
                         let mut writer = std::io::BufWriter::new(std::io::Cursor::new(&mut json));
                         translations.write_translations_json(
                             **language,
-                            config
+                            settings
                                 .template_engine
                                 .as_ref()
                                 .map(|tpl| tpl.as_ref().clone()),
-                            strict,
+                            settings.strict,
                             &mut writer,
                         )?;
                         let _ = writer.flush();
@@ -111,7 +114,7 @@ impl executor::Executor {
                     });
 
                     // write to file
-                    let dry_run = self.dry_run;
+                    let dry_run = settings.dry_run;
                     let write_task = tokio::task::spawn({
                         let json_output_path = json_output_path.clone();
                         let json = Arc::clone(&json);
@@ -141,7 +144,7 @@ impl executor::Executor {
                             .bright_black()
                         );
                     } else {
-                        let displayed_path = if self.logger.use_absolute_paths {
+                        let displayed_path = if settings.print_absolute_paths {
                             json_output_path.display().to_string()
                         } else {
                             relative_to(

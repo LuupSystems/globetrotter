@@ -235,9 +235,18 @@ pub struct Options {
     pub template_engine: Option<model::TemplateEngine>,
 
     /// Treat warnings as errors.
+    //
+    // `num_args`/`default_missing_value` rather than `ArgAction::SetTrue`: `SetTrue` implies a
+    // `default_value` of `false`, which leaves the field `Some(false)` when the flag is absent.
+    // That is indistinguishable from an explicit `--strict=false`, so the overrides layer would
+    // always win during `Settings::resolve` and the config file's key would never be consulted.
+    // `None` has to mean "not specified" for the config fallback and the built-in default to be
+    // reachable.
     #[clap(
         long = "strict",
-        action = clap::ArgAction::SetTrue,
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
         global = true,
     )]
     pub strict: Option<bool>,
@@ -247,10 +256,14 @@ pub struct Options {
     // Not `global`: its `--check` long flag would collide with the `format`
     // subcommand's `--check`, and template checking only applies to the default
     // generation flow, which has no subcommand.
+    // Same `None`-means-unspecified requirement as `--strict`: this one also falls back to
+    // the config file's `check_templates`.
     #[clap(
         long = "check",
         aliases = ["check-templates"],
-        action = clap::ArgAction::SetTrue,
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
     )]
     pub check_templates: Option<bool>,
 
@@ -258,7 +271,9 @@ pub struct Options {
     #[clap(
         long = "absolute",
         aliases = ["print-absolute", "print-absolute-paths"],
-        action = clap::ArgAction::SetTrue,
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
         global = true,
     )]
     pub print_absolute_paths: Option<bool>,
@@ -266,7 +281,9 @@ pub struct Options {
     /// Run without writing any output files.
     #[clap(
         long = "dry-run",
-        action = clap::ArgAction::SetTrue,
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
         global = true,
     )]
     pub dry_run: Option<bool>,
@@ -297,5 +314,23 @@ impl Options {
             .clone()
             .or_else(|| dirs::cache_dir().map(|dir| dir.join("globetrotter")))
             .unwrap_or_else(|| std::env::temp_dir().join("globetrotter"))
+    }
+
+    /// The settings overrides layer formed by the explicitly passed flags.
+    ///
+    /// Flags the user did not pass stay `None`, so each config's own settings
+    /// and the built-in defaults stay reachable during resolution.
+    #[must_use]
+    pub fn settings_layer(&self) -> globetrotter::config::SettingsLayer {
+        globetrotter::config::SettingsLayer {
+            strict: self.strict,
+            check_templates: self.check_templates,
+            dry_run: self.dry_run,
+            print_absolute_paths: self.print_absolute_paths,
+            template_engine: self
+                .template_engine
+                .clone()
+                .map(model::diagnostics::Spanned::dummy),
+        }
     }
 }

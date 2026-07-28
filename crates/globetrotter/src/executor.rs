@@ -1,5 +1,8 @@
 use crate::{
-    config::v1::{self as config, PathOrGlobPattern},
+    config::{
+        settings::{Settings, SettingsLayer},
+        v1::{self as config, PathOrGlobPattern},
+    },
     error::{self, Error, FailedWithErrors, IoError, OutputError},
     model,
     progress::Logger,
@@ -233,12 +236,9 @@ fn tally(severity: Severity, num_errors: &mut usize, num_warnings: &mut usize) {
 
 /// Drives loading, validation, and output generation for a set of configs.
 pub struct Executor {
-    /// Overrides each config's `strict` setting when set.
-    pub strict: Option<bool>,
-    /// Overrides each config's `check_templates` setting when set.
-    pub check_templates: Option<bool>,
-    /// When set, outputs are computed and logged but not written to disk.
-    pub dry_run: bool,
+    /// The caller's settings overrides, applied over each config's own
+    /// settings by [`Settings::resolve`].
+    pub overrides: SettingsLayer,
     /// Base directory used to render output paths relative for display.
     pub global_base_dir_for_display: Option<PathBuf>,
     /// Handlebars engine used to template output paths.
@@ -258,14 +258,20 @@ impl Executor {
     ) -> Self {
         let logger = Logger::new(configs);
         Self {
-            strict: None,
-            check_templates: None,
-            dry_run: false,
+            overrides: SettingsLayer::default(),
             global_base_dir_for_display: None,
             handlebars: handlebars::Handlebars::default(),
             diagnostic_printer,
             logger,
         }
+    }
+
+    /// The lint-time `strict` value.
+    ///
+    /// Lint reports warnings by default regardless of a config's `strict`
+    /// (which governs generation); only an explicit override escalates.
+    fn lint_strict(&self) -> bool {
+        self.overrides.strict.unwrap_or(false)
     }
 
     async fn read_translation_file(
@@ -509,15 +515,11 @@ impl Executor {
     ) -> Result<(), Error> {
         tracing::debug!(name = config_file.config.name.as_ref(), "executing");
 
-        let strict = self.strict.or(config_file.config.strict).unwrap_or(true);
-        let check_templates = self
-            .check_templates
-            .or(config_file.config.check_templates)
-            .unwrap_or(true);
+        let settings = Settings::resolve(&config_file.config.settings, &self.overrides);
 
         let mut diagnostics = vec![];
         let mut translations = self
-            .load_translations(&config_file, strict, &mut diagnostics)
+            .load_translations(&config_file, settings.strict, &mut diagnostics)
             .await?;
 
         let mut num_errors = 0;
@@ -570,13 +572,14 @@ impl Executor {
         let validate_translations = tokio::task::spawn_blocking({
             let translations = Arc::clone(&translations);
             let config_file = Arc::clone(&config_file);
+            let settings = settings.clone();
             move || {
                 let mut diagnostics = vec![];
                 let options = ValidationOptions {
                     required_languages: &config_file.config.languages,
-                    template_engine: config_file.config.template_engine.as_ref(),
-                    strict,
-                    check_templates,
+                    template_engine: settings.template_engine.as_ref(),
+                    strict: settings.strict,
+                    check_templates: settings.check_templates,
                 };
                 translations.validate(
                     &config_file.config.name,
@@ -590,27 +593,27 @@ impl Executor {
 
         let output_futures: Vec<OutputFuture<'_>> = vec![
             Box::pin(
-                self.generate_json_outputs(&*config_file, &translations, strict)
+                self.generate_json_outputs(&*config_file, &translations, &settings)
                     .map_err(OutputError::from),
             ),
             #[cfg(feature = "typescript")]
             Box::pin(
-                self.generate_typescript_outputs(&*config_file, &translations, strict)
+                self.generate_typescript_outputs(&*config_file, &translations, &settings)
                     .map_err(OutputError::from),
             ),
             #[cfg(feature = "rust")]
             Box::pin(
-                self.generate_rust_outputs(&*config_file, &translations, strict)
+                self.generate_rust_outputs(&*config_file, &translations, &settings)
                     .map_err(OutputError::from),
             ),
             #[cfg(feature = "python")]
             Box::pin(
-                self.generate_python_outputs(&*config_file, &translations, strict)
+                self.generate_python_outputs(&*config_file, &translations, &settings)
                     .map_err(OutputError::from),
             ),
             #[cfg(feature = "golang")]
             Box::pin(
-                self.generate_golang_outputs(&*config_file, &translations, strict)
+                self.generate_golang_outputs(&*config_file, &translations, &settings)
                     .map_err(OutputError::from),
             ),
         ];
@@ -665,6 +668,10 @@ impl Executor {
     /// Unlike [`Self::execute_config`], no outputs are generated. Returns the
     /// number of error and warning diagnostics emitted.
     ///
+    /// Findings are reported as warnings regardless of the config file's
+    /// `strict` (which governs generation); only [`overrides`](Self::overrides)
+    /// escalates them to errors.
+    ///
     /// # Errors
     ///
     /// Returns an error if input files cannot be read or parsed, a spawned task
@@ -676,13 +683,16 @@ impl Executor {
     ) -> Result<(usize, usize, Arc<model::Translations>), Error> {
         tracing::debug!(name = config_file.config.name.as_ref(), "linting");
 
-        // lint reports warnings by default regardless of the config's `strict`
-        // (which governs generation); only an explicit `--strict` escalates.
-        let strict = self.strict.unwrap_or(false);
+        // Lint resolves like generation except for `strict`; see
+        // `Self::lint_strict` for why the config's value is not consulted.
+        let settings = Settings {
+            strict: self.lint_strict(),
+            ..Settings::resolve(&config_file.config.settings, &self.overrides)
+        };
 
         let mut diagnostics = vec![];
         let mut translations = self
-            .load_translations(&config_file, strict, &mut diagnostics)
+            .load_translations(&config_file, settings.strict, &mut diagnostics)
             .await?;
 
         let mut num_errors = 0;
@@ -716,8 +726,8 @@ impl Executor {
                 let mut diagnostics = vec![];
                 let options = LintOptions {
                     required_languages: &config_file.config.languages,
-                    template_engine: config_file.config.template_engine.as_ref(),
-                    strict,
+                    template_engine: settings.template_engine.as_ref(),
+                    strict: settings.strict,
                     detect_duplicates,
                 };
                 translations.lint(&mut diagnostics, &options);
@@ -824,7 +834,7 @@ impl Executor {
         }
 
         if scan_usages {
-            let strict = self.strict.unwrap_or(false);
+            let strict = self.lint_strict();
             let usages = params.usages.clone();
             let dead_diagnostics = tokio::task::spawn_blocking(move || {
                 crate::dead_keys::find_unused_keys(&defined_keys, &usages, &excluded, strict)
@@ -1285,38 +1295,30 @@ mod tests {
             dir
         };
 
-        let mut outputs = config::Outputs::new()
+        let outputs = config::Outputs::new()
             .with_json([config::JsonOutputConfig::new("generated/json/en.json")]);
 
         #[cfg(feature = "typescript")]
-        {
-            outputs = outputs.with_typescript(globetrotter_typescript::OutputConfig {
-                interface_type: vec![globetrotter_typescript::config::InterfaceTypeOutputConfig {
-                    path: PathBuf::from("generated/ts/translations.d.ts"),
-                }],
-            });
-        }
+        let outputs = outputs.with_typescript(globetrotter_typescript::OutputConfig {
+            interface_type: vec![globetrotter_typescript::config::InterfaceTypeOutputConfig {
+                path: PathBuf::from("generated/ts/translations.d.ts"),
+            }],
+        });
 
         #[cfg(feature = "rust")]
-        {
-            outputs = outputs.with_rust(globetrotter_rust::OutputConfig::new([PathBuf::from(
-                "generated/rust/translations.rs",
-            )]));
-        }
+        let outputs = outputs.with_rust(globetrotter_rust::OutputConfig::new([PathBuf::from(
+            "generated/rust/translations.rs",
+        )]));
 
         #[cfg(feature = "golang")]
-        {
-            outputs = outputs.with_golang(globetrotter_golang::OutputConfig {
-                output_paths: vec![PathBuf::from("generated/go/translations.go")],
-            });
-        }
+        let outputs = outputs.with_golang(globetrotter_golang::OutputConfig {
+            output_paths: vec![PathBuf::from("generated/go/translations.go")],
+        });
 
         #[cfg(feature = "python")]
-        {
-            outputs = outputs.with_python(globetrotter_python::OutputConfig {
-                output_paths: vec![PathBuf::from("generated/python/translations.py")],
-            });
-        }
+        let outputs = outputs.with_python(globetrotter_python::OutputConfig {
+            output_paths: vec![PathBuf::from("generated/python/translations.py")],
+        });
 
         let configs = vec![config::ConfigFile {
             file_id: None,
