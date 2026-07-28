@@ -1,3 +1,5 @@
+//! Validation of translation completeness and template syntax.
+
 use crate::{Language, TemplateEngine, Translations, diagnostics::Spanned};
 
 #[cfg(feature = "rayon")]
@@ -51,7 +53,10 @@ pub struct ValidationOptions<'a> {
 }
 
 impl Translations {
-    /// Validate the translations, pushing any issues onto `diagnostics`.
+    /// Validates the translations and appends any issues to `diagnostics`.
+    ///
+    /// Existing diagnostics are retained. Validation checks required languages
+    /// and, when requested, compiles templates using the configured engine.
     #[cfg(feature = "rayon")]
     pub fn validate(
         &self,
@@ -72,13 +77,19 @@ impl Translations {
             check_templates = options.check_templates,
             "validating",
         );
+
+        // Resolve the shared language requirements before parallel validation.
         let required_languages = options
             .required_languages
             .iter()
             .map(|language| *language.as_ref())
             .collect::<std::collections::BTreeSet<_>>();
+
+        // Validate each translation independently across the Rayon pool.
         let partial_diagnostics = self.0.par_iter().flat_map(|(key, translation)| {
             let mut diagnostics = vec![];
+
+            // Check that every required language is present.
             diagnostics.extend(
                 required_languages
                     .iter()
@@ -101,6 +112,7 @@ impl Translations {
                     }),
             );
 
+            // Compile template translations when checking is enabled.
             if options.check_templates && translation.is_template() {
                 match options.template_engine {
                     None => {
@@ -137,6 +149,7 @@ impl Translations {
             diagnostics
         });
 
+        // Append worker diagnostics without disturbing existing entries.
         diagnostics.extend(partial_diagnostics.collect::<Vec<_>>());
     }
 }

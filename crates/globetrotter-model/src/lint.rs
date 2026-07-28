@@ -4,7 +4,7 @@
 //! missing or empty translations, stray whitespace, broken templates,
 //! inconsistent or undeclared template arguments, and duplicated strings.
 //!
-//! Every diagnostic carries a stable [`LintCode`]; a translation key can
+//! Every diagnostic carries a stable [`crate::lint::LintCode`]; a translation key can
 //! suppress a code by listing its kebab-case name in an `allow` key, e.g.
 //! `allow = ["duplicate"]` (or `allow = "all"` to silence the key entirely).
 
@@ -17,10 +17,10 @@ use handlebars::template::{BlockParam, HelperTemplate, Parameter, Template, Temp
 use handlebars::{Path, PathSeg};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-/// A stable identifier for each lint, shown in diagnostics (`warning[code]: …`)
-/// and usable in a translation key's `allow` list to suppress it. The
-/// kebab-case string form (`missing-language`, `unused-key`, …) is derived via
-/// [`strum`].
+/// A stable identifier for a translation lint.
+///
+/// Diagnostics display it as `warning[code]: …`, and translation keys may use
+/// its kebab-case form (`missing-language`, `unused-key`, …) in an `allow` list.
 #[derive(
     Clone,
     Copy,
@@ -116,7 +116,7 @@ impl std::str::FromStr for AllowEntry {
     }
 }
 
-/// `true` if `code` (or the catch-all [`AllowEntry::All`]) is in the allow list.
+/// Returns `true` if `code` or [`AllowEntry::All`] is in the allow list.
 #[must_use]
 pub fn is_allowed(allow: &BTreeSet<AllowEntry>, code: LintCode) -> bool {
     allow.contains(&AllowEntry::All) || allow.contains(&AllowEntry::Code(code))
@@ -175,7 +175,7 @@ fn collect_helper(
         collect_parameter(parameter, variables, locals);
     }
 
-    // block parameters (`as |x|`) shadow outer names inside the block body.
+    // Block parameters (`as |x|`) shadow outer names inside the block body.
     let depth = locals.len();
     if let Some(block_param) = &helper.block_param {
         match block_param {
@@ -234,22 +234,24 @@ fn braces(name: &str) -> String {
 }
 
 impl Translations {
-    /// Lint the translations, pushing any issues onto `diagnostics`.
+    /// Lints the translations and appends any issues to `diagnostics`.
     ///
     /// Checks for missing and empty translations, surrounding whitespace,
     /// templates that fail to compile, placeholders that are inconsistent across
     /// languages, template arguments that are used but not declared (or declared
     /// but never used), and — when [`LintOptions::detect_duplicates`] is enabled
-    /// — keys that share an identical translation. Issues are reported as
-    /// warnings, or as errors when [`LintOptions::strict`] is set.
+    /// — keys that share an identical translation. Existing diagnostics are
+    /// retained. Issues are warnings unless [`LintOptions::strict`] promotes
+    /// them to errors.
     pub fn lint(&self, diagnostics: &mut Vec<Diagnostic<FileId>>, options: &LintOptions<'_>) {
+        // Determine the language set against which every key is checked.
         let required: BTreeSet<Language> = options
             .required_languages
             .iter()
             .map(|lang| *lang.as_ref())
             .collect();
-        // when the config declares no languages, expect every key to cover the
-        // set of languages that appear anywhere in the translations.
+        // With no declared languages, use the catalog-wide union so partial
+        // keys are still detected.
         let expected: BTreeSet<Language> = if required.is_empty() {
             self.0
                 .values()
@@ -264,6 +266,7 @@ impl Translations {
             None | Some(TemplateEngine::Handlebars)
         );
 
+        // Run completeness, content, and template checks per key.
         for (key, translation) in &self.0 {
             lint_translation(
                 key,
@@ -275,6 +278,7 @@ impl Translations {
             );
         }
 
+        // Run catalog-wide duplicate checks only when requested.
         if options.detect_duplicates {
             for translation in self.0.values() {
                 lint_identical_languages(translation, options.strict, diagnostics);
@@ -284,7 +288,7 @@ impl Translations {
     }
 }
 
-/// Within a single key, report languages that share an identical translation
+/// Reports languages within one key that share an identical translation
 /// (after normalizing case and whitespace) — typically a value copied across
 /// languages or an untranslated placeholder.
 fn lint_identical_languages(
@@ -348,6 +352,7 @@ fn lint_translation(
     let file_id = translation.file_id;
     let allow = &translation.allow;
 
+    // Report missing required languages.
     for language in expected_languages {
         if !translation.language.contains_key(language) {
             emit(
@@ -367,6 +372,7 @@ fn lint_translation(
         }
     }
 
+    // Check each available translation's content.
     for (language, value) in &translation.language {
         let text = value.as_ref();
         if text.trim().is_empty() {
@@ -382,8 +388,8 @@ fn lint_translation(
                     ]),
             );
         } else if text.starts_with([' ', '\t']) || text.ends_with([' ', '\t']) {
-            // only spaces and tabs; a trailing newline on a multi-line string is
-            // idiomatic TOML and not flagged.
+            // Only spaces and tabs count here; a trailing newline on a
+            // multiline TOML string is idiomatic and remains valid.
             emit(
                 diagnostics,
                 allow,
@@ -401,6 +407,7 @@ fn lint_translation(
         }
     }
 
+    // Validate template syntax and arguments after basic content checks.
     if handlebars {
         lint_templates(key, translation, strict, diagnostics);
     }
@@ -415,6 +422,7 @@ fn lint_templates(
     let file_id = translation.file_id;
     let allow = &translation.allow;
 
+    // Compile each template and collect its placeholder names.
     let mut per_language: Vec<(Language, &Spanned<String>, BTreeSet<String>)> = Vec::new();
     for (language, value) in &translation.language {
         match handlebars_variables(value.as_ref()) {
@@ -438,7 +446,7 @@ fn lint_templates(
         .flat_map(|(_, _, variables)| variables.iter().map(String::as_str))
         .collect();
 
-    // a placeholder used in one language should be present in every language.
+    // A placeholder used in one language should be present in every language.
     for (language, value, variables) in &per_language {
         for missing in used.iter().filter(|name| !variables.contains(**name)) {
             emit(
@@ -463,6 +471,7 @@ fn lint_templates(
 
     let declared: BTreeSet<&str> = translation.arguments.keys().map(String::as_str).collect();
 
+    // Report placeholders that have no matching argument declaration.
     for (language, value, variables) in &per_language {
         for undeclared in variables
             .iter()
@@ -488,6 +497,7 @@ fn lint_templates(
         }
     }
 
+    // Report argument declarations that no language uses.
     for unused in declared.iter().filter(|name| !used.contains(**name)) {
         emit(
             diagnostics,
@@ -517,7 +527,7 @@ struct DupEntry<'a> {
     file_id: FileId,
 }
 
-/// Report different keys that share an identical translation (after normalizing
+/// Reports different keys that share an identical translation after normalizing
 /// case and whitespace) in some language.
 fn lint_duplicates(
     translations: &Translations,
@@ -530,14 +540,14 @@ fn lint_duplicates(
         .flat_map(|translation| translation.language.keys().copied())
         .collect();
 
-    // de-duplicate reports for key sets that coincide in more than one language.
+    // Report a matching set of keys only once when several languages coincide.
     let mut reported: HashSet<Vec<usize>> = HashSet::new();
 
     for language in languages {
         let mut groups: BTreeMap<String, Vec<DupEntry<'_>>> = BTreeMap::new();
         for (index, translation) in translations.0.values().enumerate() {
-            // a key that allows the lint is excluded so the others can still be
-            // reported among themselves.
+            // Exclude allowed keys without suppressing duplicates among the
+            // remaining keys.
             if is_allowed(&translation.allow, LintCode::Duplicate) {
                 continue;
             }
@@ -766,10 +776,11 @@ mod tests {
         );
     }
 
+    /// Similar but unequal strings do not count as duplicates.
     #[test]
     fn near_duplicates_are_not_reported() {
-        // textually one character apart but semantically distinct (connect vs
-        // connected): must NOT be flagged now that detection is exact-only.
+        // A one-word variation (`connect`/`connected`) must not satisfy exact
+        // duplicate matching.
         let raw = concat!(
             "\n[connect]\nen = \"connect to the Europace service\"\n",
             "\n[connected]\nen = \"connected to the Europace service\"\n"
@@ -783,9 +794,10 @@ mod tests {
         );
     }
 
+    /// Exact duplicate detection also applies to single-word translations.
     #[test]
     fn detects_single_word_duplicates() {
-        // even a single shared word across keys is an exact duplicate.
+        // One shared word still forms an exact duplicate.
         let raw = concat!("\n[save]\nen = \"Save\"\n", "\n[store]\nen = \"Save\"\n");
         let found = lint(raw, &[], true);
         assert!(
@@ -796,9 +808,10 @@ mod tests {
         );
     }
 
+    /// A likely untranslated copy is reported without flagging distinct values.
     #[test]
     fn flags_identical_languages_within_a_key() {
-        // en copied to de/fr — a stale/untranslated key.
+        // English copied into German is likely untranslated.
         let raw = "\n[greeting]\nen = \"Hello\"\nde = \"Hello\"\nfr = \"Bonjour\"\n";
         let found = lint(raw, &[], true);
         assert!(
@@ -807,7 +820,8 @@ mod tests {
                 .any(|(code, _)| code.as_deref() == Some("identical-languages")),
             "{found:?}"
         );
-        // distinct translations are not flagged.
+
+        // Distinct translations are not flagged.
         let ok = "\n[hi]\nen = \"Hello\"\nde = \"Hallo\"\nfr = \"Bonjour\"\n";
         let found = lint(ok, &[], true);
         assert!(

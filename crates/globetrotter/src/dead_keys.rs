@@ -1,9 +1,9 @@
 //! Detection of translation keys that are never referenced in source code.
 //!
-//! Globetrotter keys appear verbatim as string literals in generated output and
-//! in call sites (e.g. `t("upload.title")`), so a key is considered used if its
-//! exact dotted string occurs — as a whole token — anywhere in the scanned
-//! source tree.
+//! A key is considered used when the scan finds its dotted spelling, an enabled
+//! target's generated identifier, or a sufficiently specific dynamic template
+//! prefix. Literal spellings must occur as whole tokens, so `a.b` does not
+//! satisfy `a.b.c`.
 
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use globetrotter_model::{
@@ -74,7 +74,7 @@ fn is_whole_token(content: &str, start: usize, end: usize) -> bool {
     before_ok && after_ok
 }
 
-/// Collect literal key prefixes that immediately precede a `${ … }`
+/// Collects literal key prefixes that immediately precede a `${ … }`
 /// interpolation, e.g. `` t(`a.b.${x}`) `` yields `a.b.` and
 /// `` `a.b.step${n}.x` `` yields `a.b.step`. Keys beginning with such a prefix
 /// are assumed to be referenced dynamically and are not reported as unused.
@@ -91,7 +91,7 @@ fn collect_dynamic_prefixes(content: &str, prefixes: &mut HashSet<String>) {
             .into_iter()
             .rev()
             .collect();
-        // require a dot so trivial prefixes don't mask large key subtrees.
+        // Require a dot so trivial prefixes cannot mask large key subtrees.
         if run.contains('.') {
             prefixes.insert(run);
         }
@@ -135,12 +135,13 @@ fn is_pruned_dir(
     crate::config::config_file_names().any(|config| path.join(config).exists())
 }
 
-/// Find keys that never appear as a whole token in any scanned source file.
+/// Finds keys without a literal, generated-identifier, or dynamic-prefix usage.
 ///
 /// The scan respects `.gitignore`, skips other globetrotter source trees (any
 /// directory containing a config file), and skips `excluded` canonicalized
 /// directories (e.g. generated output) and well-known build and dependency
 /// directories (`node_modules`, `target`, `dist`, …).
+/// Unreadable files and files larger than the scan limit are skipped.
 ///
 /// # Errors
 ///
@@ -155,6 +156,7 @@ pub fn find_unused_keys(
         return Ok(Vec::new());
     }
 
+    // Build one automaton for every literal form of every defined key.
     let patterns: Vec<&str> = keys
         .iter()
         .flat_map(|key| key.forms.iter().map(String::as_str))
@@ -164,6 +166,7 @@ pub fn find_unused_keys(
 
     let searcher = aho_corasick::AhoCorasick::new(&patterns).map_err(std::io::Error::other)?;
 
+    // Configure one ignore-aware walker across all requested source roots.
     let Some((first, rest)) = usage_dirs.split_first() else {
         return Ok(Vec::new());
     };
@@ -171,7 +174,7 @@ pub fn find_unused_keys(
     for dir in rest {
         builder.add(dir);
     }
-    // respect .gitignore/.ignore even outside a git checkout.
+    // Respect `.gitignore` and `.ignore` even outside a Git checkout.
     builder.require_git(false);
     let scan_roots: BTreeSet<PathBuf> = usage_dirs
         .iter()
@@ -193,6 +196,7 @@ pub fn find_unused_keys(
         )
     });
 
+    // Scan eligible source files for literal forms and dynamic prefixes.
     let mut used: HashSet<usize> = HashSet::new();
     let mut dynamic_prefixes: HashSet<String> = HashSet::new();
     for entry in builder.build().flatten() {
@@ -223,6 +227,7 @@ pub fn find_unused_keys(
         collect_dynamic_prefixes(&content, &mut dynamic_prefixes);
     }
 
+    // Resolve automaton matches back to the string forms they represent.
     let matched_forms: HashSet<&str> = used
         .iter()
         .filter_map(|&index| patterns.get(index).copied())
@@ -230,6 +235,7 @@ pub fn find_unused_keys(
     let dynamic: Vec<&str> = dynamic_prefixes.iter().map(String::as_str).collect();
 
     let mut diagnostics = Vec::new();
+    // Report definitions with neither a literal nor dynamic-prefix reference.
     for key in keys {
         let referenced = key
             .forms
@@ -276,6 +282,7 @@ mod tests {
         Ok(path)
     }
 
+    /// An empty catalog avoids building a pattern automaton.
     #[test]
     fn empty_key_set_returns_no_diagnostics() -> eyre::Result<()> {
         let dir = temp_dir("empty")?;
@@ -286,6 +293,7 @@ mod tests {
         Ok(())
     }
 
+    /// An explicitly requested root is scanned even when it contains a config.
     #[test]
     fn explicit_root_with_config_file_is_still_scanned() -> eyre::Result<()> {
         let dir = temp_dir("root-config")?;

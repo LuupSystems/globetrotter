@@ -1,3 +1,5 @@
+//! Kotlin output configuration.
+
 use std::path::PathBuf;
 
 /// Configuration for Kotlin translation code generation outputs.
@@ -10,7 +12,7 @@ pub struct OutputConfig {
 }
 
 impl OutputConfig {
-    /// Return `true` if there are no configured output paths.
+    /// Returns `true` if there are no configured output paths.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.output_paths.is_empty()

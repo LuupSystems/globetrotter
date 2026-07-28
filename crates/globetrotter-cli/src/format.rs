@@ -1,3 +1,5 @@
+//! In-place TOML formatting that preserves comment ownership.
+
 use crate::options::{FormatOptions, SortOrder};
 use color_eyre::eyre::{self, WrapErr};
 use std::cmp::Ordering;
@@ -5,7 +7,7 @@ use std::path::PathBuf;
 use toml_edit::{ArrayOfTables, Decor, Item, KeyMut, Table};
 
 impl crate::Globetrotter {
-    /// Format translation files in place by sorting their keys.
+    /// Formats translation files in place by sorting their keys.
     ///
     /// Translation files are discovered from the loaded configurations and from
     /// any paths passed via `--translation`. Comments and formatting are
@@ -19,6 +21,7 @@ impl crate::Globetrotter {
     pub async fn format(self, options: &FormatOptions) -> eyre::Result<()> {
         let strict = self.options.strict.unwrap_or(false);
 
+        // Resolve configured translation files before adding explicit paths.
         let mut diagnostics = Vec::new();
         let files =
             globetrotter::executor::resolve_input_files(&self.configs, strict, &mut diagnostics);
@@ -26,8 +29,8 @@ impl crate::Globetrotter {
             self.diagnostic_printer.emit(diagnostic).await?;
         }
 
-        // canonicalize both config-derived and explicitly passed paths so the
-        // same file referenced through different patterns is only formatted once.
+        // Canonicalize all sources so aliases and overlapping globs cannot
+        // format the same file twice.
         let mut paths = Vec::with_capacity(files.len() + self.options.translations.len());
         for path in files.iter().chain(&self.options.translations) {
             let path = tokio::fs::canonicalize(path)
@@ -44,6 +47,7 @@ impl crate::Globetrotter {
             );
         }
 
+        // Format or verify every unique translation file.
         let mut unformatted: Vec<PathBuf> = Vec::new();
         for path in &paths {
             let original = tokio::fs::read_to_string(path)
@@ -67,6 +71,7 @@ impl crate::Globetrotter {
             }
         }
 
+        // Check mode reports every unformatted file before failing.
         if options.check && !unformatted.is_empty() {
             eyre::bail!(
                 "{} translation file(s) are not formatted",
@@ -102,15 +107,15 @@ fn format_str(input: &str, order: SortOrder) -> eyre::Result<String> {
 struct SortState<'a> {
     input: &'a str,
     order: SortOrder,
-    // the renderer emits header tables in `position` order, so positions are
-    // reassigned to match the new key order.
+    // `toml_edit` renders table headers by position, so sorting keys also
+    // requires assigning new positions.
     position: isize,
     first_header: bool,
 }
 
 fn key_cmp(a: &str, b: &str, order: SortOrder) -> Ordering {
-    // the `arguments` table holds a translation's metadata rather than a nested
-    // translation key, so it is always kept last regardless of sort order.
+    // `arguments` and its alias `args` are metadata, not nested translation
+    // keys, so they remain last in either sort direction.
     let pinned = |key: &str| key == "arguments" || key == "args";
     match (pinned(a), pinned(b)) {
         (true, true) => Ordering::Equal,
@@ -134,7 +139,7 @@ fn sort_table(table: &mut Table, state: &mut SortState<'_>) {
             Item::Table(child) => {
                 child.set_position(Some(state.position));
                 state.position += 1;
-                // implicit (e.g. the `a` in `[a.b]`) and dotted tables do not
+                // Implicit (e.g. the `a` in `[a.b]`) and dotted tables do not
                 // render a header line, so they carry no block separation.
                 if !child.is_implicit() && !child.is_dotted() {
                     normalize_header(&mut key, child, state);
@@ -145,7 +150,7 @@ fn sort_table(table: &mut Table, state: &mut SortState<'_>) {
                 normalize_array_of_tables(&mut key, children, state);
             }
             Item::Value(_) => {
-                // a comment above a language key lives in the key's leaf decor;
+                // A comment above a language key lives in the key's leaf decor;
                 // keep it (sorted with the key) but drop blank lines between
                 // language keys.
                 let comments = comments_of(key.leaf_decor(), state.input);
@@ -157,7 +162,7 @@ fn sort_table(table: &mut Table, state: &mut SortState<'_>) {
 }
 
 fn normalize_header(key: &mut KeyMut<'_>, table: &mut Table, state: &mut SortState<'_>) {
-    // a section's leading comment may sit in the key's leaf decor (rendered
+    // A section's leading comment may sit in the key's leaf decor (rendered
     // before the `[` of a dotted header) and/or in the table's own decor.
     let mut comments = comments_of(key.leaf_decor(), state.input);
     comments.push_str(&comments_of(table.decor(), state.input));
@@ -188,8 +193,10 @@ fn normalize_array_of_tables(
     }
 }
 
-/// The decor prefix for a header: its comments, preceded by one blank line
-/// unless it is the first header in the document.
+/// Builds a header's decor prefix.
+///
+/// Comments are preceded by one blank line unless this is the first rendered
+/// header.
 fn block_separator(comments: &str, state: &mut SortState<'_>) -> String {
     let prefix = if state.first_header {
         comments.to_string()
@@ -212,7 +219,7 @@ fn comments_of(decor: &Decor, input: &str) -> String {
     comment_lines(raw)
 }
 
-/// Collect the comment lines from a decor prefix so they sit directly above the
+/// Collects comment lines from decor so they stay directly above the
 /// key or header they annotate. Leading and trailing blank lines are dropped,
 /// but a single blank line between two comment paragraphs is preserved (runs of
 /// several blank lines collapse to one) — e.g. a file-level comment separated
@@ -224,8 +231,8 @@ fn comment_lines(prefix: &str) -> String {
     for line in prefix.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
-            // remember an interior blank, but only once a comment precedes it;
-            // trailing blanks are never flushed and so are dropped.
+            // Remember an interior blank only after a comment; leaving it
+            // pending also drops trailing whitespace.
             pending_blank = !out.is_empty();
         } else {
             if pending_blank {
@@ -325,7 +332,7 @@ mod tests {
     fn section_comments_move_with_their_section() {
         crate::tests::init();
 
-        // a stack of comment lines sits on top of each section header; they must
+        // A stack of comment lines sits on top of each section header; they must
         // travel with the section when the sections are reordered.
         let input = indoc! {r#"
             # top comment for b
@@ -430,9 +437,9 @@ mod tests {
     fn real_world_translation_file() {
         crate::tests::init();
 
-        // mixed, unsorted real-world input: section comments, a comment on a
-        // language key, blank lines between languages, oversized gaps between
-        // sections, and an `arguments` table that must stay last.
+        // Mixed, unsorted real-world input covers section and language
+        // comments, blank language gaps, oversized section gaps, and argument
+        // metadata that must remain last.
         let input = indoc! {r#"
             # Upload-related strings.
             [upload.title]
@@ -472,7 +479,7 @@ mod tests {
         let have = format_str(input, SortOrder::Ascending).unwrap();
         sim_assert_eq!(have: have, want: want);
 
-        // formatting is idempotent.
+        // A second pass must not introduce additional changes.
         let again = format_str(&have, SortOrder::Ascending).unwrap();
         sim_assert_eq!(have: again, want: want);
     }
@@ -481,9 +488,8 @@ mod tests {
     fn preserves_blank_line_between_comment_paragraphs() {
         crate::tests::init();
 
-        // the common top-of-file pattern: a file-level comment, a blank line,
-        // then the first key's own comment. The blank must survive formatting
-        // (and the sort that reorders the languages below).
+        // Keep the file-level comment and its separating blank distinct from
+        // the first key's comment while languages are reordered.
         let input = indoc! {r#"
             # This file contains greeting strings.
 
@@ -545,8 +551,8 @@ mod tests {
     fn multiline_strings_are_untouched() {
         crate::tests::init();
 
-        // keys around a multi-line string value (which itself contains lines
-        // that look like blanks) must sort without corrupting the value.
+        // Sort keys around a multiline value without treating its blank-looking
+        // lines as TOML decor.
         let input = indoc! {r#"
             [b]
             en = "B"

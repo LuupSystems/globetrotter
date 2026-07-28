@@ -1,3 +1,5 @@
+//! SWC-backed TypeScript AST construction and emission.
+
 use globetrotter_model as model;
 use swc_core::{
     base::{Compiler, PrintArgs},
@@ -15,7 +17,7 @@ pub enum Error {
 
 /// Conversion from a model type into its TypeScript AST representation.
 pub trait IntoAST<T> {
-    /// Convert `self` into the corresponding TypeScript AST node.
+    /// Converts `self` into the corresponding TypeScript AST node.
     fn into_ast(self) -> T;
 }
 
@@ -53,11 +55,12 @@ fn emit_code(compiler: &Compiler, program: &ast::Program) -> Result<String, anyh
 
 fn type_annotation_for_translation(translation: &model::Translation) -> ast::TsType {
     if !translation.is_template() {
-        // "translation.key": string;
+        // Literal translations are readonly string-valued properties.
         return model::ArgumentType::String.into_ast();
     }
 
-    // "translation.key": (values: { readonly "member.one": string; }) => string;
+    // Templates become functions whose values object mirrors the declared
+    // argument names and types.
     let members = translation
         .arguments
         .iter()
@@ -131,7 +134,7 @@ fn type_members(
     })
 }
 
-/// Generate a TypeScript `Translations` type for the given model.
+/// Generates an exported TypeScript `Translations` type.
 ///
 /// # Errors
 ///
@@ -139,8 +142,10 @@ fn type_members(
 pub fn generate_translations_type_export(
     translations: &model::Translations,
 ) -> Result<String, Error> {
+    // Convert translations into readonly type members.
     let members: Vec<_> = type_members(translations).collect();
 
+    // Wrap the members in an exported `Translations` type alias.
     let program = ast::Program::Module(ast::Module {
         span: DUMMY_SP,
         body: vec![ast::ModuleItem::ModuleDecl(ast::ModuleDecl::ExportDecl(
@@ -165,6 +170,7 @@ pub fn generate_translations_type_export(
         swc_core::common::sync::Lrc::default();
     let compiler = Compiler::new(cm);
 
+    // Emit the constructed AST with SWC's TypeScript code generator.
     emit_code(&compiler, &program).map_err(Error::Codegen)
 }
 
@@ -215,6 +221,7 @@ mod tests {
         Ok(program)
     }
 
+    /// The generated type preserves literal keys and typed template arguments.
     #[test]
     fn generate_type() -> eyre::Result<()> {
         crate::tests::init();
@@ -275,6 +282,7 @@ mod tests {
         Ok(())
     }
 
+    /// SWC can parse the reference interface used by the generator tests.
     #[test]
     fn parse_reference_interface() -> eyre::Result<()> {
         crate::tests::init();

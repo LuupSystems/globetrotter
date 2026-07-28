@@ -53,7 +53,7 @@ pub struct Settings {
 }
 
 impl Settings {
-    /// Merge the settings layers for one configuration in precedence order.
+    /// Merges the settings layers for one configuration in precedence order.
     ///
     /// Explicit `overrides` values win over the config file's, and built-in
     /// defaults fill in whatever neither layer specifies: generation is strict,
@@ -131,8 +131,8 @@ mod tests {
         );
     }
 
-    /// Explicit overrides win over the config file, including explicit `false`
-    /// over a config `true` (the regression the tri-state layers exist for).
+    /// Explicit overrides win in both directions, including `false` over a
+    /// config value of `true`.
     #[test]
     fn overrides_win_over_config_in_both_directions() {
         let config = SettingsLayer {

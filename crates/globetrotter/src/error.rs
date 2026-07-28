@@ -1,3 +1,5 @@
+//! Errors produced while loading, validating, and generating translations.
+
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use globetrotter_model::diagnostics::Span;
 use std::path::PathBuf;
@@ -13,7 +15,7 @@ pub struct IoError {
 }
 
 impl IoError {
-    /// Create a new [`IoError`] for the given path and source error.
+    /// Creates an [`IoError`] for the given path and source error.
     pub fn new(path: impl Into<PathBuf>, source: std::io::Error) -> Self {
         Self {
             inner: source,
@@ -140,7 +142,8 @@ impl std::fmt::Display for FailedWithErrors {
 pub struct DuplicateKeyError<F: Copy + PartialEq> {
     /// The duplicated key.
     pub key: String,
-    /// The spans and file ids where the key was defined.
+    /// Definitions in encounter order, with the final one treated as the
+    /// duplicate that triggered the error.
     pub occurrences: Vec<(Span, F)>,
 }
 
@@ -148,17 +151,18 @@ impl<F> DuplicateKeyError<F>
 where
     F: Copy + PartialEq,
 {
-    /// Render this duplicate-key error into diagnostics.
+    /// Renders this duplicate-key error into diagnostics.
     ///
-    /// When `all` is set, every prior occurrence is highlighted; otherwise only
-    /// the first occurrence is labelled.
+    /// When `all` is `true`, every prior occurrence is highlighted. Otherwise,
+    /// only the most recent prior occurrence is labelled. An empty occurrence
+    /// list produces an unlabelled diagnostic.
     #[must_use]
     pub fn to_diagnostics(&self, all: bool) -> Vec<Diagnostic<F>> {
         let mut labels = vec![];
 
         match self.occurrences.split_last() {
             None => {
-                // No occurrences recorded; nothing to highlight.
+                // Without an occurrence, the diagnostic has no source label.
             }
             Some((last, rest)) => {
                 if all {

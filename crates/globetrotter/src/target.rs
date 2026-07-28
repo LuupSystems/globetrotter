@@ -1,3 +1,5 @@
+//! Typed-language output generation selected by Cargo features.
+
 #[cfg(any(
     feature = "typescript",
     feature = "rust",
@@ -51,7 +53,7 @@ pub enum Target {
 }
 
 impl Target {
-    /// Iterate over all target variants.
+    /// Iterates over all target variants.
     #[must_use]
     pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
         <Self as strum::IntoEnumIterator>::iter()
@@ -131,7 +133,8 @@ impl crate::executor::Executor {
             return Ok(());
         }
 
-        // Placeholder to keep this async until Python codegen is implemented.
+        // The Python backend has no emitter, but this future preserves the
+        // shared asynchronous target interface.
         tokio::task::yield_now().await;
         Ok(())
     }
@@ -148,7 +151,8 @@ impl crate::executor::Executor {
             return Ok(());
         }
 
-        // Placeholder to keep this async until Golang codegen is implemented.
+        // The Go backend has no emitter, but this future preserves the shared
+        // asynchronous target interface.
         tokio::task::yield_now().await;
         Ok(())
     }

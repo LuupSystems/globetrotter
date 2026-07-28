@@ -24,9 +24,10 @@ use async_openai::{Client, config::OpenAIConfig};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Abort the run after this many *consecutive* request failures: an endpoint
-/// that keeps failing is misconfigured or down, and warning 2,000 more times
-/// helps nobody. Isolated failures are warned about and skipped.
+/// The number of consecutive request failures that makes an endpoint unusable.
+///
+/// Isolated failures are reported and skipped; a sustained failure stops the
+/// run instead of repeating the same endpoint error for every remaining key.
 const MAX_CONSECUTIVE_FAILURES: usize = 5;
 
 /// Errors that can occur while judging.
@@ -170,10 +171,9 @@ pub struct Verdict {
 }
 
 /// One language flagged by the model.
-//
-// The `extend` puts `confidence` back into the schema's `required` list: its
-// serde default (see the field) would otherwise drop it, and strict structured
-// output demands that every property be required.
+///
+/// The schema extension keeps `confidence` required for strict structured
+/// output even though serde accepts a missing value on the recovery path.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(extend("required" = ["language", "problem", "confidence"]))]
@@ -185,11 +185,9 @@ pub struct Issue {
     /// The model's self-reported certainty that the difference is real, from
     /// 0.0 to 1.0. Verbalized confidence is only loosely calibrated, so treat
     /// it as an ordinal ranking of findings rather than a probability.
-    //
-    // Required in the strict response schema (see the container attribute), but
-    // defaulted when parsing so a recovery-path response that omits it still
-    // yields a verdict: a missing confidence must keep the finding (recall
-    // first), not drop the key.
+    ///
+    /// The recovery parser defaults a missing value to full confidence so the
+    /// finding is retained rather than silently filtered out.
     #[serde(default = "full_confidence")]
     pub confidence: f64,
 }
@@ -233,11 +231,11 @@ pub struct Stats {
 /// Receives progress updates so a caller can drive a progress bar. The no-op
 /// `()` implementation is available when progress isn't needed.
 pub trait Progress: Send + Sync {
-    /// Set the total number of keys, called once before judging begins.
+    /// Sets the total number of keys before judging begins.
     fn set_length(&self, total: u64) {
         let _ = total;
     }
-    /// Advance completed keys by `delta`.
+    /// Advances completed keys by `delta`.
     fn inc(&self, delta: u64) {
         let _ = delta;
     }
@@ -255,7 +253,7 @@ pub struct Judge {
 }
 
 impl Judge {
-    /// Create a judge from `options`.
+    /// Creates a judge from `options`.
     ///
     /// The API key is read from [`Options::api_key_env`] once, here. No request
     /// is made until [`Self::judge`] runs.
@@ -289,7 +287,7 @@ impl Judge {
         })
     }
 
-    /// Judge every key, calling `sink` with each [`Finding`] as its verdict
+    /// Judges every key, calling `sink` with each [`Finding`] as its verdict
     /// arrives (completion order, not input order).
     ///
     /// Up to [`Options::concurrency`] requests are in flight at a time. A key
@@ -316,12 +314,14 @@ impl Judge {
         // full-confidence findings.
         let min_confidence = self.options.min_confidence.clamp(0.0, 1.0);
 
+        // Judge keys concurrently while preserving completion-order delivery.
         let mut verdicts = futures::stream::iter(keys.iter().map(|key| async move {
             let outcome = self.judge_key(key).await;
             (key, outcome)
         }))
         .buffer_unordered(self.options.concurrency.max(1));
 
+        // Stream successful findings and stop after repeated endpoint failures.
         while let Some((key, outcome)) = verdicts.next().await {
             progress.inc(1);
             match outcome {
@@ -365,13 +365,14 @@ impl Judge {
         }
         drop(verdicts);
 
+        // Defer eviction until all cache reads and writes have finished.
         if let Some(cache) = &self.cache {
             cache.enforce_capacity()?;
         }
         Ok(stats)
     }
 
-    /// Judge one key: cache lookup, then a strict-schema request, then one
+    /// Judges one key using the cache, a strict-schema request, and one
     /// recovery attempt without structured output. Returns the verdict and
     /// whether it came from the cache.
     async fn judge_key(&self, key: &KeyInput<'_>) -> Result<(Verdict, bool), Error> {
@@ -426,7 +427,7 @@ impl Judge {
         Ok((verdict, false))
     }
 
-    /// Send one chat completion and parse the verdict. With `strict`, the
+    /// Sends one chat completion and parses the verdict. With `strict`, the
     /// derived JSON schema is enforced server-side; without it, the response is
     /// parsed leniently (the prompt itself already demands JSON).
     async fn request(&self, rendered_prompt: &str, strict: bool) -> Result<Verdict, Error> {
@@ -471,7 +472,7 @@ impl Judge {
     }
 }
 
-/// Parse a verdict from model output, tolerating surrounding prose or a
+/// Parses a verdict from model output, tolerating surrounding prose or a
 /// ```` ```json ```` fence by falling back to the first balanced `{…}` block.
 fn parse_verdict(content: &str) -> Result<Verdict, serde_json::Error> {
     match serde_json::from_str(content) {
@@ -512,6 +513,7 @@ fn first_json_object(text: &str) -> Option<&str> {
 mod tests {
     use super::{Verdict, first_json_object, parse_verdict};
 
+    /// A bare structured response parses directly.
     #[test]
     fn parses_a_bare_verdict() {
         let verdict: Verdict =
@@ -529,9 +531,9 @@ mod tests {
         let verdict = parse_verdict(content).expect("parse");
         assert!(!verdict.consistent);
         assert_eq!(verdict.issues[0].language, "de");
-        // The brace inside the problem string must not derail block extraction.
+        // Braces inside JSON strings do not affect balanced-block extraction.
         assert_eq!(verdict.issues[0].problem, "says {x}");
-        // A missing confidence defaults to 1.0 so the finding is never filtered.
+        // Missing confidence defaults to 1.0 so the finding is retained.
         assert!((verdict.issues[0].confidence - 1.0).abs() < f64::EPSILON);
     }
 
@@ -551,6 +553,7 @@ mod tests {
         assert_eq!(missing, "{languages}");
     }
 
+    /// Explicit confidence values survive response parsing.
     #[test]
     fn parses_an_explicit_confidence() {
         let content = r#"{"consistent": false, "issues": [{"language": "fr",
@@ -559,6 +562,7 @@ mod tests {
         assert!((verdict.issues[0].confidence - 0.4).abs() < f64::EPSILON);
     }
 
+    /// Balanced-object extraction ignores braces inside JSON strings.
     #[test]
     fn finds_balanced_object_with_braces_in_strings() {
         let text = r#"noise {"a": "{not a block}", "b": {"c": 1}} trailing"#;
@@ -568,6 +572,7 @@ mod tests {
         );
     }
 
+    /// The derived schema satisfies strict structured-output requirements.
     #[test]
     fn schema_derives_with_closed_objects() {
         let schema = serde_json::to_value(schemars::schema_for!(Verdict)).expect("schema");

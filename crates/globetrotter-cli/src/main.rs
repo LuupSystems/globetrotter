@@ -25,8 +25,7 @@ use std::path::PathBuf;
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-/// Top-level application state, holding parsed options, the diagnostics printer,
-/// and the loaded configurations.
+/// Holds parsed options, registered source files, and loaded configurations.
 pub struct Globetrotter {
     /// Parsed command-line options.
     pub options: options::Options,
@@ -39,7 +38,10 @@ pub struct Globetrotter {
 }
 
 impl Globetrotter {
-    /// Create a new Globetrotter instance from command-line options.
+    /// Loads configuration files and creates the application state.
+    ///
+    /// Explicit paths may name files or directories. With no explicit path,
+    /// the current directory and its ancestors are searched for a config file.
     ///
     /// # Errors
     ///
@@ -137,7 +139,7 @@ impl Globetrotter {
         let (configs, diagnostics): (Vec<_>, Vec<_>) = configs.into_iter().unzip();
         let configs = configs.into_iter().flatten().collect();
 
-        // emit diagnostics
+        // Emit every config diagnostic before rejecting the complete batch.
         let has_error = diagnostics
             .iter()
             .flatten()
@@ -157,12 +159,11 @@ impl Globetrotter {
         })
     }
 
-    /// Execute the globetrotter command.
+    /// Generates all outputs configured for the loaded translation catalogs.
     ///
     /// # Errors
     ///
-    /// Returns an error if configuration parsing, translation processing, or output
-    /// generation fails.
+    /// Returns an error if translation processing or output generation fails.
     pub async fn execute(self) -> Result<(), globetrotter::Error> {
         let start = std::time::Instant::now();
         let logger = Logger::new(&self.configs);
@@ -226,9 +227,7 @@ pub mod tests {
 
     static INIT: std::sync::Once = std::sync::Once::new();
 
-    /// Initialize test
-    ///
-    /// This ensures `color_eyre` is setup once.
+    /// Installs `color_eyre` once for tests that return reports.
     pub fn init() {
         INIT.call_once(|| {
             color_eyre::install().ok();

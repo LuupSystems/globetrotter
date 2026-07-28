@@ -1,7 +1,9 @@
+//! In-memory gzip size calculation for generated output reporting.
+
 use flate2::{Compression, write::GzEncoder};
 use std::io::Write;
 
-/// Compute the size in bytes of the gzipped representation of the given value.
+/// Computes the gzip size of `value` in bytes using best compression.
 ///
 /// # Errors
 ///

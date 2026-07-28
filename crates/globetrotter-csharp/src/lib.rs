@@ -1,4 +1,4 @@
-//! C# bindings code generation for globetrotter translations.
+//! Configuration types for globetrotter C# outputs.
 
 /// C# code generation configuration types.
 pub mod config;

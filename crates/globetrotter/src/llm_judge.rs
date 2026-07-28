@@ -21,8 +21,11 @@ use std::collections::HashMap;
 
 pub use globetrotter_llm_judge::{Error, Stats};
 
-/// Drives an [`indicatif::ProgressBar`] from the judging progress.
-pub struct BarProgress(pub indicatif::ProgressBar);
+/// Drives an [`indicatif::ProgressBar`] from judging progress.
+pub struct BarProgress(
+    /// The progress bar updated by judge callbacks.
+    pub indicatif::ProgressBar,
+);
 
 impl globetrotter_llm_judge::Progress for BarProgress {
     fn set_length(&self, total: u64) {
@@ -33,7 +36,7 @@ impl globetrotter_llm_judge::Progress for BarProgress {
     }
 }
 
-/// Create a judge from `params`.
+/// Creates a judge from executor parameters.
 ///
 /// # Errors
 ///
@@ -64,9 +67,10 @@ struct KeySpans<'a> {
     language_spans: HashMap<&'a str, Span>,
 }
 
-/// Judge the translations for cross-language drift, streaming a note diagnostic
-/// for every flagged language via `emit` as its verdict arrives. Returns the
-/// run's [`Stats`].
+/// Judges translations for cross-language drift.
+///
+/// A note diagnostic is passed to `emit` for every flagged language as its
+/// verdict arrives. The returned [`Stats`] describe the complete run.
 ///
 /// Keys that suppress the `llm-drift` code via their `allow` list, and keys
 /// with fewer than two languages, are skipped.
@@ -151,7 +155,7 @@ fn confidence_badge(confidence: f64) -> String {
 }
 
 impl crate::executor::Executor {
-    /// Judge one config's translations, streaming each finding above a live
+    /// Judges one config's translations, streaming findings above a live
     /// progress bar as its verdict arrives.
     pub(crate) async fn stream_llm_judge(
         &self,
@@ -202,8 +206,7 @@ impl crate::executor::Executor {
     }
 }
 
-/// A progress bar for the judging phase, counting translation keys.
-/// Hidden when stderr is not a terminal.
+/// Builds a key-counting progress bar hidden when stderr is not a terminal.
 fn judge_progress_bar() -> indicatif::ProgressBar {
     use std::io::IsTerminal;
     let bar = indicatif::ProgressBar::new(0);
@@ -220,7 +223,7 @@ fn judge_progress_bar() -> indicatif::ProgressBar {
     bar
 }
 
-/// Build a note diagnostic for one finding, pointing at the flagged language's
+/// Builds a note diagnostic for one finding, pointing at the flagged language's
 /// translation string.
 fn diagnostic_for(
     spans: &HashMap<&str, KeySpans<'_>>,

@@ -1,3 +1,5 @@
+//! Alignment and path display for human-readable progress output.
+
 use crate::{
     config::v1::{ConfigFile, Configs},
     model::Language,
@@ -32,7 +34,10 @@ fn pad_right(value: &str, width: usize, fill: char) -> String {
     )
 }
 
-/// Compute `path` relative to `base_dir`, falling back to `path` unchanged.
+/// Computes `path` relative to `base_dir`, falling back to `path` unchanged.
+///
+/// The fallback applies when `base_dir` is `None` or no relative path can be
+/// formed, such as between different Windows path prefixes.
 #[must_use]
 pub fn relative_to(base_dir: Option<&Path>, path: &Path) -> PathBuf {
     base_dir
@@ -44,14 +49,14 @@ pub fn relative_to(base_dir: Option<&Path>, path: &Path) -> PathBuf {
 /// Formats aligned progress log lines for configs and targets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Logger {
-    /// The width reserved for config names, for column alignment.
+    /// Display width reserved for config names.
     pub longest_config_name: usize,
-    /// The width reserved for target/language names, for column alignment.
+    /// Display width reserved for target or language names.
     pub longest_target_name: usize,
 }
 
 impl Logger {
-    /// Create a logger sized to align output for the given configs.
+    /// Creates a logger sized to align output for the given configs.
     #[must_use]
     pub fn new<F>(configs: &Configs<F>) -> Self {
         let longest_config_name = configs
@@ -76,7 +81,7 @@ impl Logger {
         }
     }
 
-    /// Format the aligned log prefix for a config name and code target.
+    /// Formats the aligned log prefix for a config name and code target.
     #[must_use]
     pub fn target_log_prefix(&self, name: &str, target: Target) -> String {
         format!(
@@ -90,7 +95,7 @@ impl Logger {
         )
     }
 
-    /// Format the aligned log prefix for a config name and language.
+    /// Formats the aligned log prefix for a config name and language.
     #[must_use]
     pub fn language_log_prefix(&self, name: &str, language: Language) -> String {
         format!(
@@ -104,7 +109,7 @@ impl Logger {
         )
     }
 
-    /// Format a `completed in <duration>` log line, aligned to the columns.
+    /// Formats a `completed in <duration>` line aligned to the output columns.
     #[must_use]
     pub fn completed(&self, duration: &std::time::Duration) -> String {
         format!(
@@ -115,7 +120,7 @@ impl Logger {
         )
     }
 
-    /// Format a dry-run notice indicating the path that would be written.
+    /// Formats a dry-run notice for a path that would be written.
     #[must_use]
     pub fn dry_run_would_write(&self, path: &Path) -> colored::ColoredString {
         format!("{} would write {}", "DRY RUN:".yellow(), path.display()).bright_black()
@@ -127,6 +132,7 @@ mod test {
     use colored::Colorize;
     use similar_asserts::assert_eq as sim_assert_eq;
 
+    /// Right padding measures visible text rather than ANSI escape bytes.
     #[test]
     fn test_pad_right() {
         sim_assert_eq!(have: super::pad_right("test", 7, ' '), want: "test   ");
@@ -142,6 +148,7 @@ mod test {
         );
     }
 
+    /// Left padding measures visible text rather than ANSI escape bytes.
     #[test]
     fn test_pad_left() {
         sim_assert_eq!(have: super::pad_left("test", 7, ' '), want: "   test");

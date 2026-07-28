@@ -1,4 +1,4 @@
-//! Zig bindings code generation for globetrotter translations.
+//! Configuration types for globetrotter Zig outputs.
 
 /// Zig code generation configuration types.
 pub mod config;

@@ -1,3 +1,5 @@
+//! Command-line arguments and their conversion into executor settings.
+
 use clap::{Parser, Subcommand};
 use globetrotter::model;
 use std::path::PathBuf;
@@ -30,7 +32,7 @@ pub struct FormatOptions {
 #[cfg(feature = "llm-judge")]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum LlmEffort {
-    /// Send no reasoning-effort field at all.
+    /// Sends no reasoning-effort field.
     None,
     /// Minimal reasoning; fastest, least reliable.
     Low,
@@ -61,7 +63,7 @@ impl From<LlmEffort> for Option<globetrotter::executor::LlmJudgeEffort> {
 #[cfg(feature = "llm-judge")]
 #[derive(Parser, Debug)]
 pub struct LlmJudgeOptions {
-    /// (experimental) Ask an LLM whether each key's languages all tell the user
+    /// (experimental) Asks an LLM whether each key's languages tell the user
     /// the same thing.
     ///
     /// Each key is judged in one request against an OpenAI-compatible endpoint
@@ -170,7 +172,7 @@ pub struct LlmJudgeOptions {
     pub cache_capacity: usize,
 }
 
-/// Parse a `--llm-min-confidence` value, requiring the 0–1 range so an
+/// Parses a `--llm-min-confidence` value, requiring the 0–1 range so an
 /// out-of-range threshold errors instead of silently suppressing everything.
 #[cfg(feature = "llm-judge")]
 fn parse_confidence(value: &str) -> Result<f64, String> {
@@ -184,7 +186,7 @@ fn parse_confidence(value: &str) -> Result<f64, String> {
 
 #[cfg(feature = "llm-judge")]
 impl LlmJudgeOptions {
-    /// The executor parameters when `--llm-judge` is set, otherwise `None`.
+    /// Builds executor parameters when `--llm-judge` is set.
     ///
     /// `cache_dir` is the resolved globetrotter cache directory; verdicts go in
     /// its `llm-judge` subdirectory.
@@ -245,11 +247,11 @@ pub struct LintOptions {
 /// Top-level CLI commands.
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Format translation files in place.
+    /// Formats translation files in place.
     #[command(name = "format", aliases = ["fmt"])]
     Format(FormatOptions),
 
-    /// Lint translation files and report any issues.
+    /// Lints translation files and reports any issues.
     #[command(name = "lint")]
     Lint(LintOptions),
 }
@@ -301,7 +303,7 @@ pub struct Options {
     )]
     pub strict: Option<bool>,
 
-    /// Validate that all templates render successfully.
+    /// Whether to validate that all templates render successfully.
     //
     // Not `global`: its `--check` long flag would collide with the `format`
     // subcommand's `--check`, and template checking only applies to the default
@@ -338,7 +340,7 @@ pub struct Options {
     )]
     pub dry_run: Option<bool>,
 
-    /// Process only the first N translation keys of each config.
+    /// Process only the first `N` translation keys of each config.
     ///
     /// A debugging aid for large corpora: try a change — or the LLM judge —
     /// against a small subset of real translations before paying for a full
@@ -365,8 +367,10 @@ pub struct Options {
 }
 
 impl Options {
-    /// The resolved cache directory: `--cache-dir`/`GLOBETROTTER_CACHE_DIR` if
-    /// set, else `<os-cache>/globetrotter`, else a temp-dir fallback.
+    /// Resolves the cache directory from the CLI, environment, or platform.
+    ///
+    /// Precedence is `--cache-dir`, `GLOBETROTTER_CACHE_DIR`, the platform
+    /// cache directory, and finally the process temporary directory.
     #[must_use]
     pub fn cache_dir(&self) -> PathBuf {
         self.cache_dir

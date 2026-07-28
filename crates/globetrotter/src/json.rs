@@ -1,3 +1,5 @@
+//! Per-language JSON output generation and output-path templating.
+
 use crate::{
     config::{
         settings::Settings,
@@ -72,6 +74,8 @@ impl executor::Executor {
         settings: &Settings,
     ) -> Result<(), JsonOutputError> {
         let config = &config_file.config;
+
+        // Resolve every configured output template for every language.
         let json_output_paths = config.languages.iter().flat_map(|language| {
             config.outputs.json.iter().cloned().map(move |config| {
                 let output_path = self.resolve_json_output_path(&config.path, **language)?;
@@ -90,6 +94,7 @@ impl executor::Executor {
                         &json_output_path,
                     );
 
+                    // Serialize one language once for both writing and sizing.
                     let mut json = Vec::new();
                     {
                         let mut writer = std::io::BufWriter::new(std::io::Cursor::new(&mut json));
@@ -107,13 +112,14 @@ impl executor::Executor {
 
                     let json = Arc::new(json);
 
-                    // compute gzipped size
+                    // Compute the gzipped display size off the async runtime.
+                    // Compression is CPU-bound and can run alongside the write.
                     let gzip_task = tokio::task::spawn_blocking({
                         let json = Arc::clone(&json);
                         move || crate::gzip::gzipped_size(&*json)
                     });
 
-                    // write to file
+                    // Write the same serialized bytes unless this is a dry run.
                     let dry_run = settings.dry_run;
                     let write_task = tokio::task::spawn({
                         let json_output_path = json_output_path.clone();
@@ -127,7 +133,7 @@ impl executor::Executor {
                         }
                     });
 
-                    // join tasks
+                    // Wait for both tasks before reporting their output sizes.
                     let () = write_task.await??;
                     let num_bytes_gzip = gzip_task.await?.unwrap_or(0);
 

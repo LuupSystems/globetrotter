@@ -48,7 +48,8 @@ impl IntoTokenStream for model::ArgumentType {
                 let tokens = quote! {i64};
                 (tokens, false)
             }
-            // Keep ISO 8601 values as strings so generated bindings do not impose a date-time crate.
+            // Keep ISO 8601 values as strings so generated bindings do not
+            // impose a date-time crate.
             Self::String | Self::Iso8601DateTimeString => {
                 let tokens = quote! {&'a str};
                 (tokens, true)
@@ -61,8 +62,7 @@ impl IntoTokenStream for model::ArgumentType {
     }
 }
 
-/// Error raised when multiple translation keys map to the same Rust enum variant
-/// identifier.
+/// A collision between translation keys that map to one Rust enum identifier.
 #[derive(thiserror::Error, Debug)]
 pub struct DuplicateIdentifierError {
     identifier: String,
@@ -80,8 +80,7 @@ impl std::fmt::Display for DuplicateIdentifierError {
     }
 }
 
-/// Error raised when multiple translation arguments would produce the same
-/// Rust struct field name.
+/// A collision between translation arguments that map to one Rust field name.
 #[derive(thiserror::Error, Debug)]
 pub struct DuplicateFieldError {
     field: String,
@@ -121,7 +120,7 @@ pub enum Error {
     Syn(String),
 }
 
-/// Generate a Rust `Translation` enum for the given translations model.
+/// Generates a Rust `Translation` enum for the given translations.
 ///
 /// The generated code includes a `key` method that maps each variant back to
 /// its original translation key.
@@ -134,13 +133,14 @@ pub enum Error {
 pub fn generate_translation_enum(translations: &model::Translations) -> Result<String, Error> {
     use itertools::Itertools;
 
+    // Normalize every translation key to its generated variant name.
     let enum_variant_names: Vec<_> = translations
         .0
         .iter()
         .map(|(key, translation)| (key_to_rust_enum_variant(key.as_ref()), key, translation))
         .collect();
 
-    // Find duplicate identifiers
+    // Reject collisions before generating an ambiguous enum.
     let duplicates: Vec<_> = enum_variant_names
         .iter()
         .duplicates_by(|(safe_key, _, _)| safe_key)
@@ -155,6 +155,7 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
         return Err(DuplicateIdentifierError { identifier, keys }.into());
     }
 
+    // Generate each variant after validating its normalized field names.
     let enum_variants = enum_variant_names
         .iter()
         .map(|(safe_key, key, translation)| {
@@ -164,7 +165,7 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
                 .map(|(name, typ)| (argument_to_rust_field_name(name), name, typ))
                 .collect();
 
-            // Check for duplicate field names
+            // Reject argument names that normalize to the same field.
             let duplicates: Vec<_> = fields
                 .iter()
                 .duplicates_by(|(safe_name, _, _)| safe_name)
@@ -209,6 +210,7 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
     let (enum_variants, uses_lifetime): (Vec<_>, Vec<_>) = enum_variants.try_unzip()?;
     let uses_lifetime = uses_lifetime.iter().any(|v| *v);
 
+    // Build the reverse mapping from generated variants to translation keys.
     let enum_variant_keys: Vec<_> = enum_variant_names
         .iter()
         .map(|(safe_key, key, _)| {
@@ -220,7 +222,7 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
         })
         .collect();
 
-    // Build generics only if needed
+    // Introduce a lifetime only when at least one generated field borrows text.
     let generics: syn::Generics = if uses_lifetime {
         syn::parse_quote!(<'a>)
     } else {
@@ -245,6 +247,8 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
             }
         }
     };
+
+    // Render and format the complete generated source file.
     let code = pretty_print(&out).map_err(|err| Error::Syn(err.to_string()))?;
     let code = format!("{}\n{}", preamble(), code);
     Ok(code)
@@ -266,15 +270,14 @@ mod tests {
 
     static INIT: std::sync::Once = std::sync::Once::new();
 
-    /// Initialize test
-    ///
-    /// This ensures `color_eyre` is setup once.
+    /// Installs `color_eyre` once for tests that return reports.
     pub fn init() {
         INIT.call_once(|| {
             color_eyre::install().ok();
         });
     }
 
+    /// String arguments introduce a lifetime on the generated enum.
     #[test]
     fn generate_enum_with_lifetime() -> eyre::Result<()> {
         crate::tests::init();
@@ -356,6 +359,7 @@ mod tests {
         Ok(())
     }
 
+    /// Owned argument types produce an enum without unused generics.
     #[test]
     fn generate_enum_without_lifetime() -> eyre::Result<()> {
         crate::tests::init();

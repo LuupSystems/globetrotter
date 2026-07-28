@@ -27,7 +27,7 @@ pub struct Cache {
 }
 
 impl Cache {
-    /// Open (creating if needed) the cache under `dir`, or under
+    /// Opens or creates the cache under `dir`, or under
     /// `<user cache dir>/globetrotter/llm-judge` when `dir` is `None`.
     ///
     /// Returns `Ok(None)` — caching disabled — when `capacity` is `0` or no
@@ -51,8 +51,10 @@ impl Cache {
         Ok(Some(Self { root, capacity }))
     }
 
-    /// The cache key for `parts`, hashed with length prefixes so adjacent parts
-    /// cannot collide by concatenation (e.g. `("ab", "c")` vs `("a", "bc")`).
+    /// Computes a cache key from length-prefixed string parts.
+    ///
+    /// Length prefixes preserve part boundaries, so `("ab", "c")` and
+    /// `("a", "bc")` cannot collide by concatenation.
     #[must_use]
     pub fn key(&self, parts: &[&str]) -> String {
         let mut hasher = blake3::Hasher::new();
@@ -86,8 +88,10 @@ impl Cache {
         Some(verdict)
     }
 
-    /// Store a verdict, atomically (write to a temp file, then rename), so a
-    /// concurrent or interrupted run never leaves a torn entry.
+    /// Stores a verdict atomically.
+    ///
+    /// Writing to a temporary file before renaming prevents concurrent or
+    /// interrupted runs from leaving torn entries.
     ///
     /// # Errors
     ///
@@ -107,7 +111,7 @@ impl Cache {
         Ok(())
     }
 
-    /// Evict least-recently-used entries until the cache is within capacity.
+    /// Evicts least-recently-used entries until the cache is within capacity.
     ///
     /// Called once per run rather than per store: listing every entry is the
     /// expensive part, and a run can only exceed capacity by the number of keys
@@ -160,6 +164,7 @@ mod tests {
         (dir, cache)
     }
 
+    /// Stored verdicts can be retrieved by their content key.
     #[test]
     fn round_trips_a_verdict() {
         let (_dir, cache) = temp_cache(10);
@@ -182,6 +187,7 @@ mod tests {
         assert_ne!(cache.key(&["ab", "c"]), cache.key(&["a", "bc"]));
     }
 
+    /// A zero capacity disables cache creation explicitly.
     #[test]
     fn zero_capacity_disables_caching() {
         let dir = tempfile::tempdir().expect("temp dir");
@@ -192,6 +198,7 @@ mod tests {
         );
     }
 
+    /// Capacity enforcement retains exactly the configured number of entries.
     #[test]
     fn evicts_down_to_capacity() {
         let (dir, cache) = temp_cache(2);
@@ -210,7 +217,7 @@ mod tests {
         assert_eq!(remaining, 2);
     }
 
-    /// Number of regular files under `root`, recursively.
+    /// Counts regular files under `root` recursively.
     fn walkdir_count(root: &std::path::Path) -> usize {
         let mut count = 0;
         let mut stack = vec![root.to_path_buf()];

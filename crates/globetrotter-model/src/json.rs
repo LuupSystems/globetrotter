@@ -1,3 +1,5 @@
+//! JSON representations of translations for one language.
+
 use crate::{Language, TemplateEngine, diagnostics::Spanned};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -55,7 +57,10 @@ pub struct Translations {
 }
 
 impl crate::Translations {
-    /// Write translations for a single language as pretty-printed JSON.
+    /// Writes one language as pretty-printed JSON.
+    ///
+    /// The serialized form is identical to [`Self::translations_json`] and has
+    /// no trailing newline.
     ///
     /// # Errors
     ///
@@ -73,7 +78,11 @@ impl crate::Translations {
         Ok(translations)
     }
 
-    /// Build the JSON representation for a single language without writing it.
+    /// Builds the JSON representation for one language.
+    ///
+    /// When `strict` is `false`, a missing value is replaced with a descriptive
+    /// placeholder string. When `strict` is `true`, it returns
+    /// [`Error::MissingKey`] instead.
     ///
     /// # Errors
     ///

@@ -1,3 +1,5 @@
+//! Parsing of source-located TOML translation files.
+
 use crate::{
     ArgumentType, Language, Translation,
     diagnostics::{DiagnosticExt, FileId, Span, Spanned},
@@ -162,7 +164,7 @@ impl<'de> From<&toml_span::value::ValueInner<'de>> for ValueKind {
     }
 }
 
-/// Parse the optional `allow` key listing lint codes to suppress for a key.
+/// Parses the optional `allow` key listing lint codes to suppress for a key.
 ///
 /// # Errors
 ///
@@ -202,7 +204,7 @@ fn parse_allow(
     }
 }
 
-/// Parse one `allow` entry into a typed [`AllowEntry`](crate::lint::AllowEntry),
+/// Parses one `allow` entry into a typed [`AllowEntry`](crate::lint::AllowEntry),
 /// rejecting anything that is neither a known lint code nor `all` so typos fail
 /// loudly rather than silently doing nothing.
 fn parse_allow_entry(code: &str, span: Span) -> Result<crate::lint::AllowEntry, Error> {
@@ -213,7 +215,7 @@ fn parse_allow_entry(code: &str, span: Span) -> Result<crate::lint::AllowEntry, 
         })
 }
 
-/// Parse a single translation table from a TOML value.
+/// Parses a single translation table from a TOML value.
 ///
 /// # Errors
 ///
@@ -270,7 +272,8 @@ pub fn parse_translation(
         })
         .transpose()?;
 
-    // removed before language parsing so it is not mistaken for a language entry.
+    // Remove `allow` before scanning scalar entries so it cannot be mistaken
+    // for a language code.
     let allow = parse_allow(table)?;
 
     let languages: Vec<String> = table
@@ -339,13 +342,13 @@ fn flatten_toml_span(
 ) -> Result<(), Error> {
     match value {
         toml_span::value::ValueInner::Table(table) => {
-            // treat as terminal
+            // Parse translation fields attached directly to this table.
             if let Some(translation) = parse_translation(table, file_id)? {
                 out.0
                     .insert(Spanned::new(span, key.to_owned()), translation);
             }
 
-            // treat as non-terminal
+            // Descend into any remaining nested translation tables.
             for (child_key, value) in table.iter_mut() {
                 let new_key: String = if key.is_empty() {
                     child_key.to_string()
@@ -406,7 +409,11 @@ fn flatten_toml_span(
 }
 
 impl crate::Translations {
-    /// Construct translations from a parsed TOML value.
+    /// Constructs translations from a parsed TOML value.
+    ///
+    /// Recoverable top-level type mismatches are appended to `diagnostics`.
+    /// `strict` controls whether those diagnostics are warnings or errors;
+    /// existing diagnostics are retained.
     ///
     /// # Errors
     ///
@@ -431,7 +438,11 @@ impl crate::Translations {
         Ok(translations)
     }
 
-    /// Parse translations from a raw TOML string.
+    /// Parses translations from a raw TOML string.
+    ///
+    /// Recoverable structural issues are appended to `diagnostics`. `strict`
+    /// controls whether they are warnings or errors; existing diagnostics are
+    /// retained.
     ///
     /// # Errors
     ///

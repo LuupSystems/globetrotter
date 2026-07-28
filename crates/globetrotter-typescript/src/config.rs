@@ -1,3 +1,5 @@
+//! TypeScript output configuration.
+
 use std::path::PathBuf;
 
 /// Configuration for a generated TypeScript interface type output.
@@ -19,7 +21,7 @@ pub struct OutputConfig {
 }
 
 impl OutputConfig {
-    /// Return `true` if there are no configured outputs.
+    /// Returns `true` if there are no configured outputs.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.interface_type.is_empty()

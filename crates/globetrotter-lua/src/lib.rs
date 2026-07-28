@@ -1,4 +1,4 @@
-//! Lua bindings code generation for globetrotter translations.
+//! Configuration types for globetrotter Lua outputs.
 
 /// Lua code generation configuration types.
 pub mod config;

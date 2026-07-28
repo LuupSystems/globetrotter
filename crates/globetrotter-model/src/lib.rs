@@ -71,9 +71,7 @@ impl std::str::FromStr for TemplateEngine {
 mod template_engine_tests {
     use super::TemplateEngine;
 
-    /// Parsing must terminate and map the documented names; a previous
-    /// implementation delegated to `s.parse()`, which resolved back to
-    /// itself and overflowed the stack on any input.
+    /// Known names, aliases, and custom engine names parse without recursion.
     #[test]
     fn parses_engine_names_without_recursing() {
         assert_eq!("handlebars".parse(), Ok(TemplateEngine::Handlebars));
@@ -92,6 +90,7 @@ mod template_engine_tests {
     }
 }
 
+/// The declared type of a template argument.
 #[derive(
     Copy,
     Clone,
@@ -110,7 +109,6 @@ mod template_engine_tests {
     Serialize,
     Deserialize,
 )]
-/// The declared type of a template argument.
 pub enum ArgumentType {
     /// An argument of any type.
     #[serde(rename = "any")]
@@ -204,7 +202,7 @@ impl Translation {
 pub struct Translations(pub IndexMap<Spanned<String>, Translation>);
 
 impl Translations {
-    /// Sort the translations and their arguments and languages by key.
+    /// Sorts translation keys, argument names, and languages deterministically.
     #[cfg(not(feature = "rayon"))]
     pub fn sort(&mut self) {
         self.0.sort_keys();
@@ -214,7 +212,7 @@ impl Translations {
         }
     }
 
-    /// Sort the translations and their arguments and languages by key.
+    /// Sorts translation keys, argument names, and languages deterministically.
     #[cfg(feature = "rayon")]
     pub fn sort(&mut self) {
         self.0.par_sort_keys();
@@ -271,9 +269,7 @@ impl IntoIterator for Translations {
 mod tests {
     static INIT: std::sync::Once = std::sync::Once::new();
 
-    /// Initialize test
-    ///
-    /// This ensures `color_eyre` is setup once.
+    /// Installs `color_eyre` once for tests that return reports.
     pub fn init() {
         INIT.call_once(|| {
             color_eyre::install().ok();

@@ -1,3 +1,5 @@
+//! Source spans and helpers for building diagnostics.
+
 use codespan_reporting::diagnostic::{Diagnostic, Severity};
 
 /// Identifier for a source file, used when emitting diagnostics.
@@ -7,7 +9,7 @@ pub type Span = std::ops::Range<usize>;
 
 /// Conversion of a value into a list of diagnostics for a given source file.
 pub trait ToDiagnostics {
-    /// Convert `self` into diagnostics labelled with `file_id`.
+    /// Converts `self` into diagnostics whose labels refer to `file_id`.
     fn to_diagnostics<F: Copy + PartialEq>(&self, file_id: F) -> Vec<Diagnostic<F>>;
 }
 
@@ -17,7 +19,7 @@ pub trait DiagnosticExt {
     fn is_error(&self) -> bool;
     /// Returns `true` if this diagnostic has warning severity.
     fn is_warning(&self) -> bool;
-    /// Construct an error diagnostic when `strict`, otherwise a warning.
+    /// Constructs an error diagnostic when `strict`, otherwise a warning.
     fn warning_or_error(strict: bool) -> Self;
 }
 
@@ -68,6 +70,9 @@ where
 }
 
 /// A value paired with its source [`Span`].
+///
+/// Serialization, equality, ordering, and hashing use only the wrapped value.
+/// The span is metadata and does not affect collection keys or serialized data.
 #[derive(Debug, Clone)]
 pub struct Spanned<T> {
     /// The wrapped value.
@@ -102,7 +107,7 @@ impl<T> AsRef<T> for Spanned<T> {
 }
 
 impl<T> Spanned<T> {
-    /// Create a new spanned value from a span and a value.
+    /// Creates a value with its source span.
     pub fn new(span: impl Into<Span>, value: T) -> Self {
         Self {
             span: span.into(),
@@ -110,7 +115,7 @@ impl<T> Spanned<T> {
         }
     }
 
-    /// Create a spanned value with an empty (dummy) span.
+    /// Creates a synthetic value with the empty span `0..0`.
     pub fn dummy(value: T) -> Self {
         Self {
             span: Span::default(),
@@ -118,7 +123,7 @@ impl<T> Spanned<T> {
         }
     }
 
-    /// Consume the wrapper and return the inner value.
+    /// Consumes the wrapper and returns the inner value.
     pub fn into_inner(self) -> T {
         self.inner
     }

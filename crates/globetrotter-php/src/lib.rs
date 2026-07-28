@@ -1,4 +1,4 @@
-//! PHP bindings code generation for globetrotter translations.
+//! Configuration types for globetrotter PHP outputs.
 
 /// PHP code generation configuration types.
 pub mod config;

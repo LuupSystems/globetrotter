@@ -1,14 +1,16 @@
+//! Extension traits used by the translation model.
+
 /// Iterator extension traits.
 pub mod iter {
     /// Fallible [`Iterator::unzip`] over iterators of `Result<(A, B), E>`.
     pub trait TryUnzipExt: Iterator {
-        /// Try to unzip an iterator of `Result<(A, B), E>` into two collections.
+        /// Unzips successful pairs into two collections.
         ///
-        /// On success, returns `(left, right)`; on the first `Err(e)`, returns `Err(e)`
-        /// and stops consuming the iterator.
+        /// On success, returns `(left, right)`. The first error stops iteration
+        /// and is returned without consuming later items.
         ///
-        /// This mirrors `Iterator::unzip` in that the destination collections can be
-        /// any types implementing `Default + Extend`.
+        /// Like [`Iterator::unzip`], the destination collections may be any
+        /// types implementing `Default + Extend`.
         ///
         /// # Errors
         ///
@@ -19,19 +21,20 @@ pub mod iter {
             C1: Default + Extend<A>,
             C2: Default + Extend<B>,
         {
-            // we can’t generally reserve without specialization, so we keep it simple
+            // Generic destination collections expose no common capacity API.
             let mut left = C1::default();
             let mut right = C2::default();
 
             for item in self {
-                let (a, b) = item?; // short-circuit on error
+                // Stop at the first source error.
+                let (a, b) = item?;
                 left.extend(std::iter::once(a));
                 right.extend(std::iter::once(b));
             }
             Ok((left, right))
         }
 
-        /// Convenience helper that always returns `Vec`s.
+        /// Collects both sides into `Vec`s, stopping at the first error.
         ///
         /// # Errors
         ///

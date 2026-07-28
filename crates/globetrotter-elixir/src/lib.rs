@@ -1,4 +1,4 @@
-//! Elixir bindings code generation for globetrotter translations.
+//! Configuration types for globetrotter Elixir outputs.
 
 /// Elixir code generation configuration types.
 pub mod config;

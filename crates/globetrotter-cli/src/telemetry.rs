@@ -1,19 +1,28 @@
+//! Tracing subscriber and terminal-color configuration.
+
 use color_eyre::eyre;
 use termcolor::ColorChoice;
 use tracing_subscriber::layer::SubscriberExt;
 
+/// Output encoding for tracing events.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LogFormat {
+    /// Newline-delimited JSON events.
     Json,
+    /// Compact human-readable events.
     PrettyCompact,
+    /// Expanded human-readable events with structured fields.
     Pretty,
 }
 
+/// Command-line controls for tracing and terminal color.
 #[derive(clap::Parser, Debug)]
 pub struct LoggingOptions {
+    /// Default tracing level when `RUST_LOG` does not provide a filter.
     #[arg(long = "log", env = "LOG_LEVEL", aliases = ["log-level"], global = true, help = "Log level. When using a more sophisticated logging setup using RUST_LOG environment variable, this option is overwritten.")]
     pub log_level: Option<tracing::metadata::Level>,
 
+    /// Encoding used for tracing events.
     #[arg(
         long = "log-format",
         env = "LOG_FORMAT",
@@ -22,6 +31,7 @@ pub struct LoggingOptions {
     )]
     pub log_format: Option<crate::telemetry::LogFormat>,
 
+    /// Color policy shared by tracing, progress output, and diagnostics.
     #[arg(
         long = "color",
         env = "GLOBETROTTER_COLOR",
@@ -43,11 +53,21 @@ impl std::str::FromStr for LogFormat {
     }
 }
 
+/// Installs the process-wide tracing subscriber.
+///
+/// Returns the selected format and whether ANSI color is enabled. An invalid
+/// `RUST_LOG` filter is reported to stderr and falls back to `log_level`.
+///
+/// # Errors
+///
+/// Returns an error if the default filter cannot be parsed or another global
+/// tracing subscriber has already been installed.
 pub fn setup_logging(
     log_level: Option<tracing::metadata::Level>,
     log_format: Option<LogFormat>,
     color_choice: ColorChoice,
 ) -> eyre::Result<(LogFormat, bool)> {
+    // Build the fallback filter, then let a valid `RUST_LOG` override it.
     let default_log_level = log_level.unwrap_or(tracing::metadata::Level::INFO);
     let default_log_directive = format!(
         "none,globetrotter={}",
@@ -76,7 +96,7 @@ pub fn setup_logging(
         None => default_env_filter,
     };
 
-    // autodetect logging format
+    // Resolve the output format and whether it may emit ANSI escapes.
     let log_format = log_format.unwrap_or(LogFormat::PrettyCompact);
     let use_color = match color_choice {
         ColorChoice::Always | ColorChoice::AlwaysAnsi => true,
@@ -84,6 +104,7 @@ pub fn setup_logging(
         ColorChoice::Auto => std::io::IsTerminal::is_terminal(&std::io::stdout()),
     };
 
+    // Build each supported formatting layer with the shared color policy.
     let fmt_layer_pretty = tracing_subscriber::fmt::Layer::new()
         .pretty()
         .without_time()
@@ -102,6 +123,7 @@ pub fn setup_logging(
         .with_ansi(use_color)
         .with_writer(std::io::stdout);
 
+    // Install only the layer selected for this process.
     let subscriber = tracing_subscriber::registry()
         .with(if log_format == LogFormat::Json {
             Some(fmt_layer_json)

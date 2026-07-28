@@ -1,3 +1,5 @@
+//! Version 1 configuration schema and source-located YAML parsing.
+
 use super::ConfigError;
 use super::settings::SettingsLayer;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
@@ -22,12 +24,15 @@ pub struct ConfigFile<F> {
 /// A list of parsed configurations.
 pub type Configs<F> = Vec<ConfigFile<F>>;
 
-/// Parse the `languages` configuration for a single config.
+/// Parses the `languages` field for one config.
+///
+/// A missing field appends a warning, or an error when `strict` is `true`, and
+/// returns an empty list. Existing diagnostics are retained.
 ///
 /// # Errors
 ///
 /// Returns an error if the languages section is present but not a sequence, or if
-/// any language value cannot be deserialized into a Language enum variant.
+/// any language value cannot be deserialized into a [`model::Language`].
 pub fn parse_languages<F>(
     value: &yaml_spanned::Spanned<Value>,
     file_id: F,
@@ -60,7 +65,7 @@ pub fn parse_languages<F>(
     }
 }
 
-/// Parse a typed value from YAML.
+/// Parses a source-located typed value from YAML.
 ///
 /// # Errors
 ///
@@ -75,7 +80,7 @@ pub fn parse<T: serde::de::DeserializeOwned>(
     Ok(Spanned::new(value.span, inner))
 }
 
-/// Parse an optional typed value from YAML.
+/// Parses an optional source-located typed value from YAML.
 ///
 /// # Errors
 ///
@@ -87,7 +92,9 @@ pub fn parse_optional<T: serde::de::DeserializeOwned>(
     value.map(|value| parse(value)).transpose()
 }
 
-/// Parse a single input entry from YAML.
+/// Parses one input entry from YAML.
+///
+/// A null entry appends a diagnostic and returns `None`.
 ///
 /// # Errors
 ///
@@ -118,12 +125,15 @@ pub fn parse_input<F>(
             separator: None,
         })),
         Value::Mapping(mapping) => {
+            // Parse the required input path.
             let path_value = mapping.get("path").ok_or_else(|| ConfigError::MissingKey {
                 key: "path".to_string(),
                 message: "missing path to input file".to_string(),
                 span: value.span.into(),
             })?;
             let path_or_glob_pattern = parse::<PathOrGlobPattern>(path_value)?;
+
+            // Parse the exclusion field in either accepted shape.
             let exclude = match mapping.get("exclude") {
                 None => Ok(vec![]),
                 Some(yaml_spanned::Spanned {
@@ -141,6 +151,8 @@ pub fn parse_input<F>(
                     span: other.span().into(),
                 }),
             }?;
+
+            // Parse the optional key-prefixing policy.
             let prefix = parse_optional::<String>(mapping.get("prefix"))?;
             let prepend_filename = parse_optional::<bool>(mapping.get("prepend_filename"))?;
             let prepend_relative_path =
@@ -164,7 +176,7 @@ pub fn parse_input<F>(
     }
 }
 
-/// Expect a YAML value to be a sequence.
+/// Borrows a YAML value as a sequence.
 ///
 /// # Errors
 ///
@@ -180,7 +192,7 @@ pub fn expect_sequence(value: &yaml_spanned::Spanned<Value>) -> Result<&Sequence
         })
 }
 
-/// Expect a YAML value to be a mapping.
+/// Borrows a YAML value as a mapping together with its source span.
 ///
 /// # Errors
 ///
@@ -199,13 +211,13 @@ pub fn expect_mapping(
     Ok((value.span(), mapping))
 }
 
-#[cfg(feature = "rust")]
-/// Parse the Rust output configuration.
+/// Parses the Rust output configuration.
 ///
 /// # Errors
 ///
 /// Returns an error if the `rust`/`rs` output configuration has an unexpected
 /// type or contains invalid output paths.
+#[cfg(feature = "rust")]
 pub fn parse_rust_outputs(
     value: &Mapping,
 ) -> Result<Option<globetrotter_rust::OutputConfig>, ConfigError> {
@@ -242,13 +254,13 @@ pub fn parse_rust_outputs(
     }))
 }
 
-#[cfg(feature = "typescript")]
-/// Parse the TypeScript output configuration.
+/// Parses the TypeScript output configuration.
 ///
 /// # Errors
 ///
 /// Returns an error if the `typescript`/`ts` output configuration has an
 /// unexpected type or contains invalid output paths.
+#[cfg(feature = "typescript")]
 pub fn parse_typescript_outputs(
     value: &Mapping,
 ) -> Result<Option<globetrotter_typescript::OutputConfig>, ConfigError> {
@@ -297,7 +309,7 @@ pub fn parse_typescript_outputs(
     }))
 }
 
-/// Parse the JSON output configuration.
+/// Parses the JSON output configuration.
 ///
 /// # Errors
 ///
@@ -316,7 +328,7 @@ pub fn parse_json_outputs(value: &Mapping) -> Result<Vec<JsonOutputConfig>, Conf
                     style: None,
                 }),
                 Value::Mapping(mapping) => {
-                    // get path
+                    // Parse the required path before its optional layout.
                     let path = mapping.get("path").ok_or_else(|| ConfigError::MissingKey {
                         key: "path".to_string(),
                         message: "missing path to output JSON file".to_string(),
@@ -347,7 +359,10 @@ pub fn parse_json_outputs(value: &Mapping) -> Result<Vec<JsonOutputConfig>, Conf
     }
 }
 
-/// Parse the `inputs`/`translations` configuration for a single config.
+/// Parses the `inputs` or `translations` field for one config.
+///
+/// A missing field appends a diagnostic and returns an empty list. Null input
+/// entries are omitted after [`parse_input`] reports them.
 ///
 /// # Errors
 ///
@@ -385,7 +400,9 @@ pub fn parse_inputs<F: Copy + PartialEq>(
     Ok(inputs)
 }
 
-/// Parse the `outputs` configuration for a single config.
+/// Parses the `outputs` field for one config.
+///
+/// A missing field appends a diagnostic and returns an empty output set.
 ///
 /// # Errors
 ///
@@ -423,7 +440,7 @@ pub fn parse_outputs<F: Copy + PartialEq>(
     })
 }
 
-/// Parse a single configuration entry.
+/// Parses one configuration entry.
 ///
 /// # Errors
 ///
@@ -437,6 +454,7 @@ pub fn parse_config<F: Copy + PartialEq>(
     strict_override: Option<bool>,
     diagnostics: &mut Vec<Diagnostic<F>>,
 ) -> Result<Config, ConfigError> {
+    // Parse settings that can later be overridden by the caller.
     let strict_config = parse_optional::<bool>(value.get("strict"))?.map(Spanned::into_inner);
     let strict = strict_override.unwrap_or(false);
     let languages = parse_languages(value, file_id, strict, diagnostics)?;
@@ -452,6 +470,8 @@ pub fn parse_config<F: Copy + PartialEq>(
             .or_else(|| value.get("absolute")),
     )?
     .map(Spanned::into_inner);
+
+    // Parse the input and output pipelines using the effective strictness.
     let inputs = parse_inputs(value, config_span, file_id, strict, diagnostics)?;
     let outputs = parse_outputs(value, config_span, file_id, strict, diagnostics)?;
 
@@ -470,7 +490,10 @@ pub fn parse_config<F: Copy + PartialEq>(
     })
 }
 
-/// Parse the top-level configuration structure into a list of configs.
+/// Parses the top-level `config` or `configs` structure.
+///
+/// A single `config` receives the synthetic name `"config"`. A `configs`
+/// sequence receives positional names, while a mapping preserves its names.
 ///
 /// # Errors
 ///
@@ -484,7 +507,7 @@ pub fn parse_configs<F: Copy + PartialEq>(
     diagnostics: &mut Vec<Diagnostic<F>>,
 ) -> Result<Configs<F>, ConfigError> {
     if let Some(config) = value.get("config") {
-        // single config
+        // Single unnamed configuration.
         let config = parse_config(
             Spanned::dummy("config".to_string()),
             None,
@@ -509,7 +532,7 @@ pub fn parse_configs<F: Copy + PartialEq>(
         return Ok(Configs::default());
     };
 
-    // parse each config
+    // Named or positional configurations.
     match configs.as_ref() {
         Value::Sequence(seq) => seq
             .iter()
@@ -586,7 +609,7 @@ pub struct Input {
 }
 
 impl Input {
-    /// Create a new input from a path or glob pattern.
+    /// Creates an input with no exclusions or key-prefix transformations.
     pub fn new(path_or_glob_pattern: impl Into<PathOrGlobPattern>) -> Self {
         Self {
             path_or_glob_pattern: Spanned::dummy(path_or_glob_pattern.into()),
@@ -598,35 +621,35 @@ impl Input {
         }
     }
 
-    /// Set the patterns to exclude from the matched inputs.
+    /// Sets patterns to exclude from the matched inputs.
     #[must_use]
     pub fn with_exclude(mut self, exclude: impl IntoIterator<Item = PathOrGlobPattern>) -> Self {
         self.exclude = exclude.into_iter().map(Spanned::dummy).collect();
         self
     }
 
-    /// Set the prefix prepended to every key from this input.
+    /// Sets the prefix prepended to every key from this input.
     #[must_use]
     pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = Some(Spanned::dummy(prefix.into()));
         self
     }
 
-    /// Set whether keys are prefixed with the input file's stem.
+    /// Sets whether keys are prefixed with the input file's stem.
     #[must_use]
     pub fn with_prepend_filename(mut self, prepend_filename: bool) -> Self {
         self.prepend_filename = Some(Spanned::dummy(prepend_filename));
         self
     }
 
-    /// Set whether keys are prefixed with the input file's relative path.
+    /// Sets whether keys are prefixed with the input file's relative path.
     #[must_use]
     pub fn with_prepend_relative_path(mut self, prepend_relative_path: bool) -> Self {
         self.prepend_relative_path = Some(Spanned::dummy(prepend_relative_path));
         self
     }
 
-    /// Set the separator used when joining prefix segments with keys.
+    /// Sets the separator used when joining prefix segments with keys.
     #[must_use]
     pub fn with_separator(mut self, separator: impl Into<String>) -> Self {
         self.separator = Some(Spanned::dummy(separator.into()));
@@ -665,7 +688,7 @@ impl std::fmt::Display for Input {
     Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Default,
 )]
 pub enum JsonOutputStyle {
-    /// A flat object mapping fully-qualified keys to translations.
+    /// A flat `translations` map keyed by fully qualified translation key.
     #[default]
     Flat,
 }
@@ -680,7 +703,7 @@ pub struct JsonOutputConfig {
 }
 
 impl JsonOutputConfig {
-    /// Create a new JSON output config writing to the given path.
+    /// Creates a flat JSON output at the given path template.
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self {
             path: Spanned::dummy(path.into()),
@@ -688,7 +711,7 @@ impl JsonOutputConfig {
         }
     }
 
-    /// Set the layout style of the generated JSON.
+    /// Sets the layout style of the generated JSON.
     #[must_use]
     pub fn with_style(mut self, style: impl Into<JsonOutputStyle>) -> Self {
         self.style = Some(Spanned::dummy(style.into()));
@@ -720,20 +743,20 @@ pub struct Outputs {
 }
 
 impl Outputs {
-    /// Create an empty set of outputs.
+    /// Creates an empty output set.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the JSON outputs.
+    /// Sets all JSON outputs, replacing any existing entries.
     #[must_use]
     pub fn with_json(mut self, json: impl IntoIterator<Item = JsonOutputConfig>) -> Self {
         self.json = json.into_iter().collect();
         self
     }
 
-    /// Set the TypeScript output configuration.
+    /// Sets the TypeScript output configuration.
     #[cfg(feature = "typescript")]
     #[must_use]
     pub fn with_typescript(
@@ -744,7 +767,7 @@ impl Outputs {
         self
     }
 
-    /// Set the Rust output configuration.
+    /// Sets the Rust output configuration.
     #[cfg(feature = "rust")]
     #[must_use]
     pub fn with_rust(mut self, rust: impl Into<globetrotter_rust::OutputConfig>) -> Self {
@@ -752,7 +775,7 @@ impl Outputs {
         self
     }
 
-    /// Set the Go output configuration.
+    /// Sets the Go output configuration.
     #[cfg(feature = "golang")]
     #[must_use]
     pub fn with_golang(mut self, golang: impl Into<globetrotter_golang::OutputConfig>) -> Self {
@@ -760,7 +783,7 @@ impl Outputs {
         self
     }
 
-    /// Set the Python output configuration.
+    /// Sets the Python output configuration.
     #[cfg(feature = "python")]
     #[must_use]
     pub fn with_python(mut self, python: impl Into<globetrotter_python::OutputConfig>) -> Self {
@@ -841,7 +864,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Create a new configuration with the given name.
+    /// Creates an otherwise empty configuration with the given name.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: Spanned::dummy(name.into()),
@@ -852,14 +875,14 @@ impl Config {
         }
     }
 
-    /// Add a required language.
+    /// Adds a required language.
     #[must_use]
     pub fn with_language(mut self, language: impl Into<model::Language>) -> Self {
         self.languages.push(Spanned::dummy(language.into()));
         self
     }
 
-    /// Add multiple required languages.
+    /// Adds multiple required languages.
     #[must_use]
     pub fn with_languages(mut self, languages: impl IntoIterator<Item = model::Language>) -> Self {
         self.languages
@@ -867,35 +890,35 @@ impl Config {
         self
     }
 
-    /// Set whether templates are validated.
+    /// Sets whether templates are validated.
     #[must_use]
     pub fn with_check_templates(mut self, check_templates: bool) -> Self {
         self.settings.check_templates = Some(check_templates);
         self
     }
 
-    /// Set whether warnings are promoted to errors.
+    /// Sets whether warnings are promoted to errors.
     #[must_use]
     pub fn with_strict(mut self, strict: bool) -> Self {
         self.settings.strict = Some(strict);
         self
     }
 
-    /// Set whether outputs are computed but not written to disk.
+    /// Sets whether outputs are computed but not written to disk.
     #[must_use]
     pub fn with_dry_run(mut self, dry_run: bool) -> Self {
         self.settings.dry_run = Some(dry_run);
         self
     }
 
-    /// Set whether output paths are logged as absolute paths.
+    /// Sets whether output paths are logged as absolute paths.
     #[must_use]
     pub fn with_print_absolute_paths(mut self, print_absolute_paths: bool) -> Self {
         self.settings.print_absolute_paths = Some(print_absolute_paths);
         self
     }
 
-    /// Set the template engine.
+    /// Sets the template engine.
     #[must_use]
     pub fn with_template_engine(
         mut self,
@@ -905,21 +928,21 @@ impl Config {
         self
     }
 
-    /// Add a single input source.
+    /// Adds one input source.
     #[must_use]
     pub fn with_input(mut self, input: impl Into<Input>) -> Self {
         self.inputs.push(input.into());
         self
     }
 
-    /// Add multiple input sources.
+    /// Adds multiple input sources.
     #[must_use]
     pub fn with_inputs(mut self, inputs: impl IntoIterator<Item = Input>) -> Self {
         self.inputs.extend(inputs);
         self
     }
 
-    /// Set the outputs to generate.
+    /// Sets the outputs to generate.
     #[must_use]
     pub fn with_outputs(mut self, outputs: impl Into<Outputs>) -> Self {
         self.outputs = outputs.into();

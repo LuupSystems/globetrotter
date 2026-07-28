@@ -1,4 +1,4 @@
-//! Dart bindings code generation for globetrotter translations.
+//! Configuration types for globetrotter Dart outputs.
 
 /// Dart code generation configuration types.
 pub mod config;

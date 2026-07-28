@@ -1,3 +1,5 @@
+//! Custom Handlebars helpers used by the Rust example.
+
 use handlebars::{
     Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError,
     RenderErrorReason,
@@ -22,7 +24,7 @@ fn invalid_param_type(
 /// Name of the registered Handlebars helper used for pluralization.
 pub const PLURALIZE_HELPER_NAME: &str = "pluralize";
 
-/// Handlebars helper that pluralizes a string based on a numeric count.
+/// Pluralizes a string based on a numeric count.
 ///
 /// The first parameter is the value to pluralize, the second parameter is
 /// the numeric count determining whether the singular or plural form is

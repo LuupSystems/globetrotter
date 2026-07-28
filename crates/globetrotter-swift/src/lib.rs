@@ -1,4 +1,4 @@
-//! Swift bindings code generation for globetrotter translations.
+//! Configuration types for globetrotter Swift outputs.
 
 /// Swift code generation configuration types.
 pub mod config;

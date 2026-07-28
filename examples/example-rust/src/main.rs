@@ -12,19 +12,19 @@ use color_eyre::eyre;
 use globetrotter_model as model;
 use handlebars::Handlebars;
 
-/// The generated translations as JSON for the German locale.
+/// Generated translations for the German locale.
 ///
-/// Of course, you could dynamically load them from the file system too.
+/// Applications may instead load the same JSON from the filesystem at runtime.
 pub static JSON_TRANSLATIONS_DE: &str =
     include_str!(concat!(env!("OUT_DIR"), "/translations_de.json"));
-/// The generated translations as JSON for the English locale.
+/// Generated translations for the English locale.
 pub static JSON_TRANSLATIONS_EN: &str =
     include_str!(concat!(env!("OUT_DIR"), "/translations_en.json"));
-/// The generated translations as JSON for the French locale.
+/// Generated translations for the French locale.
 pub static JSON_TRANSLATIONS_FR: &str =
     include_str!(concat!(env!("OUT_DIR"), "/translations_fr.json"));
 
-/// The generated rust bindings for the translations
+/// Generated Rust bindings for the translation keys.
 #[allow(
     clippy::all,
     clippy::pedantic,
@@ -40,7 +40,7 @@ pub use generated::Translation;
 
 /// Trait for types that can be used as translation keys in the example.
 pub trait TranslationKey: Clone + std::fmt::Debug {
-    /// Get the string key for this translation.
+    /// Returns the dotted key for this translation.
     fn key(&self) -> &'static str;
 }
 
@@ -59,7 +59,7 @@ pub struct MyTranslator<K> {
 }
 
 impl<K> MyTranslator<K> {
-    /// Construct a translator from a JSON reader containing translations.
+    /// Constructs a translator from generated JSON translations.
     ///
     /// # Errors
     ///
@@ -67,13 +67,13 @@ impl<K> MyTranslator<K> {
     pub fn from_reader(reader: impl std::io::BufRead) -> eyre::Result<Self> {
         let mut handlebars = Handlebars::new();
 
-        // Register your custom helpers here
+        // Helpers must be registered before templates that reference them.
         handlebars.register_helper(helpers::PLURALIZE_HELPER_NAME, Box::new(helpers::pluralize));
 
         let translations: model::json::Translations = serde_json::from_reader(reader)?;
+        // Register every translated template after its helpers.
         for (key, value) in &translations.translations {
             if let model::json::Translation::Template(template) = value {
-                // Register template
                 handlebars.register_template_string(key, template)?;
             }
         }
@@ -89,8 +89,10 @@ impl<K> MyTranslator<K>
 where
     K: TranslationKey + serde::Serialize,
 {
-    #[must_use]
     /// Translate a key plus arguments into a localized string.
+    ///
+    /// Returns `None` when the generated key is absent from the loaded locale.
+    #[must_use]
     pub fn translate(&self, key_with_args: &K) -> Option<Result<String, handlebars::RenderError>> {
         let key = key_with_args.key();
         let translation = self.translations.translations.get(key)?;
@@ -161,9 +163,7 @@ mod tests {
 
     static INIT: std::sync::Once = std::sync::Once::new();
 
-    /// Initialize test
-    ///
-    /// This ensures `color_eyre` is setup once.
+    /// Installs `color_eyre` once for tests that return reports.
     pub fn init() {
         INIT.call_once(|| {
             color_eyre::install().ok();
@@ -175,6 +175,7 @@ mod tests {
         MyTranslator::from_reader(reader)
     }
 
+    /// Generated translation variants serialize only their template arguments.
     #[test]
     fn test_translation_key() -> eyre::Result<()> {
         crate::tests::init();
@@ -190,6 +191,7 @@ mod tests {
         Ok(())
     }
 
+    /// German JSON renders literal and templated values.
     #[test]
     fn test_de() -> eyre::Result<()> {
         crate::tests::init();
@@ -207,6 +209,7 @@ mod tests {
         Ok(())
     }
 
+    /// English JSON renders literal and templated values.
     #[test]
     fn test_en() -> eyre::Result<()> {
         crate::tests::init();
@@ -224,6 +227,7 @@ mod tests {
         Ok(())
     }
 
+    /// French JSON renders literal and templated values.
     #[test]
     fn test_fr() -> eyre::Result<()> {
         crate::tests::init();

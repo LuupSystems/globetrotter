@@ -1,9 +1,14 @@
+//! Concurrent diagnostic rendering backed by a shared source-file registry.
+
 use codespan_reporting::{diagnostic::Diagnostic, files, term};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 use tokio::sync::{Mutex, RwLock};
 
-/// Renders diagnostics to a terminal and tracks the source files they refer to.
+/// Renders diagnostics and tracks the source files their labels refer to.
+///
+/// Clones share the source registry and serialized stderr writer, so files may
+/// be registered and diagnostics emitted safely from concurrent tasks.
 #[derive(Clone)]
 pub struct Printer {
     writer: Arc<Mutex<term::StylesWriter<'static, term::termcolor::StandardStream>>>,
@@ -44,7 +49,7 @@ impl Default for Printer {
 static DEFAULT_STYLES: LazyLock<term::Styles> = LazyLock::new(term::Styles::default);
 
 impl Printer {
-    /// Create a new printer that writes to stderr using the given color choice.
+    /// Creates a printer that writes to stderr using the given color choice.
     #[must_use]
     pub fn new(color_choice: term::termcolor::ColorChoice) -> Self {
         let writer = term::termcolor::StandardStream::stderr(color_choice);
@@ -57,13 +62,13 @@ impl Printer {
         }
     }
 
-    /// Register a source file and return its id for use in diagnostic labels.
+    /// Registers a source file and returns its id for diagnostic labels.
     pub async fn add_source_file(&self, name: impl ToSourceName, source: String) -> usize {
         let mut files = self.files.write().await;
         files.add(name.to_source_name(), source)
     }
 
-    /// Render a diagnostic to an ANSI-colored string, for printing above a
+    /// Renders a diagnostic to an ANSI-colored string for printing above a
     /// progress bar (where the normal streaming writer cannot be used directly).
     ///
     /// # Errors

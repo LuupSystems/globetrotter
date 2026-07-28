@@ -1,3 +1,9 @@
+//! Translation loading, validation, linting, and output orchestration.
+//!
+//! Each config follows a staged pipeline: resolve and parse source files, stop
+//! on file-local errors, merge catalogs while reporting cross-file conflicts,
+//! validate the complete catalog, and only then generate outputs.
+
 use crate::{
     config::{
         settings::{Settings, SettingsLayer},
@@ -189,7 +195,7 @@ fn combine_translations(
     translations: Vec<TranslationResult>,
     diagnostics: &mut Vec<Diagnostic<FileId>>,
 ) -> model::Translations {
-    // check for duplicate keys across translation files
+    // Detect cross-file duplicates before map insertion can hide an occurrence.
     let duplicate_keys = translations
         .iter()
         .flat_map(|res| (res.3).0.keys())
@@ -209,7 +215,7 @@ fn combine_translations(
         diagnostics.extend(diagnostic.to_diagnostics(true));
     }
 
-    // combine all the translations
+    // Merge only after diagnostics capture the source occurrences.
     model::Translations(
         translations
             .into_iter()
@@ -218,7 +224,7 @@ fn combine_translations(
     )
 }
 
-/// Truncate `translations` to its first `max_keys` keys, warning about what is
+/// Truncates `translations` to its first `max_keys` keys, warning about what is
 /// dropped; `None` is a no-op. See [`Executor::max_keys`].
 fn limit_keys(max_keys: Option<usize>, translations: &mut model::Translations) {
     let Some(max_keys) = max_keys else {
@@ -241,7 +247,10 @@ fn tally(severity: Severity, num_errors: &mut usize, num_warnings: &mut usize) {
     }
 }
 
-/// Drives loading, validation, and output generation for a set of configs.
+/// Drives the staged translation pipeline for a set of configs.
+///
+/// Configs may execute concurrently. Within one config, source diagnostics and
+/// catalog validation must succeed before any output future is polled.
 pub struct Executor {
     /// The caller's settings overrides, applied over each config's own
     /// settings by [`Settings::resolve`].
@@ -254,7 +263,7 @@ pub struct Executor {
     pub diagnostic_printer: crate::diagnostics::Printer,
     /// Formats progress log lines.
     pub logger: Logger,
-    /// Process only the first N translation keys of each config; `None`
+    /// Process only the first `N` translation keys of each config; `None`
     /// processes everything.
     ///
     /// A debugging aid: it lets a change (or the LLM judge) be tried against a
@@ -264,7 +273,7 @@ pub struct Executor {
 }
 
 impl Executor {
-    /// Create a new executor for the given configs and diagnostic printer.
+    /// Creates an executor with default settings overrides and aligned logging.
     #[must_use]
     pub fn new<F>(
         configs: &config::Configs<F>,
@@ -312,11 +321,7 @@ impl Executor {
             .unwrap_or(input_path.clone());
         let file_id = self
             .diagnostic_printer
-            .add_source_file(
-                &source_file_path,
-                // input.path_or_glob_pattern.as_ref().to_string(),
-                raw_translations.clone(),
-            )
+            .add_source_file(&source_file_path, raw_translations.clone())
             .await;
 
         Ok((
@@ -447,7 +452,7 @@ impl Executor {
             .flat_map(move |input| {
                 use std::collections::HashSet;
 
-                // resolve input files
+                // Resolve included files.
                 let input_paths = resolve_input_paths(
                     base_dir,
                     &input.path_or_glob_pattern,
@@ -456,7 +461,8 @@ impl Executor {
                     diagnostics,
                 );
 
-                // resolve excluded files
+                // Resolve exclusions independently; invalid exclusion patterns
+                // still produce diagnostics.
                 let exclude: HashSet<PathBuf> = input
                     .exclude
                     .iter()
@@ -471,14 +477,14 @@ impl Executor {
                     .filter_ok(move |input_path| !exclude.contains(input_path))
                     .map_ok(|input_path| (input.clone(), input_path))
             })
-            // remove duplicates (same input config and input file)
+            // Preserve distinct input policies while removing exact repeats.
             .dedup_by(|a, b| match (a, b) {
                 (Ok(a), Ok(b)) => a == b,
                 _ => false,
             })
     }
 
-    /// Resolve, read, and parse all input translation files for a config.
+    /// Resolves, reads, and parses all translation inputs for a config.
     ///
     /// Diagnostics from input resolution are pushed onto `diagnostics`; per-file
     /// parse diagnostics travel in the returned tuples.
@@ -513,7 +519,7 @@ impl Executor {
             .await
     }
 
-    /// Execute a single configuration and generate all configured outputs.
+    /// Executes one configuration and generates all configured outputs.
     ///
     /// # Errors
     ///
@@ -530,6 +536,7 @@ impl Executor {
     ) -> Result<(), Error> {
         tracing::debug!(name = config_file.config.name.as_ref(), "executing");
 
+        // Resolve settings, then load every input catalog.
         let settings = Settings::resolve(&config_file.config.settings, &self.overrides);
 
         let mut diagnostics = vec![];
@@ -537,6 +544,7 @@ impl Executor {
             .load_translations(&config_file, settings.strict, &mut diagnostics)
             .await?;
 
+        // Emit per-file diagnostics before catalogs are merged.
         let mut num_errors = 0;
         let mut num_warnings = 0;
         for diagnostic in diagnostics
@@ -558,6 +566,7 @@ impl Executor {
             .into());
         }
 
+        // Merge catalogs and apply the optional key limit off the async runtime.
         let max_keys = self.max_keys;
         let (translations, mut diagnostics) = tokio::task::spawn_blocking(move || {
             let mut diagnostics: Vec<Diagnostic<FileId>> = vec![];
@@ -567,6 +576,7 @@ impl Executor {
         })
         .await??;
 
+        // Emit cross-file diagnostics before validation and output generation.
         let mut num_errors = 0;
         let mut num_warnings = 0;
         for diagnostic in diagnostics.drain(..) {
@@ -585,7 +595,7 @@ impl Executor {
             .into());
         }
 
-        // validate all translations
+        // Start validating the merged catalog before any output future is polled.
         let validate_translations = tokio::task::spawn_blocking({
             let translations = Arc::clone(&translations);
             let config_file = Arc::clone(&config_file);
@@ -608,6 +618,7 @@ impl Executor {
             }
         });
 
+        // Assemble target futures while validation runs in the worker pool.
         let output_futures: Vec<OutputFuture<'_>> = vec![
             Box::pin(
                 self.generate_json_outputs(&*config_file, &translations, &settings)
@@ -635,6 +646,7 @@ impl Executor {
             ),
         ];
 
+        // Emit validation diagnostics before allowing any output side effects.
         let mut num_errors = 0;
         let mut num_warnings = 0;
         for diagnostic in validate_translations.await??.drain(..) {
@@ -653,7 +665,7 @@ impl Executor {
             .into());
         }
 
-        // wait for all outputs to complete
+        // Generate independent outputs concurrently once validation succeeds.
         futures::future::join_all(output_futures)
             .await
             .into_iter()
@@ -662,7 +674,7 @@ impl Executor {
         Ok(())
     }
 
-    /// Execute all configurations in the given list and generate outputs.
+    /// Executes every configuration and generates its outputs.
     ///
     /// # Errors
     ///
@@ -680,7 +692,7 @@ impl Executor {
         Ok(self)
     }
 
-    /// Lint a single configuration's translation files, emitting diagnostics.
+    /// Lints one configuration's translation files and emits diagnostics.
     ///
     /// Unlike [`Self::execute_config`], no outputs are generated. Returns the
     /// number of error and warning diagnostics emitted.
@@ -763,7 +775,7 @@ impl Executor {
         Ok((num_errors, num_warnings, translations))
     }
 
-    /// Lint all configurations' translation files.
+    /// Lints every configuration's translation files.
     ///
     /// Every configuration is linted and its diagnostics emitted. When
     /// [`LintParams::usages`] is non-empty, keys not referenced anywhere in
@@ -935,7 +947,7 @@ fn output_dirs(configs: &config::Configs<FileId>) -> BTreeSet<PathBuf> {
     dirs
 }
 
-/// Resolve all unique translation input file paths referenced by `configs`.
+/// Resolves all unique translation input paths referenced by `configs`.
 ///
 /// Patterns that match no files push a diagnostic into `diagnostics`. The
 /// returned paths are sorted and de-duplicated but not canonicalized.
@@ -986,6 +998,7 @@ mod tests {
         Ok(path)
     }
 
+    /// Filename prefixing uses the source file stem without its extension.
     #[tokio::test]
     async fn prepend_filename_prefixes_with_file_stem() -> eyre::Result<()> {
         let configs: config::Configs<FileId> = vec![];
@@ -1018,6 +1031,7 @@ mod tests {
         Ok(())
     }
 
+    /// Relative-path prefixing keeps every directory and filename segment.
     #[tokio::test]
     async fn prepend_relative_path_prefixes_with_full_path_segments() -> eyre::Result<()> {
         let configs: config::Configs<FileId> = vec![];
@@ -1062,6 +1076,7 @@ mod tests {
         Ok(())
     }
 
+    /// An explicit prefix works without enabling relative-path prefixing.
     #[tokio::test]
     async fn prepend_relative_path_disabled_preserves_existing_behavior() -> eyre::Result<()> {
         let configs: config::Configs<FileId> = vec![];
@@ -1094,6 +1109,7 @@ mod tests {
         Ok(())
     }
 
+    /// Exclusion patterns remove matched files without producing diagnostics.
     #[test]
     fn unique_input_paths_respects_exclude_patterns() -> eyre::Result<()> {
         let dir = temp_dir("exclude-patterns")?;
@@ -1121,6 +1137,7 @@ mod tests {
         Ok(())
     }
 
+    /// Every enabled output backend contributes its parent to scan exclusions.
     #[test]
     fn output_dirs_include_all_generated_output_parents() -> eyre::Result<()> {
         let base = temp_dir("output-dirs")?;

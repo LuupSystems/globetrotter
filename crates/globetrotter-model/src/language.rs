@@ -1,7 +1,9 @@
+//! ISO 639-1 language identifiers and display names.
+
 use serde::{Deserialize, Serialize};
 
 // spellcheck:ignore-block
-/// Language codes per ISO 639-1 Alpha-2
+/// A language identified by an ISO 639-1 two-letter code.
 #[derive(
     Clone,
     Copy,
@@ -764,19 +766,19 @@ pub enum Language {
 }
 
 impl Language {
-    /// Iterate over all known languages.
+    /// Iterates over all known languages.
     #[must_use]
     pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
         <Self as strum::IntoEnumIterator>::iter()
     }
 
-    /// Return the ISO 639-1 Alpha-2 code for this language (e.g. `"en"`).
+    /// Returns the ISO 639-1 code for this language, such as `"en"`.
     #[must_use]
     pub fn code(&self) -> &'static str {
         serde_variant::to_variant_name(self).unwrap_or_else(|_| self.into())
     }
 
-    /// Return the English display name for this language (e.g. `"English"`).
+    /// Returns the English display name for this language, such as `"English"`.
     #[allow(
         clippy::too_many_lines,
         reason = "exhaustive ISO 639-1 lookup table; one match arm per language is the clearest form"
@@ -980,6 +982,7 @@ mod tests {
     use color_eyre::eyre;
     use similar_asserts::assert_eq as sim_assert_eq;
 
+    /// Every language code round-trips through display, parsing, and serde.
     #[test]
     fn test_code() -> eyre::Result<()> {
         use std::str::FromStr;

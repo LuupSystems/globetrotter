@@ -56,7 +56,7 @@ certain you are that the difference changes what the user is told: 1.0 only \
 for unmistakable contradictions, lower when the texts could still mean the \
 same thing.";
 
-/// Render `template` for one key, substituting the `{key}` and `{languages}`
+/// Renders `template` for one key, substituting the `{key}` and `{languages}`
 /// placeholders.
 ///
 /// Substitution is plain string replacement — not `format!` — so every other

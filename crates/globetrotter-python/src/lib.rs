@@ -1,4 +1,4 @@
-//! Python bindings code generation for globetrotter translations.
+//! Configuration types for globetrotter Python outputs.
 
 /// Python code generation configuration types.
 pub mod config;

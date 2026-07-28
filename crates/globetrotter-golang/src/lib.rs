@@ -1,4 +1,4 @@
-//! Go bindings code generation for globetrotter translations.
+//! Configuration types for globetrotter Go outputs.
 
 /// Go code generation configuration types.
 pub mod config;

@@ -16,13 +16,13 @@ async fn main() -> eyre::Result<()> {
     let manifest_dir: PathBuf = std::env::var("CARGO_MANIFEST_DIR")?.into();
     let out_dir: PathBuf = std::env::var("OUT_DIR")?.into();
 
-    // Use translations.toml as input
     let translations_file = manifest_dir.join("translations.toml");
     println!("cargo:rerun-if-changed={}", translations_file.display());
 
+    // Use `translations.toml` as the build input.
     let input = Input::new(translations_file.to_string_lossy());
 
-    // Output translations as json and emit rust bindings
+    // Generate per-language JSON and typed Rust bindings.
     let outputs = Outputs::new()
         .with_json([JsonOutputConfig::new(
             out_dir.join("translations_{{language}}.json"),
@@ -45,7 +45,7 @@ async fn main() -> eyre::Result<()> {
         config,
     }];
 
-    // Generate
+    // Run the same generation pipeline used by the CLI.
     let diagnostic_printer = globetrotter::diagnostics::Printer::default();
     let executor = globetrotter::Executor::new(&configs, diagnostic_printer);
     executor.execute(configs).await?;

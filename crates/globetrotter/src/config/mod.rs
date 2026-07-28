@@ -1,3 +1,6 @@
+//! Configuration discovery, version selection, and schema parsing.
+
+/// Resolved settings and precedence layers.
 pub mod settings;
 /// Version 1 of the configuration schema and its parsing routines.
 pub mod v1;
@@ -31,18 +34,21 @@ pub enum Version {
     /// Version 1 of the configuration schema.
     #[serde(rename = "1", alias = "v1", alias = "V1")]
     V1,
-    /// The latest supported schema version.
+    /// An input alias that resolves to the latest supported schema.
     #[serde(rename = "latest")]
     #[default]
     Latest,
 }
 
-/// The supported configuration file names, in search order.
+/// Returns supported configuration file names in discovery order.
 pub fn config_file_names() -> impl Iterator<Item = &'static str> {
     [".globetrotter.yaml", "globetrotter.yaml"].into_iter()
 }
 
-/// Search for a globetrotter configuration file in the given directory.
+/// Searches a directory for the first supported configuration file.
+///
+/// The returned path is canonicalized. Hidden `.globetrotter.yaml` takes
+/// precedence over `globetrotter.yaml`.
 ///
 /// # Errors
 ///
@@ -69,8 +75,9 @@ pub async fn find_config_file(dir: &Path) -> std::io::Result<Option<PathBuf>> {
     Ok(None)
 }
 
-/// Synchronously search for a globetrotter configuration file in the given
-/// directory.
+/// Searches a directory synchronously for the first supported config file.
+///
+/// Unlike [`find_config_file`], the returned path is not canonicalized.
 ///
 /// # Errors
 ///
@@ -82,14 +89,18 @@ pub fn find_config_file_sync(dir: &Path) -> std::io::Result<Option<PathBuf>> {
             Err(err) => return Err(err),
             Ok(true) => return Ok(Some(path)),
             Ok(false) => {
-                // skip
+                // Try the next supported config file name.
             }
         }
     }
     Ok(None)
 }
 
-/// Parse a raw YAML configuration string into typed `Configs`.
+/// Parses a raw YAML string into [`v1::Configs`].
+///
+/// Version and schema diagnostics are appended to `diagnostics`; existing
+/// diagnostics are retained. `strict` overrides the file's setting while the
+/// file itself is being parsed.
 ///
 /// # Errors
 ///
@@ -203,7 +214,10 @@ impl ToDiagnostics for ConfigError {
     }
 }
 
-/// Parse the configuration `version` field from the given YAML value.
+/// Parses the configuration `version` field from a YAML value.
+///
+/// A missing field resolves to [`Version::Latest`] and appends a warning, or an
+/// error when `strict` is explicitly `true`.
 ///
 /// # Errors
 ///
@@ -284,6 +298,7 @@ mod tests {
         Ok(())
     }
 
+    /// Numeric, string, and prefixed version-one spellings parse identically.
     #[test]
     fn test_parse_version() -> eyre::Result<()> {
         fn parse_version_wrapper(

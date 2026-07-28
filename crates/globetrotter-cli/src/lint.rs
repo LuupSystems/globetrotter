@@ -1,3 +1,5 @@
+//! CLI lint orchestration and exit-status reporting.
+
 use crate::options::LintOptions;
 use color_eyre::eyre;
 use globetrotter::config::v1::{Config, ConfigFile, Input};
@@ -28,7 +30,7 @@ fn ad_hoc_translation_config(
 }
 
 impl crate::Globetrotter {
-    /// Lint the configured translation files and report any issues.
+    /// Lints the configured translation files and reports any issues.
     ///
     /// Checks for missing, empty, or whitespace-padded translations, templates
     /// that fail to compile, placeholders that are inconsistent across
@@ -50,7 +52,8 @@ impl crate::Globetrotter {
         let start = std::time::Instant::now();
         let mut configs = self.configs;
 
-        // lint any files passed directly via `--translation` as an ad-hoc config.
+        // Direct translation paths form one synthetic config so they use the
+        // same lint pipeline as configured inputs.
         if let Some(config) = ad_hoc_translation_config(&self.options.translations) {
             configs.push(config);
         }
@@ -61,10 +64,12 @@ impl crate::Globetrotter {
             );
         }
 
+        // Build an executor whose settings cannot write generated outputs.
         let logger = Logger::new(&configs);
         let executor = globetrotter::Executor {
             overrides: globetrotter::config::SettingsLayer {
-                // lint never writes outputs, so this is not a user-facing setting to resolve.
+                // Lint never writes outputs, so this invariant does not depend
+                // on user or config settings.
                 dry_run: Some(true),
                 ..self.options.settings_layer()
             },
@@ -92,6 +97,7 @@ impl crate::Globetrotter {
             llm_judge,
         };
 
+        // Run every lint phase before translating findings into an exit code.
         println!();
         let result = executor.lint(configs, &params).await;
         let elapsed = format_duration(start.elapsed());
