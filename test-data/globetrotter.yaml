@@ -2,6 +2,7 @@ version: 1
 configs:
   my-other-translations:
     languages: &languages ["en", "de", fr]
+    engine: handlebars
     inputs:
       - prefix: "other-a"
         prepend_relative_path: true
@@ -24,9 +25,6 @@ configs:
       - path: ./translations/b.toml
         prefix: "my-b"
         prepend_filename: true
-      - ./translations/media.toml
-      - ./translations/upload.toml
-      - ./translations/settings.toml
     outputs:
       json:
         - ./output/translations_{{language}}.json

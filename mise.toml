@@ -9,6 +9,7 @@ typos = "latest"
 actionlint = "latest"
 "github:romnn/cooldown" = { version = "latest", minimum_release_age = "0" }
 "github:romnn/bumpversion" = { version = "latest", matching = "bumpversion", minimum_release_age = "0" }
+"aqua:charmbracelet/freeze" = "latest"
 
 # Cargo plugins
 "aqua:nextest-rs/nextest/cargo-nextest" = "latest"

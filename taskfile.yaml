@@ -60,6 +60,12 @@ tasks:
       - task: goreleaser
         vars: { GORELEASER_ARGS: "release --clean --timeout 120m" }
 
+  docs:screenshots:
+    desc: "regenerate the README screenshot (needs charmbracelet/freeze)"
+    aliases: [screenshots]
+    cmds:
+      - bash scripts/screenshots.sh
+
   typos:
     desc: "check repository for typos"
     aliases: [spellcheck]
