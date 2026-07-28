@@ -1,4 +1,4 @@
 min-age = "14d"
 
 [global]
-exclude-folders = ["/examples"]
+exclude-folders = ["/docs", "/examples"]
