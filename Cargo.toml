@@ -18,7 +18,21 @@ readme = "README.md"
 homepage = "https://github.com/LuupSystems/globetrotter"
 repository = "https://github.com/LuupSystems/globetrotter"
 
+[workspace.metadata.cargo-fc]
+install_missing_targets = true
+dedupe = true
+aggregate_targets = false
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-pc-windows-gnu",
+  "aarch64-apple-darwin",
+]
+
+[workspace.metadata.cargo-fc.subcommands.udeps]
+maximal_features = true
+
 [workspace.lints.rust]
+warnings = { level = "warn", priority = -1 }
 unsafe_code = "deny"
 unused_must_use = "deny"
 # Warn-only: keep iteration fast during development; CI/review still adds the docs.
@@ -34,8 +48,15 @@ unreachable = "deny"
 unimplemented = "deny"
 todo = "deny"
 indexing_slicing = "deny"
+missing_errors_doc = "warn"
+await_holding_lock = "deny"
 # Every `#[allow(...)]` must carry a `reason = "..."` justifying the escape hatch.
 allow_attributes_without_reason = "deny"
+
+# Allowed
+map_unwrap_or = "allow"
+assigning_clones = "allow"
+struct_excessive_bools = "allow"
 
 [profile.dev]
 debug = 1

@@ -29,9 +29,6 @@ workspace = true
 default = ["rayon"]
 rayon = ["dep:rayon", "indexmap/rayon"]
 
-[package.metadata.cargo-feature-combinations]
-exclude_features = ["default"]
-
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

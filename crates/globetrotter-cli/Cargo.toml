@@ -43,8 +43,15 @@ rayon = ["globetrotter/rayon"]
 # the `--semantic*` flags disappear with it.
 semantic = ["globetrotter/semantic"]
 
-[package.metadata.cargo-feature-combinations]
-exclude_features = ["default"]
+[package.metadata.cargo-fc]
+# Language selectors are independent alternatives in the matrix. The `default` row
+# still exercises the shipped CLI with every backend enabled together.
+mutually_exclusive_features = [[
+  "typescript",
+  "rust",
+  "golang",
+  "python",
+]]
 
 [package.metadata.docs.rs]
 all-features = true

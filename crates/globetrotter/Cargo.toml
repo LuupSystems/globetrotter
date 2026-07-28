@@ -42,8 +42,15 @@ python = ["dep:globetrotter-python"]
 # stack (candle); disable with `--no-default-features` for a lighter build.
 semantic = ["dep:globetrotter-semantic", "dep:indicatif"]
 
-[package.metadata.cargo-feature-combinations]
-exclude_features = ["default"]
+[package.metadata.cargo-fc]
+# Language backends are independent alternatives in the matrix. The `default` row
+# still exercises the supported configuration with every backend enabled together.
+mutually_exclusive_features = [[
+  "typescript",
+  "rust",
+  "golang",
+  "python",
+]]
 
 [package.metadata.docs.rs]
 all-features = true

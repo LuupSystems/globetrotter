@@ -27,11 +27,7 @@ keywords = [
 workspace = true
 
 [features]
-default = []
 serde = ["dep:serde"]
-
-[package.metadata.cargo-feature-combinations]
-exclude_features = ["default"]
 
 [package.metadata.docs.rs]
 all-features = true

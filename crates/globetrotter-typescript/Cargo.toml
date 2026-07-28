@@ -31,8 +31,10 @@ default = ["swc"]
 swc = ["dep:swc_core", "dep:anyhow"]
 serde = ["dep:serde"]
 
-[package.metadata.cargo-feature-combinations]
-exclude_features = ["default"]
+[package.metadata.cargo-fc]
+# `default` enables `swc`, so varying both names would duplicate every SWC state.
+# Keep the shipped `default` axis and cross it with `serde`.
+exclude_features = ["swc"]
 
 [package.metadata.docs.rs]
 all-features = true
