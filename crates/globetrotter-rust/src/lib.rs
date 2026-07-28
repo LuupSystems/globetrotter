@@ -48,7 +48,7 @@ impl IntoTokenStream for model::ArgumentType {
                 let tokens = quote! {i64};
                 (tokens, false)
             }
-            // TODO(roman): create our own globetrotter type for this
+            // Keep ISO 8601 values as strings so generated bindings do not impose a date-time crate.
             Self::String | Self::Iso8601DateTimeString => {
                 let tokens = quote! {&'a str};
                 (tokens, true)
@@ -133,8 +133,6 @@ pub enum Error {
 /// `syn` for pretty-printing.
 pub fn generate_translation_enum(translations: &model::Translations) -> Result<String, Error> {
     use itertools::Itertools;
-
-    // Can we use https://github.com/rust-phf/rust-phf at compile time?
 
     let enum_variant_names: Vec<_> = translations
         .0

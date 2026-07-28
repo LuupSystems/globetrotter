@@ -100,8 +100,6 @@ pub enum GolangOutputError {
     #[error(transparent)]
     Io(#[from] IoError),
 
-    // #[error(transparent)]
-    // Codegen(#[from] globetrotter_typescript::Error),
     /// A spawned task failed to join.
     #[error(transparent)]
     Task(#[from] tokio::task::JoinError),
@@ -114,8 +112,7 @@ pub enum PythonOutputError {
     /// Writing the generated code to disk failed.
     #[error(transparent)]
     Io(#[from] IoError),
-    // #[error(transparent)]
-    // Codegen(#[from] globetrotter_typescript::Error),
+
     /// A spawned task failed to join.
     #[error(transparent)]
     Task(#[from] tokio::task::JoinError),

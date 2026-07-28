@@ -49,12 +49,6 @@ impl<F> DiagnosticExt for Diagnostic<F> {
 /// both its `Display` and `Debug` implementations.
 pub struct DisplayRepr<'a, T>(pub &'a T);
 
-// impl<'a, T> tracing::Value for DisplayRepr<'a, T> {
-//     fn record(&self, key: &tracing::field::Field, visitor: &mut dyn tracing::field::Visit) {
-//
-//     }
-// }
-
 impl<T> std::fmt::Debug for DisplayRepr<'_, T>
 where
     T: std::fmt::Display,

@@ -189,7 +189,6 @@ where
 
         vec![
             Diagnostic::error()
-                // .with_code("E0384")
                 .with_message(format!("duplicate key `{}`", self.key))
                 .with_labels(labels),
         ]

@@ -771,8 +771,6 @@ impl Outputs {
 
 impl std::fmt::Display for Outputs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO(roman): all the target configs should implement display
-
         let mut s = f.debug_struct("Outputs");
         s.field("json", &self.json);
         #[cfg(feature = "typescript")]

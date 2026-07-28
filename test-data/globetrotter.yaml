@@ -32,12 +32,6 @@ configs:
         - ./output/translations_{{language}}.json
       typescript:
         type: ./output/typescript_types.ts
-        # type:
-        #   - ./output/typescript1.ts
-        #   - ./output/typescript2.ts
-        # dts:
-        #   - ./output/typescript1.ts
-        #   - ./output/typescript2.ts
       rust:
         - ./output/rust_types.rs
       golang:

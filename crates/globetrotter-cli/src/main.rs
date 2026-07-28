@@ -74,7 +74,6 @@ impl Globetrotter {
             .await?;
 
         if config_file_paths.is_empty() {
-            // if no config file is provided, try to find config file in current directory
             let cwd = std::env::current_dir()?;
             if let Some(config_file_path) = globetrotter::config::find_config_file(&cwd).await? {
                 config_file_paths.push(config_file_path);
@@ -122,43 +121,6 @@ impl Globetrotter {
             })
             .try_collect::<Vec<_>>()
             .await?;
-
-        // need at least an input file?
-        // right now i do not see how cli interface should
-        // look like...
-        //
-        // maybe there is a compelling use case to quickly generate
-        // a JSON from a translation file, without creating a
-        // config file...
-        //
-        // until we know what we want in life, we complain
-        // eyre::bail!("no config file found, try --config");
-
-        // here is how this could start:
-        //
-        // configs.push(config::v1::Config {
-        //     name: Spanned::dummy("default".to_string()),
-        //     languages: vec![Spanned::dummy(Language::De)],
-        //     settings: options.settings_layer(),
-        //     inputs: vec![config::v1::Input {
-        //         path_or_glob_pattern: Spanned::dummy("test".to_string()),
-        //         exclude: vec![],
-        //         prefix: None,
-        //         prepend_filename: None,
-        //         separator: None,
-        //     }],
-        //     outputs: config::v1::Outputs {
-        //         json: vec![],
-        //         #[cfg(feature = "typescript")]
-        //         typescript: None,
-        //         #[cfg(feature = "rust")]
-        //         rust: None,
-        //         #[cfg(feature = "golang")]
-        //         golang: None,
-        //         #[cfg(feature = "python")]
-        //         python: None,
-        //     },
-        // });
 
         let (configs, diagnostics): (Vec<_>, Vec<_>) = configs.into_iter().unzip();
         let configs = configs.into_iter().flatten().collect();
