@@ -1,0 +1,133 @@
+<span class="term-fg32 term-fg1">$</span> globetrotter lint --help
+&nbsp;
+Lint translation files and report any issues
+&nbsp;
+<span class="term-fg1 term-fg4">Usage:</span> <span class="term-fg1">globetrotter lint</span> [OPTIONS]
+&nbsp;
+<span class="term-fg1 term-fg4">Options:</span>
+      <span class="term-fg1">--log</span> &lt;LOG_LEVEL&gt;
+          Log level. When using a more sophisticated logging setup using RUST_LOG environment variable, this option is overwritten.
+&nbsp;
+          [env: LOG_LEVEL=]
+&nbsp;
+      <span class="term-fg1">--usages</span> &lt;DIR&gt;
+          Report translation keys never referenced in this source directory.
+&nbsp;
+          Repeatable. When omitted, the unused-key check is skipped.
+&nbsp;
+      <span class="term-fg1">--log-format</span> &lt;LOG_FORMAT&gt;
+          log format (json or pretty)
+&nbsp;
+          [env: LOG_FORMAT=]
+&nbsp;
+      <span class="term-fg1">--no-duplicates</span>
+          Disable duplicate-translation detection entirely
+&nbsp;
+      <span class="term-fg1">--color</span> &lt;COLOR_CHOICE&gt;
+          enable or disable color
+&nbsp;
+          [env: GLOBETROTTER_COLOR=]
+&nbsp;
+      <span class="term-fg1">--llm-judge</span>
+          (experimental) Ask an LLM whether each key&#39;s languages all tell the user the same thing.
+&nbsp;
+          Each key is judged in one request against an OpenAI-compatible endpoint (a local ollama by default). Findings are printed as notes with the model&#39;s reason and never fail the lint: the judge is tuned for recall, so treat every finding as a suggestion for inspection. Verdicts are cached, so re-runs only pay for changed keys.
+&nbsp;
+          Use a capable model: in testing, 4B-class models missed real drift and hallucinated justifications, while `gemma4:12b` and `qwen3.5:9b` (Q4, 4K context) with medium reasoning effort worked well.
+&nbsp;
+  <span class="term-fg1">-c</span>, <span class="term-fg1">--config</span> &lt;CONFIG_PATHS&gt;
+          Paths to globetrotter config files or directories to search for one
+&nbsp;
+      <span class="term-fg1">--llm-base-url</span> &lt;URL&gt;
+          Base URL of the OpenAI-compatible endpoint
+&nbsp;
+          [default: http:&#47;&#47;localhost:11434&#47;v1]
+&nbsp;
+  <span class="term-fg1">-i</span>, <span class="term-fg1">--translation</span> &lt;TRANSLATIONS&gt;
+          Paths to translation files to process
+&nbsp;
+      <span class="term-fg1">--llm-model</span> &lt;MODEL&gt;
+          Model name as known to the endpoint
+&nbsp;
+          [default: gemma4:12b]
+&nbsp;
+      <span class="term-fg1">--engine</span> &lt;TEMPLATE_ENGINE&gt;
+          Template engine to use for rendering translations
+&nbsp;
+      <span class="term-fg1">--llm-api-key-env</span> &lt;ENV&gt;
+          Name of the environment variable holding the API key.
+&nbsp;
+          Local servers ignore the key, so leaving the variable unset is fine.
+&nbsp;
+          [default: OPENAI_API_KEY]
+&nbsp;
+      <span class="term-fg1">--llm-concurrency</span> &lt;N&gt;
+          Maximum number of concurrent requests
+&nbsp;
+          [default: 8]
+&nbsp;
+      <span class="term-fg1">--strict</span>[=&lt;STRICT&gt;]
+          Treat warnings as errors
+&nbsp;
+          [possible values: true, false]
+&nbsp;
+      <span class="term-fg1">--llm-temperature</span> &lt;T&gt;
+          Sampling temperature. The default `0` keeps verdicts reproducible (and cacheable) across runs
+&nbsp;
+          [default: 0]
+&nbsp;
+      <span class="term-fg1">--absolute</span>[=&lt;PRINT_ABSOLUTE_PATHS&gt;]
+          Print absolute paths instead of paths relative to the common base directory
+&nbsp;
+          [possible values: true, false]
+&nbsp;
+      <span class="term-fg1">--llm-effort</span> &lt;EFFORT&gt;
+          Reasoning effort, for models that support it
+&nbsp;
+          Possible values:
+          - <span class="term-fg1">none</span>:   Send no reasoning-effort field at all
+          - <span class="term-fg1">low</span>:    Minimal reasoning; fastest, least reliable
+          - <span class="term-fg1">medium</span>: Balanced reasoning; the tested sweet spot for drift detection
+          - <span class="term-fg1">high</span>:   Maximal reasoning; slowest
+&nbsp;
+          [default: medium]
+&nbsp;
+      <span class="term-fg1">--dry-run</span>[=&lt;DRY_RUN&gt;]
+          Run without writing any output files
+&nbsp;
+          [possible values: true, false]
+&nbsp;
+      <span class="term-fg1">--llm-min-confidence</span> &lt;MIN&gt;
+          Minimum confidence a finding needs to be reported.
+&nbsp;
+          Each finding carries the model&#39;s self-reported confidence (0 to 1), which is only loosely calibrated — treat it as a ranking of findings, not a probability. The default `0` reports everything, keeping recall maximal; raise it to trade recall for fewer false positives. The threshold applies after the verdict cache, so changing it re-filters cached verdicts without new requests.
+&nbsp;
+          [default: 0]
+&nbsp;
+      <span class="term-fg1">--llm-prompt</span> &lt;FILE&gt;
+          File with a custom judge prompt template.
+&nbsp;
+          The template must contain the `{key}` and `{languages}` placeholders; all other braces pass through verbatim. Prompt wording strongly affects which findings a given model reports, and the best wording differs per model, so tune the template together with `--llm-model`.
+&nbsp;
+      <span class="term-fg1">--max-keys</span> &lt;N&gt;
+          Process only the first N translation keys of each config.
+&nbsp;
+          A debugging aid for large corpora: try a change — or the LLM judge — against a small subset of real translations before paying for a full run. Applies to linting and generation alike; the truncation is warned about, never silent.
+&nbsp;
+      <span class="term-fg1">--cache-dir</span> &lt;DIR&gt;
+          Directory for cached data (e.g. LLM judge verdicts).
+&nbsp;
+          Defaults to a `globetrotter` folder in the OS user cache directory (e.g. `~&#47;.cache&#47;globetrotter` on Linux).
+&nbsp;
+          [env: GLOBETROTTER_CACHE_DIR=]
+&nbsp;
+      <span class="term-fg1">--llm-cache-capacity</span> &lt;N&gt;
+          Maximum number of cached verdicts kept on disk (least-recently-used eviction); `0` disables the cache entirely
+&nbsp;
+          [default: 100000]
+&nbsp;
+  <span class="term-fg1">-h</span>, <span class="term-fg1">--help</span>
+          Print help (see a summary with &#39;-h&#39;)
+&nbsp;
+  <span class="term-fg1">-V</span>, <span class="term-fg1">--version</span>
+          Print version

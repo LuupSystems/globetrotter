@@ -66,6 +66,27 @@ tasks:
     cmds:
       - bash scripts/screenshots.sh
 
+  docs:terminals:
+    desc: "regenerate documentation examples and terminal snippets"
+    cmds:
+      - bash scripts/terminals.sh
+
+  docs:build:
+    desc: "regenerate examples and build the static site into docs/public"
+    deps: [docs:terminals]
+    dir: docs
+    cmds:
+      - hugo --minify --gc {{.CLI_ARGS}}
+
+  docs:serve:
+    desc: "serve the documentation website with hot reload"
+    aliases: [docs]
+    deps: [docs:terminals]
+    dir: docs
+    interactive: true
+    cmds:
+      - hugo server --disableFastRender {{.CLI_ARGS}}
+
   typos:
     desc: "check repository for typos"
     aliases: [spellcheck]
@@ -87,8 +108,8 @@ tasks:
     cmds:
       - cargo clean {{.CLI_ARGS}}
 
-  docs:
-    desc: "open documentation preview"
+  docs:cargo:
+    desc: "open the rustdoc API documentation preview"
     env:
       RUSTDOCFLAGS: "--cfg docsrs"
     cmds:

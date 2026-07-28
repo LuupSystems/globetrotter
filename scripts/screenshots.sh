@@ -9,8 +9,8 @@ export CLICOLOR_FORCE=1 TERM=xterm-256color
 unset NO_COLOR
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-demo="$repo/test-data"
-output="$demo/demo.png"
+demo="$repo/docs/examples/quickstart"
+output="$repo/docs/static/images/demo.png"
 globetrotter="${GLOBETROTTER_BIN:-$repo/target/debug/globetrotter}"
 
 command -v freeze >/dev/null || {
@@ -25,6 +25,8 @@ fi
   echo "globetrotter binary not found or not executable: $globetrotter" >&2
   exit 1
 }
+
+mkdir -p "$(dirname "$output")"
 
 ansi="$(
   cd "$demo"

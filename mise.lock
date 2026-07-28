@@ -79,6 +79,32 @@ checksum = "sha256:0a7316540862c13d954f648917ceacca593747baed6eec180fafa590be271
 url = "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-pc-windows-msvc-v0.22.2.zip"
 url_api = "https://api.github.com/repos/rustsec/rustsec/releases/assets/439294720"
 
+[[tools."asdf:NeoHsu/asdf-hugo"]]
+version = "extended-0.163.3"
+backend = "asdf:NeoHsu/asdf-hugo"
+
+[[tools."github:buildkite/terminal-to-html"]]
+version = "3.17.1"
+backend = "github:buildkite/terminal-to-html"
+
+[tools."github:buildkite/terminal-to-html"."platforms.linux-x64"]
+checksum = "sha256:506bf48a06017c6d74903da75f9fd3aea18cc9451cb3ad39103e4c8997c3716f"
+url = "https://github.com/buildkite/terminal-to-html/releases/download/v3.17.1/terminal-to-html-3.17.1-linux-amd64.gz"
+url_api = "https://api.github.com/repos/buildkite/terminal-to-html/releases/assets/469851432"
+provenance = "github-attestations"
+
+[tools."github:buildkite/terminal-to-html"."platforms.macos-arm64"]
+checksum = "sha256:264b131fe7ae4601fc8b65e80bdc3d71e5c2cc32853f3a270c9cbaf47b2d45df"
+url = "https://github.com/buildkite/terminal-to-html/releases/download/v3.17.1/terminal-to-html-3.17.1-darwin-arm64.gz"
+url_api = "https://api.github.com/repos/buildkite/terminal-to-html/releases/assets/469851452"
+provenance = "github-attestations"
+
+[tools."github:buildkite/terminal-to-html"."platforms.windows-x64"]
+checksum = "sha256:5286bcf3d17312af5b354da16731f4bbc9b777a0a15168d6b49562a8b6f6df17"
+url = "https://github.com/buildkite/terminal-to-html/releases/download/v3.17.1/terminal-to-html-3.17.1-windows-amd64.zip"
+url_api = "https://api.github.com/repos/buildkite/terminal-to-html/releases/assets/469851361"
+provenance = "github-attestations"
+
 [[tools."github:est31/cargo-udeps"]]
 version = "0.1.61"
 backend = "github:est31/cargo-udeps"
@@ -198,6 +224,22 @@ url_api = "https://api.github.com/repos/rust-cross/cargo-zigbuild/releases/asset
 checksum = "sha256:82ff1207be9e9533267b83dbe33d0b16b30043f116dc336d9a526667fa27622a"
 url = "https://github.com/rust-cross/cargo-zigbuild/releases/download/v0.23.0/cargo-zigbuild-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/rust-cross/cargo-zigbuild/releases/assets/450974351"
+
+[[tools.go]]
+version = "1.26.5"
+backend = "core:go"
+
+[tools.go."platforms.linux-x64"]
+checksum = "sha256:5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053"
+url = "https://dl.google.com/go/go1.26.5.linux-amd64.tar.gz"
+
+[tools.go."platforms.macos-arm64"]
+checksum = "sha256:efb87ff28af9a188d0536ef5d42e63dd52ba8263cd7344a993cc48dd11dedb6a"
+url = "https://dl.google.com/go/go1.26.5.darwin-arm64.tar.gz"
+
+[tools.go."platforms.windows-x64"]
+checksum = "sha256:97e6b2a833b6d89f9ff17d25419ac0a7e3b482a044e9ab18cdef834bd834fd38"
+url = "https://dl.google.com/go/go1.26.5.windows-amd64.zip"
 
 [[tools.task]]
 version = "3.52.0"

@@ -1,0 +1,26 @@
+{{- /* Read examples from the mounted runnable fixture instead of duplicating snippets in prose. */ -}}
+{{- $path := .Get "path" | default (.Get 0) -}}
+{{- $res := resources.Get (printf "examples/%s" $path) -}}
+{{- if not $res -}}
+  {{- errorf "example: examples/%s not found (run task docs:terminals for generated files)" $path -}}
+{{- end -}}
+{{- $base := path.Base $path -}}
+{{- $ext := strings.TrimPrefix "." (path.Ext $path) -}}
+{{- $lang := .Get "lang" -}}
+{{- if not $lang -}}
+  {{- if or (eq $ext "yaml") (eq $ext "yml") -}}{{- $lang = "yaml" -}}
+  {{- else if eq $ext "json" -}}{{- $lang = "json" -}}
+  {{- else if eq $ext "toml" -}}{{- $lang = "toml" -}}
+  {{- else if eq $ext "rs" -}}{{- $lang = "rust" -}}
+  {{- else if eq $ext "ts" -}}{{- $lang = "typescript" -}}
+  {{- else -}}{{- $lang = "text" -}}{{- end -}}
+{{- end -}}
+{{- $title := .Get "title" | default $base -}}
+{{- $generated := strings.Contains $path "/generated/" -}}
+<div class="gt-file{{ if $generated }} gt-file--out{{ end }}">
+  <div class="gt-file__cap">
+    <span class="gt-file__name">{{ $title }}</span>
+    {{- if $generated }}<span class="gt-file__tag">generated</span>{{ end }}
+  </div>
+  <div class="gt-file__body">{{ transform.Highlight (strings.TrimSpace $res.Content) $lang }}</div>
+</div>

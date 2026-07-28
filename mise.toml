@@ -11,6 +11,11 @@ actionlint = "latest"
 "github:romnn/bumpversion" = { version = "latest", matching = "bumpversion", minimum_release_age = "0" }
 "aqua:charmbracelet/freeze" = "latest"
 
+# Documentation site (docs/, Hugo Book theme, and live terminal snippets).
+go = "latest"
+"asdf:NeoHsu/asdf-hugo" = "extended-0.163.3"
+"github:buildkite/terminal-to-html" = "latest"
+
 # Cargo plugins
 "aqua:nextest-rs/nextest/cargo-nextest" = "latest"
 "github:romnn/cargo-feature-combinations" = { version = "latest", matching = "cargo-fc", minimum_release_age = "0" }

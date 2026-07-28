@@ -1,0 +1,28 @@
+{{- /* Persist the manual choice while retaining the OS preference as the default. */ -}}
+<button type="button" id="gt-theme-btn" class="gt-theme-btn" aria-label="Toggle light and dark theme" aria-pressed="false">
+  <span class="gt-theme-btn__icon" aria-hidden="true">☾</span>
+  <span class="gt-theme-btn__label">Dark</span>
+</button>
+<script>
+(function () {
+  var btn = document.getElementById('gt-theme-btn');
+  if (!btn) return;
+  var root = document.documentElement;
+  var icon = btn.querySelector('.gt-theme-btn__icon');
+  var label = btn.querySelector('.gt-theme-btn__label');
+  function mode() { return root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; }
+  function render() {
+    var current = mode();
+    icon.textContent = current === 'dark' ? '☀' : '☾';
+    label.textContent = current === 'dark' ? 'Light' : 'Dark';
+    btn.setAttribute('aria-pressed', String(current === 'dark'));
+  }
+  btn.addEventListener('click', function () {
+    var next = mode() === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('gt-theme', next); } catch (e) {}
+    render();
+  });
+  render();
+})();
+</script>

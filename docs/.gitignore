@@ -1,0 +1,4 @@
+# Hugo build output and module/asset cache.
+/public
+/resources
+/.hugo_build.lock

@@ -1,0 +1,16 @@
+[account.greeting]
+en = "Welcome back, {{name}}!"
+de = "Willkommen zurück, {{name}}!"
+fr = "Bon retour, {{name}} !"
+arguments = { name = "string" }
+
+[cart.summary]
+en = "You have {{count}} items in your cart."
+de = "Du hast {{count}} Artikel in deinem Warenkorb."
+fr = "Vous avez {{count}} articles dans votre panier."
+arguments = { count = "number" }
+
+[navigation.sign_out]
+en = "Sign out"
+de = "Abmelden"
+fr = "Se déconnecter"

@@ -1,0 +1,7 @@
+{{- /* Inline checked-in HTML produced from real ANSI output by scripts/terminals.sh. */ -}}
+{{- $name := .Get "name" | default (.Get 0) -}}
+{{- $res := resources.Get (printf "terminals/%s.html" $name) -}}
+{{- if not $res -}}
+  {{- errorf "terminal: assets/terminals/%s.html not found (run task docs:terminals)" $name -}}
+{{- end -}}
+<div class="gt-term"><pre class="gt-term__body">{{ $res.Content | safeHTML }}</pre></div>

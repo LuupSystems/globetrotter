@@ -1,0 +1,16 @@
+{
+  "version": "1",
+  "template_engine": "handlebars",
+  "language": "de",
+  "translations": {
+    "app.account.greeting": {
+      "template": "Willkommen zurück, {{name}}!"
+    },
+    "app.cart.summary": {
+      "template": "Du hast {{count}} Artikel in deinem Warenkorb."
+    },
+    "app.navigation.sign_out": {
+      "literal": "Abmelden"
+    }
+  }
+}

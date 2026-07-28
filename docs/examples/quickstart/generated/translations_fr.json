@@ -1,0 +1,16 @@
+{
+  "version": "1",
+  "template_engine": "handlebars",
+  "language": "fr",
+  "translations": {
+    "app.account.greeting": {
+      "template": "Bon retour, {{name}} !"
+    },
+    "app.cart.summary": {
+      "template": "Vous avez {{count}} articles dans votre panier."
+    },
+    "app.navigation.sign_out": {
+      "literal": "Se déconnecter"
+    }
+  }
+}

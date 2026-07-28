@@ -1,5 +1,6 @@
 [files]
 ignore-files = true
+extend-exclude = ["docs/assets/**/*"]
 
 [default]
 extend-ignore-re = [

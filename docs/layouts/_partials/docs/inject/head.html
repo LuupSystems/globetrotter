@@ -1,0 +1,14 @@
+{{- /* Resolve the effective color theme before first paint to avoid a flash. */ -}}
+<script>
+(function () {
+  try {
+    var stored = localStorage.getItem('gt-theme');
+    var mode = (stored === 'light' || stored === 'dark')
+      ? stored
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', mode);
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+})();
+</script>

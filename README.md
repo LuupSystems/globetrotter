@@ -8,8 +8,10 @@
 
 Type-safe internationalization through code generation. Define translations once, use them everywhere with full type safety across multiple programming languages.
 
+📖 **[Documentation](https://luupsystems.github.io/globetrotter/)** — installation, quick start, configuration, generated outputs, and linting.
+
 <p align="center">
-  <img src="test-data/demo.png" alt="globetrotter demo" width="600">
+  <img src="docs/static/images/demo.png" alt="globetrotter demo" width="600">
 </p>
 
 ### Why globetrotter

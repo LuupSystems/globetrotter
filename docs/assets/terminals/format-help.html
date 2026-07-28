@@ -1,0 +1,77 @@
+<span class="term-fg32 term-fg1">$</span> globetrotter format --help
+&nbsp;
+Format translation files in place
+&nbsp;
+<span class="term-fg1 term-fg4">Usage:</span> <span class="term-fg1">globetrotter format</span> [OPTIONS]
+&nbsp;
+<span class="term-fg1 term-fg4">Options:</span>
+      <span class="term-fg1">--log</span> &lt;LOG_LEVEL&gt;
+          Log level. When using a more sophisticated logging setup using RUST_LOG environment variable, this option is overwritten.
+&nbsp;
+          [env: LOG_LEVEL=]
+&nbsp;
+      <span class="term-fg1">--order</span> &lt;ORDER&gt;
+          Order in which translation keys are sorted
+&nbsp;
+          Possible values:
+          - <span class="term-fg1">ascending</span>:  Sort keys from A to Z
+          - <span class="term-fg1">descending</span>: Sort keys from Z to A
+&nbsp;
+          [default: ascending]
+&nbsp;
+      <span class="term-fg1">--check</span>
+          Check whether files are already formatted instead of rewriting them.
+&nbsp;
+          Exits with a non-zero status if any file would be reformatted.
+&nbsp;
+      <span class="term-fg1">--log-format</span> &lt;LOG_FORMAT&gt;
+          log format (json or pretty)
+&nbsp;
+          [env: LOG_FORMAT=]
+&nbsp;
+      <span class="term-fg1">--color</span> &lt;COLOR_CHOICE&gt;
+          enable or disable color
+&nbsp;
+          [env: GLOBETROTTER_COLOR=]
+&nbsp;
+  <span class="term-fg1">-c</span>, <span class="term-fg1">--config</span> &lt;CONFIG_PATHS&gt;
+          Paths to globetrotter config files or directories to search for one
+&nbsp;
+  <span class="term-fg1">-i</span>, <span class="term-fg1">--translation</span> &lt;TRANSLATIONS&gt;
+          Paths to translation files to process
+&nbsp;
+      <span class="term-fg1">--engine</span> &lt;TEMPLATE_ENGINE&gt;
+          Template engine to use for rendering translations
+&nbsp;
+      <span class="term-fg1">--strict</span>[=&lt;STRICT&gt;]
+          Treat warnings as errors
+&nbsp;
+          [possible values: true, false]
+&nbsp;
+      <span class="term-fg1">--absolute</span>[=&lt;PRINT_ABSOLUTE_PATHS&gt;]
+          Print absolute paths instead of paths relative to the common base directory
+&nbsp;
+          [possible values: true, false]
+&nbsp;
+      <span class="term-fg1">--dry-run</span>[=&lt;DRY_RUN&gt;]
+          Run without writing any output files
+&nbsp;
+          [possible values: true, false]
+&nbsp;
+      <span class="term-fg1">--max-keys</span> &lt;N&gt;
+          Process only the first N translation keys of each config.
+&nbsp;
+          A debugging aid for large corpora: try a change — or the LLM judge — against a small subset of real translations before paying for a full run. Applies to linting and generation alike; the truncation is warned about, never silent.
+&nbsp;
+      <span class="term-fg1">--cache-dir</span> &lt;DIR&gt;
+          Directory for cached data (e.g. LLM judge verdicts).
+&nbsp;
+          Defaults to a `globetrotter` folder in the OS user cache directory (e.g. `~&#47;.cache&#47;globetrotter` on Linux).
+&nbsp;
+          [env: GLOBETROTTER_CACHE_DIR=]
+&nbsp;
+  <span class="term-fg1">-h</span>, <span class="term-fg1">--help</span>
+          Print help (see a summary with &#39;-h&#39;)
+&nbsp;
+  <span class="term-fg1">-V</span>, <span class="term-fg1">--version</span>
+          Print version
