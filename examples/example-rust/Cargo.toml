@@ -34,3 +34,4 @@ tokio.workspace = true
 [dev-dependencies]
 color-eyre.workspace = true
 similar-asserts.workspace = true
+test-util.workspace = true

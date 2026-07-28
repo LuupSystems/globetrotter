@@ -93,7 +93,7 @@ mod tests {
     use similar_asserts::assert_eq as sim_assert_eq;
 
     /// With neither layer set, the built-in generation defaults apply.
-    #[test]
+    #[test_util::test]
     fn defaults_apply_when_no_layer_specifies_a_value() {
         let settings = Settings::resolve(&SettingsLayer::default(), &SettingsLayer::default());
         sim_assert_eq!(
@@ -109,7 +109,7 @@ mod tests {
     }
 
     /// The config file's values are reachable when no override is given.
-    #[test]
+    #[test_util::test]
     fn config_layer_is_reachable_without_overrides() {
         let config = SettingsLayer {
             strict: Some(false),
@@ -133,7 +133,7 @@ mod tests {
 
     /// Explicit overrides win in both directions, including `false` over a
     /// config value of `true`.
-    #[test]
+    #[test_util::test]
     fn overrides_win_over_config_in_both_directions() {
         let config = SettingsLayer {
             strict: Some(true),

@@ -52,4 +52,6 @@ blake3 = "1"
 dirs = "6"
 
 [dev-dependencies]
+color-eyre.workspace = true
 tempfile = "3"
+test-util.workspace = true

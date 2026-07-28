@@ -983,11 +983,9 @@ mod tests {
     use similar_asserts::assert_eq as sim_assert_eq;
 
     /// Every language code round-trips through display, parsing, and serde.
-    #[test]
+    #[test_util::test]
     fn test_code() -> eyre::Result<()> {
         use std::str::FromStr;
-        crate::tests::init();
-
         for language in Language::iter() {
             sim_assert_eq!(have: format!("{language}"), want: language.code());
             sim_assert_eq!(have: language.to_string(), want: language.code());

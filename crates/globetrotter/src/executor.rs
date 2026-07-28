@@ -999,7 +999,7 @@ mod tests {
     }
 
     /// Filename prefixing uses the source file stem without its extension.
-    #[tokio::test]
+    #[test_util::test]
     async fn prepend_filename_prefixes_with_file_stem() -> eyre::Result<()> {
         let configs: config::Configs<FileId> = vec![];
         let printer = crate::diagnostics::Printer::default();
@@ -1032,7 +1032,7 @@ mod tests {
     }
 
     /// Relative-path prefixing keeps every directory and filename segment.
-    #[tokio::test]
+    #[test_util::test]
     async fn prepend_relative_path_prefixes_with_full_path_segments() -> eyre::Result<()> {
         let configs: config::Configs<FileId> = vec![];
         let printer = crate::diagnostics::Printer::default();
@@ -1077,7 +1077,7 @@ mod tests {
     }
 
     /// An explicit prefix works without enabling relative-path prefixing.
-    #[tokio::test]
+    #[test_util::test]
     async fn prepend_relative_path_disabled_preserves_existing_behavior() -> eyre::Result<()> {
         let configs: config::Configs<FileId> = vec![];
         let printer = crate::diagnostics::Printer::default();
@@ -1110,7 +1110,7 @@ mod tests {
     }
 
     /// Exclusion patterns remove matched files without producing diagnostics.
-    #[test]
+    #[test_util::test]
     fn unique_input_paths_respects_exclude_patterns() -> eyre::Result<()> {
         let dir = temp_dir("exclude-patterns")?;
         let keep = dir.join("keep.toml");
@@ -1138,7 +1138,7 @@ mod tests {
     }
 
     /// Every enabled output backend contributes its parent to scan exclusions.
-    #[test]
+    #[test_util::test]
     fn output_dirs_include_all_generated_output_parents() -> eyre::Result<()> {
         let base = temp_dir("output-dirs")?;
 

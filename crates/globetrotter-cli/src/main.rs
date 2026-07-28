@@ -220,17 +220,3 @@ async fn main() -> eyre::Result<std::process::ExitCode> {
     tracing::debug!(elapsed = ?start.elapsed(), "completed");
     Ok(exit_code)
 }
-
-#[cfg(test)]
-pub mod tests {
-    //! Shared test helpers.
-
-    static INIT: std::sync::Once = std::sync::Once::new();
-
-    /// Installs `color_eyre` once for tests that return reports.
-    pub fn init() {
-        INIT.call_once(|| {
-            color_eyre::install().ok();
-        });
-    }
-}

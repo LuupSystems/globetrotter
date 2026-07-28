@@ -155,19 +155,20 @@ impl Cache {
 mod tests {
     use super::Cache;
     use crate::Verdict;
+    use color_eyre::eyre::{self, OptionExt, WrapErr};
 
-    fn temp_cache(capacity: usize) -> (tempfile::TempDir, Cache) {
-        let dir = tempfile::tempdir().expect("temp dir");
+    fn temp_cache(capacity: usize) -> eyre::Result<(tempfile::TempDir, Cache)> {
+        let dir = tempfile::tempdir()?;
         let cache = Cache::open(Some(dir.path()), capacity)
-            .expect("open cache")
-            .expect("caching enabled");
-        (dir, cache)
+            .wrap_err("failed to open the test cache")?
+            .ok_or_eyre("test cache was disabled")?;
+        Ok((dir, cache))
     }
 
     /// Stored verdicts can be retrieved by their content key.
-    #[test]
+    #[test_util::test]
     fn round_trips_a_verdict() {
-        let (_dir, cache) = temp_cache(10);
+        let (_dir, cache) = temp_cache(10)?;
         let key = cache.key(&["model", "prompt"]);
         assert!(cache.lookup(&key).is_none());
 
@@ -175,56 +176,52 @@ mod tests {
             consistent: true,
             issues: vec![],
         };
-        cache.store(&key, &verdict).expect("store");
-        let hit = cache.lookup(&key).expect("hit");
+        cache.store(&key, &verdict)?;
+        let hit = cache.lookup(&key).ok_or_eyre("cached verdict missing")?;
         assert!(hit.consistent);
     }
 
     /// Length-prefixed hashing must keep part boundaries significant.
-    #[test]
+    #[test_util::test]
     fn adjacent_parts_do_not_collide() {
-        let (_dir, cache) = temp_cache(10);
+        let (_dir, cache) = temp_cache(10)?;
         assert_ne!(cache.key(&["ab", "c"]), cache.key(&["a", "bc"]));
     }
 
     /// A zero capacity disables cache creation explicitly.
-    #[test]
+    #[test_util::test]
     fn zero_capacity_disables_caching() {
-        let dir = tempfile::tempdir().expect("temp dir");
-        assert!(
-            Cache::open(Some(dir.path()), 0)
-                .expect("open cache")
-                .is_none()
-        );
+        let dir = tempfile::tempdir()?;
+        assert!(Cache::open(Some(dir.path()), 0)?.is_none());
     }
 
     /// Capacity enforcement retains exactly the configured number of entries.
-    #[test]
+    #[test_util::test]
     fn evicts_down_to_capacity() {
-        let (dir, cache) = temp_cache(2);
+        let (dir, cache) = temp_cache(2)?;
         let verdict = Verdict {
             consistent: true,
             issues: vec![],
         };
         for name in ["a", "b", "c", "d"] {
             let key = cache.key(&[name]);
-            cache.store(&key, &verdict).expect("store");
+            cache.store(&key, &verdict)?;
         }
-        cache.enforce_capacity().expect("enforce");
+        cache.enforce_capacity()?;
 
         // Exactly `capacity` entries survive eviction.
-        let remaining: usize = walkdir_count(dir.path());
+        let remaining: usize = walkdir_count(dir.path())?;
         assert_eq!(remaining, 2);
     }
 
     /// Counts regular files under `root` recursively.
-    fn walkdir_count(root: &std::path::Path) -> usize {
+    fn walkdir_count(root: &std::path::Path) -> eyre::Result<usize> {
         let mut count = 0;
         let mut stack = vec![root.to_path_buf()];
         while let Some(dir) = stack.pop() {
-            for entry in std::fs::read_dir(dir).expect("read dir") {
-                let entry = entry.expect("entry");
-                let file_type = entry.file_type().expect("file type");
+            for entry in std::fs::read_dir(dir)? {
+                let entry = entry?;
+                let file_type = entry.file_type()?;
                 if file_type.is_dir() {
                     stack.push(entry.path());
                 } else {
@@ -232,6 +229,6 @@ mod tests {
                 }
             }
         }
-        count
+        Ok(count)
     }
 }

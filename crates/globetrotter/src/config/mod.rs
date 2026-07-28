@@ -260,7 +260,7 @@ mod tests {
 
     /// Every settings key parses into the config's [`SettingsLayer`],
     /// including the `engine` and `absolute` spelling aliases.
-    #[test]
+    #[test_util::test]
     fn parses_settings_keys_and_aliases() -> eyre::Result<()> {
         use globetrotter_model::{TemplateEngine, diagnostics::Spanned};
 
@@ -299,7 +299,7 @@ mod tests {
     }
 
     /// Numeric, string, and prefixed version-one spellings parse identically.
-    #[test]
+    #[test_util::test]
     fn test_parse_version() -> eyre::Result<()> {
         fn parse_version_wrapper(
             value: impl Into<Spanned<Value>>,

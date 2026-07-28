@@ -222,10 +222,8 @@ mod tests {
     }
 
     /// The generated type preserves literal keys and typed template arguments.
-    #[test]
+    #[test_util::test]
     fn generate_type() -> eyre::Result<()> {
-        crate::tests::init();
-
         let translations = model::Translations(
             [
                 (
@@ -283,10 +281,8 @@ mod tests {
     }
 
     /// SWC can parse the reference interface used by the generator tests.
-    #[test]
+    #[test_util::test]
     fn parse_reference_interface() -> eyre::Result<()> {
-        crate::tests::init();
-
         let source_code = indoc! {r#"
             export type Translations = {
                 test: string;

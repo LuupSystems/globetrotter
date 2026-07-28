@@ -469,7 +469,7 @@ mod tests {
         crate::Translations::from_str(raw, 0, false, &mut diagnostics)
     }
 
-    #[test]
+    #[test_util::test]
     fn rejects_unknown_allow_code() {
         // spellcheck:ignore-next-line
         let result = parse("[greeting]\nen = \"Hi\"\nallow = [\"duplicat\"]\n");
@@ -480,7 +480,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_util::test]
     fn accepts_known_allow_codes_and_all() {
         for code in ["duplicate", "llm-drift", "missing-language", "all"] {
             let raw = format!("[greeting]\nen = \"Hi\"\nallow = [\"{code}\"]\n");
@@ -488,7 +488,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_util::test]
     fn rejects_unknown_single_string_allow() {
         let result = parse("[greeting]\nen = \"Hi\"\nallow = \"nope\"\n");
         assert!(
@@ -499,7 +499,7 @@ mod tests {
 
     /// Non-string leaf values produce the normal typed parse error instead of
     /// falling through an unfinished catch-all error path.
-    #[test]
+    #[test_util::test]
     fn rejects_non_string_translation_values() {
         let result = parse("[greeting]\nen = 42\n");
         assert!(

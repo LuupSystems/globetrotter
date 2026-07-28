@@ -512,23 +512,23 @@ fn first_json_object(text: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::{Verdict, first_json_object, parse_verdict};
+    use color_eyre::eyre::{self, OptionExt};
 
     /// A bare structured response parses directly.
-    #[test]
+    #[test_util::test]
     fn parses_a_bare_verdict() {
-        let verdict: Verdict =
-            parse_verdict(r#"{"consistent": true, "issues": []}"#).expect("parse");
+        let verdict: Verdict = parse_verdict(r#"{"consistent": true, "issues": []}"#)?;
         assert!(verdict.consistent);
         assert!(verdict.issues.is_empty());
     }
 
     /// The recovery path receives free-form model output; a fenced or
     /// prose-wrapped JSON object must still parse.
-    #[test]
+    #[test_util::test]
     fn parses_a_fenced_verdict() {
         let content = "Here is my verdict:\n```json\n{\"consistent\": false, \
                        \"issues\": [{\"language\": \"de\", \"problem\": \"says {x}\"}]}\n```";
-        let verdict = parse_verdict(content).expect("parse");
+        let verdict = parse_verdict(content)?;
         assert!(!verdict.consistent);
         assert_eq!(verdict.issues[0].language, "de");
         // Braces inside JSON strings do not affect balanced-block extraction.
@@ -539,7 +539,7 @@ mod tests {
 
     /// A template without the placeholders would render one identical prompt
     /// for every key (and thus one shared cache entry); creation must fail.
-    #[test]
+    #[test_util::test]
     fn rejects_template_without_placeholders() {
         let options = crate::Options {
             template: Some("judge this: {key}".to_string()),
@@ -547,23 +547,23 @@ mod tests {
         };
         let missing = match crate::Judge::new(options) {
             Err(crate::Error::Template { missing }) => missing,
-            Err(other) => panic!("expected a template error, got: {other}"),
-            Ok(_) => panic!("a template without {{languages}} must be rejected"),
+            Err(other) => eyre::bail!("expected a template error, got: {other}"),
+            Ok(_) => eyre::bail!("a template without {{languages}} must be rejected"),
         };
         assert_eq!(missing, "{languages}");
     }
 
     /// Explicit confidence values survive response parsing.
-    #[test]
+    #[test_util::test]
     fn parses_an_explicit_confidence() {
         let content = r#"{"consistent": false, "issues": [{"language": "fr",
             "problem": "different action", "confidence": 0.4}]}"#;
-        let verdict = parse_verdict(content).expect("parse");
+        let verdict = parse_verdict(content)?;
         assert!((verdict.issues[0].confidence - 0.4).abs() < f64::EPSILON);
     }
 
     /// Balanced-object extraction ignores braces inside JSON strings.
-    #[test]
+    #[test_util::test]
     fn finds_balanced_object_with_braces_in_strings() {
         let text = r#"noise {"a": "{not a block}", "b": {"c": 1}} trailing"#;
         assert_eq!(
@@ -573,9 +573,9 @@ mod tests {
     }
 
     /// The derived schema satisfies strict structured-output requirements.
-    #[test]
+    #[test_util::test]
     fn schema_derives_with_closed_objects() {
-        let schema = serde_json::to_value(schemars::schema_for!(Verdict)).expect("schema");
+        let schema = serde_json::to_value(schemars::schema_for!(Verdict))?;
         // Strict structured output requires closed objects; `deny_unknown_fields`
         // must surface as `additionalProperties: false` at the top level.
         assert_eq!(schema["additionalProperties"], serde_json::json!(false));
@@ -585,7 +585,7 @@ mod tests {
         let issue_required = &schema["$defs"]["Issue"]["required"];
         let required: Vec<&str> = issue_required
             .as_array()
-            .expect("required array")
+            .ok_or_eyre("the schema's `required` property is not an array")?
             .iter()
             .filter_map(serde_json::Value::as_str)
             .collect();

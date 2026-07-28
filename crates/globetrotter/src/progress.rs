@@ -133,7 +133,7 @@ mod test {
     use similar_asserts::assert_eq as sim_assert_eq;
 
     /// Right padding measures visible text rather than ANSI escape bytes.
-    #[test]
+    #[test_util::test]
     fn test_pad_right() {
         sim_assert_eq!(have: super::pad_right("test", 7, ' '), want: "test   ");
         sim_assert_eq!(have: super::pad_right("test", 2, ' '), want: "test");
@@ -149,7 +149,7 @@ mod test {
     }
 
     /// Left padding measures visible text rather than ANSI escape bytes.
-    #[test]
+    #[test_util::test]
     fn test_pad_left() {
         sim_assert_eq!(have: super::pad_left("test", 7, ' '), want: "   test");
         sim_assert_eq!(have: super::pad_left("test", 2, ' '), want: "test");

@@ -181,7 +181,7 @@ mod tests {
 
     /// Required languages missing during generation are reported once even
     /// when the configuration lists the same language more than once.
-    #[test]
+    #[test_util::test]
     fn reports_missing_required_languages() {
         let translations = translations_with_only_english();
         let required_languages = [
@@ -212,7 +212,7 @@ mod tests {
     }
 
     /// Strict generation promotes a missing required language to an error.
-    #[test]
+    #[test_util::test]
     fn strict_mode_promotes_missing_language_to_error() {
         let translations = translations_with_only_english();
         let required_languages = [Spanned::dummy(Language::De)];

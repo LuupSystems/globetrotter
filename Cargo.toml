@@ -87,6 +87,7 @@ futures = "0"
 # testing
 color-eyre = "0"
 similar-asserts = "1"
+test-util = { path = "./crates/test-util" }
 
 # CLI
 clap = { version = "4", features = ["derive", "env"]}

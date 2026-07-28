@@ -283,7 +283,7 @@ mod tests {
     }
 
     /// An empty catalog avoids building a pattern automaton.
-    #[test]
+    #[test_util::test]
     fn empty_key_set_returns_no_diagnostics() -> eyre::Result<()> {
         let dir = temp_dir("empty")?;
         let diagnostics =
@@ -294,7 +294,7 @@ mod tests {
     }
 
     /// An explicitly requested root is scanned even when it contains a config.
-    #[test]
+    #[test_util::test]
     fn explicit_root_with_config_file_is_still_scanned() -> eyre::Result<()> {
         let dir = temp_dir("root-config")?;
         std::fs::write(dir.join(".globetrotter.yaml"), "version: 1\nconfigs: []\n")?;

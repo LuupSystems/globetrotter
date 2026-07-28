@@ -98,3 +98,4 @@ mimalloc = "0"
 color-eyre.workspace = true
 similar-asserts.workspace = true
 indoc.workspace = true
+test-util.workspace = true

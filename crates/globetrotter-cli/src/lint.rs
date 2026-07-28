@@ -143,17 +143,19 @@ fn format_duration(duration: std::time::Duration) -> String {
 #[cfg(test)]
 mod tests {
     use super::ad_hoc_translation_config;
+    use color_eyre::eyre::OptionExt;
     use std::path::PathBuf;
 
     /// `--translation` files become one config with an input per file, with no
     /// settings of their own: flags like `--engine` apply through the
     /// executor's overrides layer instead.
-    #[test]
+    #[test_util::test]
     fn ad_hoc_config_collects_inputs_without_settings() {
         assert!(ad_hoc_translation_config(&[]).is_none());
 
         let translations = vec![PathBuf::from("translations/common.toml")];
-        let config = ad_hoc_translation_config(&translations).unwrap();
+        let config = ad_hoc_translation_config(&translations)
+            .ok_or_eyre("an ad hoc config was not created")?;
 
         assert_eq!(config.config.inputs.len(), 1);
         assert_eq!(

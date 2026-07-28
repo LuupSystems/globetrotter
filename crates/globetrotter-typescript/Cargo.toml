@@ -60,5 +60,6 @@ serde_json = { workspace = true }
 color-eyre.workspace = true
 similar-asserts.workspace = true
 indoc = "2"
+test-util.workspace = true
 # include ecma parser for reference
 swc_core = { version = "69", features = ["base", "common", "ecma_ast", "ecma_parser"] }

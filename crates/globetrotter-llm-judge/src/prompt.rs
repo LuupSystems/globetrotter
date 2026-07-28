@@ -80,7 +80,7 @@ mod tests {
     use super::{DEFAULT_TEMPLATE, render};
     use crate::{KeyInput, LanguageText};
 
-    #[test]
+    #[test_util::test]
     fn renders_key_and_languages() {
         let key = KeyInput {
             key: "actions.save",

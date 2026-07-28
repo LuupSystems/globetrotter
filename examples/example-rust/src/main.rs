@@ -161,25 +161,14 @@ mod tests {
     use color_eyre::eyre;
     use similar_asserts::assert_eq as sim_assert_eq;
 
-    static INIT: std::sync::Once = std::sync::Once::new();
-
-    /// Installs `color_eyre` once for tests that return reports.
-    pub fn init() {
-        INIT.call_once(|| {
-            color_eyre::install().ok();
-        });
-    }
-
     fn build_translator(json_translations: &str) -> eyre::Result<MyTranslator<Translation<'_>>> {
         let reader = std::io::Cursor::new(json_translations);
         MyTranslator::from_reader(reader)
     }
 
     /// Generated translation variants serialize only their template arguments.
-    #[test]
+    #[test_util::test]
     fn test_translation_key() -> eyre::Result<()> {
-        crate::tests::init();
-
         sim_assert_eq!(
             have: serde_json::to_value(Translation::TranslationLiteral {})?,
             want: serde_json::json!({})
@@ -192,10 +181,8 @@ mod tests {
     }
 
     /// German JSON renders literal and templated values.
-    #[test]
+    #[test_util::test]
     fn test_de() -> eyre::Result<()> {
-        crate::tests::init();
-
         let translator = build_translator(JSON_TRANSLATIONS_DE)?;
         let have = translator
             .translate(&Translation::TranslationLiteral {})
@@ -210,10 +197,8 @@ mod tests {
     }
 
     /// English JSON renders literal and templated values.
-    #[test]
+    #[test_util::test]
     fn test_en() -> eyre::Result<()> {
-        crate::tests::init();
-
         let translator = build_translator(JSON_TRANSLATIONS_EN)?;
         let have = translator
             .translate(&Translation::TranslationLiteral {})
@@ -228,10 +213,8 @@ mod tests {
     }
 
     /// French JSON renders literal and templated values.
-    #[test]
+    #[test_util::test]
     fn test_fr() -> eyre::Result<()> {
-        crate::tests::init();
-
         let translator = build_translator(JSON_TRANSLATIONS_FR)?;
         let have = translator
             .translate(&Translation::TranslationLiteral {})

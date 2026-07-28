@@ -26,16 +26,3 @@ pub fn preamble() -> String {
         std::env!("CARGO_PKG_VERSION"),
     ))
 }
-
-// Keep test setup unavailable when the SWC backend itself is absent.
-#[cfg(all(test, feature = "swc"))]
-pub(crate) mod tests {
-    static INIT: std::sync::Once = std::sync::Once::new();
-
-    /// Installs `color_eyre` once for tests that return reports.
-    pub fn init() {
-        INIT.call_once(|| {
-            color_eyre::install().ok();
-        });
-    }
-}

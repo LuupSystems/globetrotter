@@ -268,20 +268,9 @@ mod tests {
     use globetrotter_model::{self as model, diagnostics::Spanned};
     use similar_asserts::assert_eq as sim_assert_eq;
 
-    static INIT: std::sync::Once = std::sync::Once::new();
-
-    /// Installs `color_eyre` once for tests that return reports.
-    pub fn init() {
-        INIT.call_once(|| {
-            color_eyre::install().ok();
-        });
-    }
-
     /// String arguments introduce a lifetime on the generated enum.
-    #[test]
+    #[test_util::test]
     fn generate_enum_with_lifetime() -> eyre::Result<()> {
-        crate::tests::init();
-
         let translations = [
             (
                 Spanned::dummy("test.one".to_string()),
@@ -360,10 +349,8 @@ mod tests {
     }
 
     /// Owned argument types produce an enum without unused generics.
-    #[test]
+    #[test_util::test]
     fn generate_enum_without_lifetime() -> eyre::Result<()> {
-        crate::tests::init();
-
         let translations = [
             (
                 Spanned::dummy("test.one".to_string()),

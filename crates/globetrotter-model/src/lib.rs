@@ -72,7 +72,7 @@ mod template_engine_tests {
     use super::TemplateEngine;
 
     /// Known names, aliases, and custom engine names parse without recursion.
-    #[test]
+    #[test_util::test]
     fn parses_engine_names_without_recursing() {
         assert_eq!("handlebars".parse(), Ok(TemplateEngine::Handlebars));
         assert_eq!("golang".parse(), Ok(TemplateEngine::Golang));
@@ -262,17 +262,5 @@ impl IntoIterator for Translations {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    static INIT: std::sync::Once = std::sync::Once::new();
-
-    /// Installs `color_eyre` once for tests that return reports.
-    pub fn init() {
-        INIT.call_once(|| {
-            color_eyre::install().ok();
-        });
     }
 }

@@ -603,6 +603,7 @@ fn lint_duplicates(
 mod tests {
     use super::{LintOptions, handlebars_variables};
     use crate::{Language, Translations, diagnostics::Spanned};
+    use color_eyre::eyre::{self, OptionExt};
     use similar_asserts::assert_eq as sim_assert_eq;
     use std::collections::BTreeSet;
 
@@ -613,7 +614,7 @@ mod tests {
             .collect()
     }
 
-    #[test]
+    #[test_util::test]
     fn extracts_simple_and_helper_variables() {
         sim_assert_eq!(have: vars("{{name}}"), want: vec!["name".to_string()]);
         sim_assert_eq!(have: vars("{{uppercase name}}"), want: vec!["name".to_string()]);
@@ -623,7 +624,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_util::test]
     fn excludes_block_locals_and_this() {
         sim_assert_eq!(
             have: vars("{{#each items}}{{this}}{{/each}}"),
@@ -635,24 +636,26 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_util::test]
     fn invalid_template_returns_none() {
         assert!(handlebars_variables("{{#each}}").is_none());
         assert!(handlebars_variables("{{unclosed").is_none());
     }
 
-    #[test]
+    #[test_util::test]
     fn plain_text_has_no_variables() {
-        sim_assert_eq!(have: handlebars_variables("just text").unwrap(), want: BTreeSet::new());
+        let variables =
+            handlebars_variables("just text").ok_or_eyre("plain text did not compile")?;
+        sim_assert_eq!(have: variables, want: BTreeSet::new());
     }
 
     fn lint(
         raw: &str,
         required: &[Language],
         detect_duplicates: bool,
-    ) -> Vec<(Option<String>, String)> {
+    ) -> eyre::Result<Vec<(Option<String>, String)>> {
         let mut parse_diagnostics = vec![];
-        let translations = Translations::from_str(raw, 0, false, &mut parse_diagnostics).unwrap();
+        let translations = Translations::from_str(raw, 0, false, &mut parse_diagnostics)?;
         let required: Vec<Spanned<Language>> =
             required.iter().copied().map(Spanned::dummy).collect();
         let options = LintOptions {
@@ -663,33 +666,33 @@ mod tests {
         };
         let mut diagnostics = vec![];
         translations.lint(&mut diagnostics, &options);
-        diagnostics
+        Ok(diagnostics
             .into_iter()
             .map(|d| (d.code, d.message))
-            .collect()
+            .collect())
     }
 
-    fn messages(raw: &str, required: &[Language]) -> Vec<String> {
-        lint(raw, required, false)
+    fn messages(raw: &str, required: &[Language]) -> eyre::Result<Vec<String>> {
+        Ok(lint(raw, required, false)?
             .into_iter()
             .map(|(_, m)| m)
-            .collect()
+            .collect())
     }
 
-    #[test]
+    #[test_util::test]
     fn flags_missing_required_language() {
         let raw = "\n[greeting]\nen = \"Hello\"\n";
-        let msgs = messages(raw, &[Language::En, Language::De]);
+        let msgs = messages(raw, &[Language::En, Language::De])?;
         assert!(
             msgs.iter().any(|m| m == "missing `de` translation"),
             "{msgs:?}"
         );
     }
 
-    #[test]
+    #[test_util::test]
     fn flags_empty_and_whitespace_values() {
         let raw = "\n[a]\nen = \"\"\nde = \" Hallo \"\n";
-        let msgs = messages(raw, &[]);
+        let msgs = messages(raw, &[])?;
         assert!(
             msgs.iter().any(|m| m == "empty `en` translation"),
             "{msgs:?}"
@@ -701,10 +704,10 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_util::test]
     fn flags_template_argument_problems() {
         let raw = "\n[greeting]\nen = \"Hello {{name}}\"\nde = \"Hallo\"\narguments = { title = \"string\" }\n";
-        let msgs = messages(raw, &[]);
+        let msgs = messages(raw, &[])?;
         assert!(
             msgs.iter()
                 .any(|m| m == "placeholder `{{name}}` is missing from the `de` translation"),
@@ -722,10 +725,10 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_util::test]
     fn flags_undeclared_arguments_without_arguments_table() {
         let raw = "\n[greeting]\nen = \"Hello {{name}}\"\n";
-        let msgs = messages(raw, &[]);
+        let msgs = messages(raw, &[])?;
         assert!(
             msgs.iter()
                 .any(|m| m == "template uses `{{name}}` which is not declared in `arguments`"),
@@ -733,41 +736,41 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_util::test]
     fn flags_template_compile_error() {
         let raw = "\n[a]\nen = \"{{#each}}\"\n";
-        let msgs = messages(raw, &[]);
+        let msgs = messages(raw, &[])?;
         assert!(
             msgs.iter().any(|m| m == "`en` template fails to compile"),
             "{msgs:?}"
         );
     }
 
-    #[test]
+    #[test_util::test]
     fn clean_translations_produce_no_diagnostics() {
         let raw = "\n[greeting]\nde = \"Hallo {{name}}\"\nen = \"Hello {{name}}\"\narguments = { name = \"string\" }\n";
-        let msgs = messages(raw, &[Language::De, Language::En]);
+        let msgs = messages(raw, &[Language::De, Language::En])?;
         assert!(msgs.is_empty(), "{msgs:?}");
     }
 
-    #[test]
+    #[test_util::test]
     fn allow_key_suppresses_a_lint() {
         // `b` is missing `de` but allows the missing-language lint.
         let raw = concat!(
             "\n[a]\nen = \"Hello\"\nde = \"Hallo\"\n",
             "\n[b]\nen = \"Bye\"\nallow = [\"missing-language\"]\n"
         );
-        let msgs = messages(raw, &[Language::En, Language::De]);
+        let msgs = messages(raw, &[Language::En, Language::De])?;
         assert!(msgs.iter().all(|m| !m.contains("missing `de`")), "{msgs:?}");
     }
 
-    #[test]
+    #[test_util::test]
     fn detects_identical_translations_ignoring_case() {
         let raw = concat!(
             "\n[one]\nen = \"please upload your documents now\"\n",
             "\n[two]\nen = \"Please upload your documents now\"\n"
         );
-        let found = lint(raw, &[], true);
+        let found = lint(raw, &[], true)?;
         assert!(
             found
                 .iter()
@@ -777,7 +780,7 @@ mod tests {
     }
 
     /// Similar but unequal strings do not count as duplicates.
-    #[test]
+    #[test_util::test]
     fn near_duplicates_are_not_reported() {
         // A one-word variation (`connect`/`connected`) must not satisfy exact
         // duplicate matching.
@@ -785,7 +788,7 @@ mod tests {
             "\n[connect]\nen = \"connect to the Europace service\"\n",
             "\n[connected]\nen = \"connected to the Europace service\"\n"
         );
-        let found = lint(raw, &[], true);
+        let found = lint(raw, &[], true)?;
         assert!(
             found
                 .iter()
@@ -795,11 +798,11 @@ mod tests {
     }
 
     /// Exact duplicate detection also applies to single-word translations.
-    #[test]
+    #[test_util::test]
     fn detects_single_word_duplicates() {
         // One shared word still forms an exact duplicate.
         let raw = concat!("\n[save]\nen = \"Save\"\n", "\n[store]\nen = \"Save\"\n");
-        let found = lint(raw, &[], true);
+        let found = lint(raw, &[], true)?;
         assert!(
             found
                 .iter()
@@ -809,11 +812,11 @@ mod tests {
     }
 
     /// A likely untranslated copy is reported without flagging distinct values.
-    #[test]
+    #[test_util::test]
     fn flags_identical_languages_within_a_key() {
         // English copied into German is likely untranslated.
         let raw = "\n[greeting]\nen = \"Hello\"\nde = \"Hello\"\nfr = \"Bonjour\"\n";
-        let found = lint(raw, &[], true);
+        let found = lint(raw, &[], true)?;
         assert!(
             found
                 .iter()
@@ -823,7 +826,7 @@ mod tests {
 
         // Distinct translations are not flagged.
         let ok = "\n[hi]\nen = \"Hello\"\nde = \"Hallo\"\nfr = \"Bonjour\"\n";
-        let found = lint(ok, &[], true);
+        let found = lint(ok, &[], true)?;
         assert!(
             found
                 .iter()
@@ -832,13 +835,13 @@ mod tests {
         );
     }
 
-    #[test]
+    #[test_util::test]
     fn allow_suppresses_duplicate() {
         let raw = concat!(
             "\n[one]\nen = \"please upload your documents now\"\n",
             "\n[two]\nen = \"please upload your documents now\"\nallow = [\"duplicate\"]\n"
         );
-        let found = lint(raw, &[], true);
+        let found = lint(raw, &[], true)?;
         assert!(
             found
                 .iter()

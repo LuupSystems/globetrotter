@@ -252,10 +252,8 @@ mod tests {
     use indoc::indoc;
     use similar_asserts::assert_eq as sim_assert_eq;
 
-    #[test]
+    #[test_util::test]
     fn sorts_keys_and_preserves_comments() {
-        crate::tests::init();
-
         let input = indoc! {r#"
             # leading comment
             [b.title]
@@ -282,14 +280,12 @@ mod tests {
             en = "B"
         "#};
 
-        let have = format_str(input, SortOrder::Ascending).unwrap();
+        let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: want);
     }
 
-    #[test]
+    #[test_util::test]
     fn descending_reverses_key_order_but_keeps_arguments_last() {
-        crate::tests::init();
-
         let input = indoc! {r#"
             [a]
             arguments = { name = "string" }
@@ -308,14 +304,12 @@ mod tests {
             arguments = { name = "string" }
         "#};
 
-        let have = format_str(input, SortOrder::Descending).unwrap();
+        let have = format_str(input, SortOrder::Descending)?;
         sim_assert_eq!(have: have, want: want);
     }
 
-    #[test]
+    #[test_util::test]
     fn already_sorted_is_unchanged() {
-        crate::tests::init();
-
         let input = indoc! {r#"
             [a]
             en = "A"
@@ -324,14 +318,12 @@ mod tests {
             en = "B"
         "#};
 
-        let have = format_str(input, SortOrder::Ascending).unwrap();
+        let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: input);
     }
 
-    #[test]
+    #[test_util::test]
     fn section_comments_move_with_their_section() {
-        crate::tests::init();
-
         // A stack of comment lines sits on top of each section header; they must
         // travel with the section when the sections are reordered.
         let input = indoc! {r#"
@@ -356,14 +348,12 @@ mod tests {
             en = "B"
         "#};
 
-        let have = format_str(input, SortOrder::Ascending).unwrap();
+        let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: want);
     }
 
-    #[test]
+    #[test_util::test]
     fn comment_above_a_language_key_moves_with_it() {
-        crate::tests::init();
-
         let input = indoc! {r#"
             [greeting]
             # note about en
@@ -378,14 +368,12 @@ mod tests {
             en = "E"
         "#};
 
-        let have = format_str(input, SortOrder::Ascending).unwrap();
+        let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: want);
     }
 
-    #[test]
+    #[test_util::test]
     fn removes_blank_lines_between_language_keys() {
-        crate::tests::init();
-
         let input = indoc! {r#"
             [greeting]
             de = "D"
@@ -403,14 +391,12 @@ mod tests {
             fr = "F"
         "#};
 
-        let have = format_str(input, SortOrder::Ascending).unwrap();
+        let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: want);
     }
 
-    #[test]
+    #[test_util::test]
     fn normalizes_blank_lines_between_sections_to_one() {
-        crate::tests::init();
-
         let input = indoc! {r#"
             [a]
             en = "A"
@@ -429,14 +415,12 @@ mod tests {
             en = "B"
         "#};
 
-        let have = format_str(input, SortOrder::Ascending).unwrap();
+        let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: want);
     }
 
-    #[test]
+    #[test_util::test]
     fn real_world_translation_file() {
-        crate::tests::init();
-
         // Mixed, unsorted real-world input covers section and language
         // comments, blank language gaps, oversized section gaps, and argument
         // metadata that must remain last.
@@ -476,18 +460,16 @@ mod tests {
             en = "Upload"
         "#};
 
-        let have = format_str(input, SortOrder::Ascending).unwrap();
+        let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: want);
 
         // A second pass must not introduce additional changes.
-        let again = format_str(&have, SortOrder::Ascending).unwrap();
+        let again = format_str(&have, SortOrder::Ascending)?;
         sim_assert_eq!(have: again, want: want);
     }
 
-    #[test]
+    #[test_util::test]
     fn preserves_blank_line_between_comment_paragraphs() {
-        crate::tests::init();
-
         // Keep the file-level comment and its separating blank distinct from
         // the first key's comment while languages are reordered.
         let input = indoc! {r#"
@@ -514,17 +496,15 @@ mod tests {
             en = "x"
         "#};
 
-        let have = format_str(input, SortOrder::Ascending).unwrap();
+        let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: want);
 
-        let again = format_str(&have, SortOrder::Ascending).unwrap();
+        let again = format_str(&have, SortOrder::Ascending)?;
         sim_assert_eq!(have: again, want: want);
     }
 
-    #[test]
+    #[test_util::test]
     fn collapses_multiple_blank_lines_in_a_comment_block() {
-        crate::tests::init();
-
         let input = indoc! {r#"
             # paragraph one
 
@@ -543,14 +523,12 @@ mod tests {
             en = "A"
         "#};
 
-        let have = format_str(input, SortOrder::Ascending).unwrap();
+        let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: want);
     }
 
-    #[test]
+    #[test_util::test]
     fn multiline_strings_are_untouched() {
-        crate::tests::init();
-
         // Sort keys around a multiline value without treating its blank-looking
         // lines as TOML decor.
         let input = indoc! {r#"
@@ -579,7 +557,7 @@ mod tests {
             en = "B"
         "#};
 
-        let have = format_str(input, SortOrder::Ascending).unwrap();
+        let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: want);
     }
 }

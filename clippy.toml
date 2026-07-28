@@ -1,7 +1,7 @@
-# unwrap/expect/panic/indexing are denied in production (workspace lints) but are the
-# idiomatic failure mode in tests — scope the denies to non-test code.
-allow-unwrap-in-tests = true
-allow-expect-in-tests = true
+# Tests propagate fallible setup through `eyre::Result`; panic and indexing
+# remain available for assertions where their failure output is useful.
+allow-unwrap-in-tests = false
+allow-expect-in-tests = false
 allow-panic-in-tests = true
 allow-indexing-slicing-in-tests = true
 
