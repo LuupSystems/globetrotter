@@ -71,7 +71,7 @@ impl Cache {
 
     /// Look up a verdict, bumping its recency on a hit.
     ///
-    /// An unreadable or unparseable entry (partial write, format change) is
+    /// An unreadable or unparsable entry (partial write, format change) is
     /// treated as a miss so it gets overwritten by the fresh verdict.
     #[must_use]
     pub fn lookup(&self, key: &str) -> Option<Verdict> {
