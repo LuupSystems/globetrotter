@@ -46,7 +46,6 @@ printf '%s\n' "$ansi" |
   freeze \
     --language ansi \
     --output "$output" \
-    --window \
     --shadow.blur 20 \
     --border.radius 8 \
     --padding 20
