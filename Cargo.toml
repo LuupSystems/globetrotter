@@ -86,7 +86,7 @@ futures = "0"
 
 # testing
 color-eyre = "0"
-similar-asserts = "1"
+similar-asserts = "2.0.0"
 test-util = { path = "./crates/test-util" }
 
 # CLI

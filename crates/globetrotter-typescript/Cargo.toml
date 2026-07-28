@@ -49,7 +49,7 @@ globetrotter-model.workspace = true
 unindent = "0"
 
 # optional: swc based typescript codegen
-swc_core = { version = "69", features = ["base", "common", "ecma_ast"], optional = true }
+swc_core = { version = "73.0.0", features = ["base", "common", "ecma_ast"], optional = true }
 anyhow = { version = "1", optional = true }
 
 # serialization
@@ -62,4 +62,4 @@ similar-asserts.workspace = true
 indoc = "2"
 test-util.workspace = true
 # include ecma parser for reference
-swc_core = { version = "69", features = ["base", "common", "ecma_ast", "ecma_parser"] }
+swc_core = { version = "73.0.0", features = ["base", "common", "ecma_ast", "ecma_parser"] }
