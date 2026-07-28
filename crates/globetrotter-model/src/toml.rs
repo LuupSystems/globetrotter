@@ -34,16 +34,6 @@ pub enum Error {
         /// The source span of the offending entry.
         span: Span,
     },
-    /// A not-yet-handled TOML structure was encountered.
-    #[error("{message}")]
-    TODO {
-        /// Human-readable description of the unhandled case.
-        message: String,
-        // expected: Vec<ValueKind>,
-        // found: ValueKind,
-        /// The source span of the offending value.
-        span: Span,
-    },
     /// Deserializing a value via serde failed.
     #[error("{source}")]
     Serde {
@@ -117,19 +107,6 @@ mod diagnostics {
                                 .with_message("not a known lint code"),
                         ])
                         .with_notes(vec![format!("valid codes are: {valid}")]);
-                    vec![diagnostic]
-                }
-                Self::TODO {
-                    // expected,
-                    // found,
-                    span,
-                    ..
-                } => {
-                    let diagnostic = Diagnostic::error()
-                        .with_message(self.to_string())
-                        .with_labels(vec![
-                            Label::primary(file_id, span.clone()).with_message("?".to_string()),
-                        ]);
                     vec![diagnostic]
                 }
                 Self::Serde { source, span } => {
@@ -311,7 +288,6 @@ pub fn parse_translation(
     let language = languages
         .into_iter()
         .map(|language| {
-            // // skip non-terminal values
             let (language_value, translation_value) =
                 table
                     .remove_entry(language.as_str())
@@ -369,13 +345,6 @@ fn flatten_toml_span(
                     .insert(Spanned::new(span, key.to_owned()), translation);
             }
 
-            // let table_tmp: Vec<(String, String)> = {
-            //     table
-            //         .iter()
-            //         .map(|(k, v)| (k.name.to_string(), format!("{:?}", v.as_ref())))
-            //         .collect()
-            // };
-
             // treat as non-terminal
             for (child_key, value) in table.iter_mut() {
                 let new_key: String = if key.is_empty() {
@@ -410,8 +379,12 @@ fn flatten_toml_span(
                         )?;
                     }
                     other => {
-                        return Err(Error::TODO {
-                            message: format!("extra stuff {other:?}"),
+                        return Err(Error::UnexpectedType {
+                            message: format!(
+                                "translation value at `{new_key}` must be a string, table, or array of tables"
+                            ),
+                            expected: vec![ValueKind::String, ValueKind::Table, ValueKind::Array],
+                            found: (&other).into(),
                             span: value.span.into(),
                         });
                     }
@@ -509,6 +482,23 @@ mod tests {
         let result = parse("[greeting]\nen = \"Hi\"\nallow = \"nope\"\n");
         assert!(
             matches!(result, Err(Error::UnknownLintCode { .. })),
+            "{result:?}"
+        );
+    }
+
+    /// Non-string leaf values produce the normal typed parse error instead of
+    /// falling through an unfinished catch-all error path.
+    #[test]
+    fn rejects_non_string_translation_values() {
+        let result = parse("[greeting]\nen = 42\n");
+        assert!(
+            matches!(
+                result,
+                Err(Error::UnexpectedType {
+                    found: super::ValueKind::Integer,
+                    ..
+                })
+            ),
             "{result:?}"
         );
     }

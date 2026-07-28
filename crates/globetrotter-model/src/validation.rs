@@ -7,8 +7,6 @@ use crate::{
 };
 #[cfg(feature = "rayon")]
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-#[cfg(feature = "rayon")]
-use itertools::Itertools;
 
 #[cfg(feature = "rayon")]
 fn validate_handlebars_template(translation: &Translation, errors: &mut Vec<Diagnostic<FileId>>) {
@@ -74,26 +72,36 @@ impl Translations {
             check_templates = options.check_templates,
             "validating",
         );
-        let partial_diagnostics = self.0.par_iter().flat_map(|(_key, translation)| {
+        let required_languages = options
+            .required_languages
+            .iter()
+            .map(|language| *language.as_ref())
+            .collect::<std::collections::BTreeSet<_>>();
+        let partial_diagnostics = self.0.par_iter().flat_map(|(key, translation)| {
             let mut diagnostics = vec![];
-            diagnostics.extend(options.required_languages.iter().unique().filter_map(|lang| {
-                #[allow(
-                    clippy::if_same_then_else,
-                    reason = "placeholder: the else branch will emit a MissingLanguage diagnostic once that validation is implemented"
-                )]
-                if translation.language.contains_key(lang.as_ref()) {
-                    None
-                } else {
-                    None
-                    // Some(ValidationError::MissingLanguage {
-                    //     key: key.to_string(),
-                    //     language: *lang,
-                    // })
-                }
-            }));
+            diagnostics.extend(
+                required_languages
+                    .iter()
+                    .filter(|language| !translation.language.contains_key(*language))
+                    .map(|language| {
+                        Diagnostic::warning_or_error(options.strict)
+                            .with_message(format!(
+                                "missing `{}` translation",
+                                language.code()
+                            ))
+                            .with_labels(vec![
+                                Label::primary(translation.file_id, key.span.clone()).with_message(
+                                    format!(
+                                        "`{}` has no `{}` translation",
+                                        key.as_ref(),
+                                        language.code()
+                                    ),
+                                ),
+                            ])
+                    }),
+            );
 
             if options.check_templates && translation.is_template() {
-                // Check that templates compile
                 match options.template_engine {
                     None => {
                         let message = format!(
@@ -130,5 +138,87 @@ impl Translations {
         });
 
         diagnostics.extend(partial_diagnostics.collect::<Vec<_>>());
+    }
+}
+
+#[cfg(all(test, feature = "rayon"))]
+mod tests {
+    use super::ValidationOptions;
+    use crate::{
+        Arguments, IndexMap, Language, LanguageTranslations, Translation, Translations,
+        diagnostics::Spanned,
+    };
+    use codespan_reporting::diagnostic::Severity;
+    use std::collections::BTreeSet;
+
+    fn translations_with_only_english() -> Translations {
+        Translations(IndexMap::from([(
+            Spanned::new(4..12, "greeting".to_string()),
+            Translation {
+                language: LanguageTranslations::from([(
+                    Language::En,
+                    Spanned::new(20..25, "Hello".to_string()),
+                )]),
+                arguments: Arguments::default(),
+                file_id: 7,
+                allow: BTreeSet::default(),
+            },
+        )]))
+    }
+
+    /// Required languages missing during generation are reported once even
+    /// when the configuration lists the same language more than once.
+    #[test]
+    fn reports_missing_required_languages() {
+        let translations = translations_with_only_english();
+        let required_languages = [
+            Spanned::dummy(Language::En),
+            Spanned::dummy(Language::De),
+            Spanned::dummy(Language::De),
+        ];
+        let options = ValidationOptions {
+            required_languages: &required_languages,
+            template_engine: None,
+            strict: false,
+            check_templates: false,
+        };
+        let mut diagnostics = Vec::new();
+
+        translations.validate(
+            &Spanned::dummy("app".to_string()),
+            Some(3),
+            &mut diagnostics,
+            &options,
+        );
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].severity, Severity::Warning);
+        assert_eq!(diagnostics[0].message, "missing `de` translation");
+        assert_eq!(diagnostics[0].labels[0].file_id, 7);
+        assert_eq!(diagnostics[0].labels[0].range, 4..12);
+    }
+
+    /// Strict generation promotes a missing required language to an error.
+    #[test]
+    fn strict_mode_promotes_missing_language_to_error() {
+        let translations = translations_with_only_english();
+        let required_languages = [Spanned::dummy(Language::De)];
+        let options = ValidationOptions {
+            required_languages: &required_languages,
+            template_engine: None,
+            strict: true,
+            check_templates: false,
+        };
+        let mut diagnostics = Vec::new();
+
+        translations.validate(
+            &Spanned::dummy("app".to_string()),
+            Some(3),
+            &mut diagnostics,
+            &options,
+        );
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].severity, Severity::Error);
     }
 }

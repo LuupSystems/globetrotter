@@ -19,11 +19,9 @@ pub enum Translation {
 )]
 pub enum Version {
     /// Version 1 of the schema.
-    #[serde(rename = "1", alias = "v1")]
+    #[serde(rename = "1", alias = "v1", alias = "latest")]
     #[default]
     V1,
-    // #[serde(rename = "latest")]
-    // Latest,
 }
 
 /// Errors that can occur while producing JSON translations.
@@ -117,5 +115,19 @@ impl crate::Translations {
             translations,
             language,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Version;
+
+    /// The moving `latest` input alias resolves to the only supported schema
+    /// while serialization remains pinned to its stable version number.
+    #[test]
+    fn latest_alias_resolves_to_v1() -> serde_json::Result<()> {
+        assert_eq!(serde_json::from_str::<Version>("\"latest\"")?, Version::V1);
+        assert_eq!(serde_json::to_string(&Version::V1)?, "\"1\"");
+        Ok(())
     }
 }
