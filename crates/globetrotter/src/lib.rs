@@ -18,11 +18,11 @@ pub mod executor;
 pub mod gzip;
 /// JSON translation output generation.
 pub mod json;
+/// LLM-judged translation-consistency review during linting.
+#[cfg(feature = "llm-judge")]
+pub mod llm_judge;
 /// Progress logging and output path formatting.
 pub mod progress;
-/// Cross-lingual semantic drift detection during linting.
-#[cfg(feature = "semantic")]
-pub mod semantic;
 /// Code generation targets and their per-target output errors.
 pub mod target;
 

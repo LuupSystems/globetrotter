@@ -29,61 +29,53 @@ pub struct LintParams {
     pub detect_duplicates: bool,
     /// Source directories to scan for unused keys; empty disables the check.
     pub usages: Vec<PathBuf>,
-    /// Semantic drift detection settings; `None` disables the check.
+    /// LLM-judged translation-consistency review; `None` disables the check.
     ///
-    /// Requires the `semantic` feature to be enabled in this build; otherwise a
-    /// request is ignored with a warning.
-    pub semantic: Option<SemanticParams>,
+    /// Requires the `llm-judge` feature to be enabled in this build; otherwise
+    /// a request is ignored with a warning.
+    pub llm_judge: Option<LlmJudgeParams>,
 }
 
-/// Cross-lingual sentence-embedding model used for semantic drift detection.
+/// Settings for the LLM-judged translation-consistency review.
 ///
-/// Kept independent of the `semantic` feature so callers (e.g. the CLI) can
-/// always construct [`LintParams`]; the actual model is only loaded when the
-/// feature is compiled in.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum SemanticModel {
-    /// `intfloat/multilingual-e5-small` — small, fast bi-encoder.
-    MultilingualE5Small,
-    /// `sentence-transformers/LaBSE` — bi-encoder purpose-built for cross-lingual
-    /// matching; the default and most reliable single model.
-    #[default]
-    Labse,
-    /// `BAAI/bge-reranker-v2-m3` — a multilingual cross-encoder reranker.
-    BgeRerankerV2M3,
-    /// `MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli` — a multilingual NLI
-    /// cross-encoder that scores semantic entailment between the two strings.
-    MultilingualMiniLmNli,
-    /// `MoritzLaurer/mDeBERTa-v3-base-mnli-xnli` — a multilingual NLI
-    /// cross-encoder on a DeBERTa-v3 backbone. Scores cross-lingual sentences
-    /// poorly (correct translations look like contradictions).
-    MdebertaV3Nli,
+/// Kept independent of the `llm-judge` feature so callers (e.g. the CLI) can
+/// always construct [`LintParams`]; requests only go out when the feature is
+/// compiled in. Field semantics match `globetrotter_llm_judge::Options` (not
+/// linked: that crate is absent from default-feature builds).
+#[derive(Debug, Clone)]
+pub struct LlmJudgeParams {
+    /// Base URL of the OpenAI-compatible endpoint.
+    pub base_url: String,
+    /// Model name as known to the endpoint.
+    pub model: String,
+    /// Environment variable read for the API key.
+    pub api_key_env: String,
+    /// Maximum number of in-flight requests.
+    pub concurrency: usize,
+    /// Sampling temperature.
+    pub temperature: f32,
+    /// Reasoning effort for models that support it; `None` sends none.
+    pub effort: Option<LlmJudgeEffort>,
+    /// Prompt template overriding the built-in one.
+    pub template: Option<String>,
+    /// Findings below this confidence are suppressed; `0.0` reports everything.
+    pub min_confidence: f64,
+    /// Verdict cache location; `None` uses the OS user cache directory.
+    pub cache_dir: Option<PathBuf>,
+    /// Maximum number of cached verdicts kept on disk; `0` disables caching.
+    pub cache_capacity: usize,
 }
 
-/// Settings for cross-lingual semantic drift detection.
-#[derive(Debug, Clone)]
-pub struct SemanticParams {
-    /// The model to use (for multi-word strings when `hybrid` is set).
-    pub model: SemanticModel,
-    /// Enable the hybrid router: a bilingual lexicon and cross-lingual word
-    /// vectors handle short strings, `model` handles multi-word strings.
-    pub hybrid: bool,
-    /// Only language pairs scoring below this similarity are reported.
-    pub threshold: f32,
-    /// Word-vector similarity threshold for short strings in hybrid mode.
-    pub clwe_threshold: f32,
-    /// Skip pairs where either string has fewer than this many words (or, in
-    /// hybrid mode, the boundary between the word-level and multi-word routes).
-    pub min_words: usize,
-    /// Maximum number of findings to report (most-divergent first); `0` is
-    /// unlimited.
-    pub top: usize,
-    /// Directory holding the hybrid data files (word vectors and dictionaries).
-    pub data_dir: Option<PathBuf>,
-    /// Optional user glossary merged into the lexicon for app-specific terms.
-    pub glossary: Option<PathBuf>,
-    /// Override for the model cache directory.
-    pub cache_dir: Option<PathBuf>,
+/// Reasoning effort requested from the judge model.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum LlmJudgeEffort {
+    /// Minimal reasoning; fastest.
+    Low,
+    /// Balanced reasoning; the tested sweet spot for drift detection.
+    #[default]
+    Medium,
+    /// Maximal reasoning; slowest.
+    High,
 }
 
 pub(crate) async fn write_to_file(path: &Path, data: impl AsRef<[u8]>) -> Result<PathBuf, IoError> {
@@ -226,6 +218,21 @@ fn combine_translations(
     )
 }
 
+/// Truncate `translations` to its first `max_keys` keys, warning about what is
+/// dropped; `None` is a no-op. See [`Executor::max_keys`].
+fn limit_keys(max_keys: Option<usize>, translations: &mut model::Translations) {
+    let Some(max_keys) = max_keys else {
+        return;
+    };
+    let total = translations.0.len();
+    if total > max_keys {
+        translations.0.truncate(max_keys);
+        tracing::warn!(
+            "processing only the first {max_keys} of {total} translation keys (max-keys limit)"
+        );
+    }
+}
+
 fn tally(severity: Severity, num_errors: &mut usize, num_warnings: &mut usize) {
     match severity {
         Severity::Bug | Severity::Error => *num_errors += 1,
@@ -247,6 +254,13 @@ pub struct Executor {
     pub diagnostic_printer: crate::diagnostics::Printer,
     /// Formats progress log lines.
     pub logger: Logger,
+    /// Process only the first N translation keys of each config; `None`
+    /// processes everything.
+    ///
+    /// A debugging aid: it lets a change (or the LLM judge) be tried against a
+    /// small subset of a real corpus before paying for a full run. Truncation
+    /// is warned about, never silent.
+    pub max_keys: Option<usize>,
 }
 
 impl Executor {
@@ -263,6 +277,7 @@ impl Executor {
             handlebars: handlebars::Handlebars::default(),
             diagnostic_printer,
             logger,
+            max_keys: None,
         }
     }
 
@@ -543,9 +558,11 @@ impl Executor {
             .into());
         }
 
-        let (translations, mut diagnostics) = tokio::task::spawn_blocking(|| {
+        let max_keys = self.max_keys;
+        let (translations, mut diagnostics) = tokio::task::spawn_blocking(move || {
             let mut diagnostics: Vec<Diagnostic<FileId>> = vec![];
-            let translations = combine_translations(translations, &mut diagnostics);
+            let mut translations = combine_translations(translations, &mut diagnostics);
+            limit_keys(max_keys, &mut translations);
             Ok::<_, Error>((Arc::new(translations), diagnostics))
         })
         .await??;
@@ -706,9 +723,11 @@ impl Executor {
             self.diagnostic_printer.emit(&diagnostic).await?;
         }
 
+        let max_keys = self.max_keys;
         let (translations, combine_diagnostics) = tokio::task::spawn_blocking(move || {
             let mut diagnostics = vec![];
-            let translations = combine_translations(translations, &mut diagnostics);
+            let mut translations = combine_translations(translations, &mut diagnostics);
+            limit_keys(max_keys, &mut translations);
             (Arc::new(translations), diagnostics)
         })
         .await?;
@@ -773,32 +792,17 @@ impl Executor {
         let mut num_warnings = 0;
         let mut defined_keys: Vec<crate::dead_keys::DefinedKey> = Vec::new();
 
-        // In hybrid mode, download any missing word vectors / dictionaries for
-        // the configs' languages into the data directory before analysis.
-        #[cfg(feature = "semantic")]
-        ensure_hybrid_data(params, &configs).await?;
-
-        // Load the embedding model once up front (it is downloaded on first use
-        // and slow to load), reusing it across every config.
-        #[cfg(feature = "semantic")]
-        let semantic_analyzer = match &params.semantic {
-            Some(params) => {
-                let spinner = semantic_spinner(
-                    "loading the semantic model (first run downloads weights)…".to_string(),
-                );
-                let params = params.clone();
-                let analyzer =
-                    tokio::task::spawn_blocking(move || crate::semantic::load_analyzer(&params))
-                        .await??;
-                spinner.finish_and_clear();
-                Some(Arc::new(analyzer))
-            }
+        // Create the judge once up front (cheap: no request is made until keys
+        // are judged), reusing its HTTP client and verdict cache across configs.
+        #[cfg(feature = "llm-judge")]
+        let llm_judge = match &params.llm_judge {
+            Some(params) => Some(crate::llm_judge::judge(params)?),
             None => None,
         };
-        #[cfg(not(feature = "semantic"))]
-        if params.semantic.is_some() {
+        #[cfg(not(feature = "llm-judge"))]
+        if params.llm_judge.is_some() {
             tracing::warn!(
-                "semantic drift detection was requested but this build was compiled without the `semantic` feature; skipping"
+                "the LLM judge was requested but this build was compiled without the `llm-judge` feature; skipping"
             );
         }
 
@@ -821,15 +825,12 @@ impl Executor {
                 }
             }
 
-            // Semantic findings are emitted as notes and deliberately not
-            // tallied: they are a review aid, not a pass/fail signal. They are
-            // streamed above the live progress bar as each is found.
-            #[cfg(feature = "semantic")]
-            if let (Some(analyzer), Some(semantic)) =
-                (semantic_analyzer.as_ref(), params.semantic.as_ref())
-            {
-                self.stream_semantic(analyzer, &translations, semantic)
-                    .await?;
+            // Judge findings are emitted as notes and deliberately not tallied:
+            // they are a review aid, not a pass/fail signal. They are streamed
+            // above the live progress bar as each verdict arrives.
+            #[cfg(feature = "llm-judge")]
+            if let Some(judge) = llm_judge.as_ref() {
+                self.stream_llm_judge(judge, &translations).await?;
             }
         }
 
@@ -858,146 +859,6 @@ impl Executor {
 
         Ok(self)
     }
-
-    /// Run semantic analysis for one config, streaming each finding above a live
-    /// progress bar as it is computed.
-    #[cfg(feature = "semantic")]
-    async fn stream_semantic(
-        &self,
-        analyzer: &Arc<globetrotter_semantic::Analyzer>,
-        translations: &Arc<model::Translations>,
-        params: &SemanticParams,
-    ) -> Result<(), Error> {
-        let bar = semantic_progress_bar();
-        let progress = crate::semantic::BarProgress(bar.clone());
-        let analyzer = Arc::clone(analyzer);
-        let translations = Arc::clone(translations);
-        let params = params.clone();
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Diagnostic<FileId>>();
-        let handle = tokio::task::spawn_blocking(move || {
-            crate::semantic::stream(
-                analyzer.as_ref(),
-                translations.as_ref(),
-                &params,
-                &progress,
-                &mut |diagnostic| {
-                    let _ = tx.send(diagnostic);
-                },
-            )
-        });
-        // In a terminal, print findings above the live bar; otherwise the bar is
-        // hidden (and would swallow `println`), so emit normally instead.
-        let interactive = std::io::IsTerminal::is_terminal(&std::io::stderr());
-        while let Some(diagnostic) = rx.recv().await {
-            if interactive {
-                let rendered = self.diagnostic_printer.render(&diagnostic).await?;
-                bar.println(rendered.trim_end());
-            } else {
-                self.diagnostic_printer.emit(&diagnostic).await?;
-            }
-        }
-        handle.await??;
-        bar.finish_and_clear();
-        Ok(())
-    }
-}
-
-/// A steady-ticking spinner for an indeterminate semantic phase (model load).
-/// Hidden when stderr is not a terminal, so piped/CI output stays clean.
-#[cfg(feature = "semantic")]
-fn semantic_spinner(message: String) -> indicatif::ProgressBar {
-    use std::io::IsTerminal;
-    let spinner = indicatif::ProgressBar::new_spinner();
-    if !std::io::stderr().is_terminal() {
-        spinner.set_draw_target(indicatif::ProgressDrawTarget::hidden());
-    }
-    spinner.set_message(message);
-    spinner.enable_steady_tick(std::time::Duration::from_millis(120));
-    spinner
-}
-
-/// Download any missing hybrid data files (word vectors and dictionaries) for
-/// the configs' languages, with a byte progress bar. No-op unless hybrid mode
-/// is enabled with a data directory.
-///
-/// # Errors
-///
-/// Returns an error if a download fails.
-#[cfg(feature = "semantic")]
-async fn ensure_hybrid_data(
-    params: &LintParams,
-    configs: &config::Configs<FileId>,
-) -> Result<(), Error> {
-    let Some(semantic) = &params.semantic else {
-        return Ok(());
-    };
-    let (true, Some(data_dir)) = (semantic.hybrid, semantic.data_dir.clone()) else {
-        return Ok(());
-    };
-    let languages = config_languages(configs);
-    if languages.is_empty() {
-        return Ok(());
-    }
-    let bar = semantic_download_bar();
-    let progress = crate::semantic::BarProgress(bar.clone());
-    tokio::task::spawn_blocking(move || {
-        crate::semantic::ensure_data(&data_dir, &languages, &progress)
-    })
-    .await??;
-    bar.finish_and_clear();
-    Ok(())
-}
-
-/// The distinct language codes declared across all configs, for downloading the
-/// matching hybrid data files.
-#[cfg(feature = "semantic")]
-fn config_languages(configs: &config::Configs<FileId>) -> Vec<String> {
-    let mut languages: BTreeSet<String> = BTreeSet::new();
-    for config_file in configs {
-        for language in &config_file.config.languages {
-            languages.insert(language.as_ref().to_string());
-        }
-    }
-    languages.into_iter().collect()
-}
-
-/// A byte-oriented progress bar for downloading hybrid data files.
-/// Hidden when stderr is not a terminal.
-#[cfg(feature = "semantic")]
-fn semantic_download_bar() -> indicatif::ProgressBar {
-    use std::io::IsTerminal;
-    let bar = indicatif::ProgressBar::new(0);
-    if std::io::stderr().is_terminal() {
-        let style = indicatif::ProgressStyle::with_template(
-            "{spinner:.cyan} {msg} {bar:30.cyan/blue} {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
-        )
-        .unwrap_or_else(|_| indicatif::ProgressStyle::default_bar());
-        bar.set_style(style);
-    } else {
-        bar.set_draw_target(indicatif::ProgressDrawTarget::hidden());
-    }
-    bar.enable_steady_tick(std::time::Duration::from_millis(120));
-    bar
-}
-
-/// A progress bar for the semantic scoring phase, counting language pairs.
-/// Hidden when stderr is not a terminal.
-#[cfg(feature = "semantic")]
-fn semantic_progress_bar() -> indicatif::ProgressBar {
-    use std::io::IsTerminal;
-    let bar = indicatif::ProgressBar::new(0);
-    if std::io::stderr().is_terminal() {
-        let style = indicatif::ProgressStyle::with_template(
-            "{spinner:.cyan} semantic: scoring {bar:30.cyan/blue} {pos}/{len} pairs ({eta})",
-        )
-        .unwrap_or_else(|_| indicatif::ProgressStyle::default_bar());
-        bar.set_style(style);
-    } else {
-        bar.set_draw_target(indicatif::ProgressDrawTarget::hidden());
-    }
-    bar.set_message("semantic: scoring");
-    bar.enable_steady_tick(std::time::Duration::from_millis(120));
-    bar
 }
 
 /// All canonical forms a usage of `key` may take across a config's enabled

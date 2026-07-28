@@ -50,6 +50,18 @@ impl Globetrotter {
             .color_choice
             .unwrap_or(termcolor::ColorChoice::Auto);
 
+        // An explicit `--color` must also govern `colored`-styled strings
+        // (progress paths, the judge's confidence badge), which otherwise only
+        // follow the crate's own terminal detection; `Auto` keeps that
+        // detection.
+        match color_choice {
+            termcolor::ColorChoice::Always | termcolor::ColorChoice::AlwaysAnsi => {
+                colored::control::set_override(true);
+            }
+            termcolor::ColorChoice::Never => colored::control::set_override(false),
+            termcolor::ColorChoice::Auto => {}
+        }
+
         let diagnostic_printer = DiagnosticsPrinter::new(color_choice);
 
         let mut config_file_paths = futures::stream::iter(&options.config_paths)
@@ -161,6 +173,7 @@ impl Globetrotter {
             logger: logger.clone(),
             diagnostic_printer: self.diagnostic_printer,
             handlebars: handlebars::Handlebars::default(),
+            max_keys: self.options.max_keys,
         };
 
         println!();

@@ -34,9 +34,9 @@ impl crate::Globetrotter {
     /// that fail to compile, placeholders that are inconsistent across
     /// languages, template arguments that are used but not declared (or declared
     /// but never used), and exact duplicate strings. With `--usages`, also reports
-    /// keys not referenced in the given source directories. With `--semantic`,
-    /// reports language pairs that appear to have semantically drifted apart
-    /// (a ranked review aid, emitted as notes). No files are written.
+    /// keys not referenced in the given source directories. With `--llm-judge`,
+    /// asks an LLM whether each key's languages all tell the user the same thing
+    /// (a review aid, emitted as notes). No files are written.
     ///
     /// Returns [`ExitCode::FAILURE`] (with a one-line summary) if any issues
     /// were found, otherwise [`ExitCode::SUCCESS`]. Genuine errors (missing or
@@ -72,25 +72,24 @@ impl crate::Globetrotter {
             logger,
             diagnostic_printer: self.diagnostic_printer,
             handlebars: handlebars::Handlebars::default(),
+            max_keys: self.options.max_keys,
         };
 
-        #[cfg(feature = "semantic")]
-        let semantic = options
-            .semantic
-            .params(self.options.cache_dir.as_deref(), &self.options.cache_dir());
-        #[cfg(feature = "semantic")]
-        if semantic.is_some() {
+        #[cfg(feature = "llm-judge")]
+        let llm_judge = options.llm_judge.params(&self.options.cache_dir())?;
+        #[cfg(not(feature = "llm-judge"))]
+        let llm_judge = None;
+
+        if llm_judge.is_some() {
             tracing::warn!(
-                "`--semantic` is experimental: a best-effort review aid that flags many false positives on legitimately divergent translations — review every finding manually"
+                "`--llm-judge` is experimental: findings are model suggestions for inspection, tuned for recall over precision — review each one"
             );
         }
-        #[cfg(not(feature = "semantic"))]
-        let semantic = None;
 
         let params = LintParams {
             detect_duplicates: !options.no_duplicates,
             usages: options.usages.clone(),
-            semantic,
+            llm_judge,
         };
 
         println!();

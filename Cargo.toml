@@ -21,7 +21,8 @@ repository = "https://github.com/LuupSystems/globetrotter"
 [workspace.metadata.cargo-fc]
 install_missing_targets = true
 dedupe = true
-aggregate_targets = false
+# We aggregate targets to reduce combinations of features that must be compiled
+aggregate_targets = true 
 targets = [
   "x86_64-unknown-linux-gnu",
   "x86_64-pc-windows-gnu",
@@ -99,7 +100,7 @@ handlebars = "6"
 # workspace crates
 globetrotter = { path = "./crates/globetrotter/" }
 globetrotter-model = { path = "./crates/globetrotter-model/" }
-globetrotter-semantic = { path = "./crates/globetrotter-semantic/" }
+globetrotter-llm-judge = { path = "./crates/globetrotter-llm-judge/" }
 globetrotter-cli = { path = "./crates/globetrotter-cli/" }
 globetrotter-rust = { path = "./crates/globetrotter-rust/" }
 globetrotter-php = { path = "./crates/globetrotter-php/" }

@@ -139,7 +139,8 @@ fn is_pruned_dir(
 ///
 /// The scan respects `.gitignore`, skips other globetrotter source trees (any
 /// directory containing a config file), and skips `excluded` canonicalized
-/// directories (e.g. generated output) and the built-in [`SKIP_DIRS`].
+/// directories (e.g. generated output) and well-known build and dependency
+/// directories (`node_modules`, `target`, `dist`, …).
 ///
 /// # Errors
 ///

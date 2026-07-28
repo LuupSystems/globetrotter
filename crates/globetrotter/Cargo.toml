@@ -26,21 +26,22 @@ keywords = [
 workspace = true
 
 [features]
+# `rayon` and `llm-judge` are deliberately not default: library consumers
+# should not pull in a thread pool or an HTTP client stack unasked. The CLI
+# enables both through its own default features.
 default = [
   "typescript",
   "rust",
   "golang",
   "python",
-  "rayon",
-  "semantic",
 ]
 typescript = ["dep:globetrotter-typescript"]
 rust = ["dep:globetrotter-rust"]
 golang = ["dep:globetrotter-golang"]
 python = ["dep:globetrotter-python"]
-# Opt-in semantic drift detection during linting. Pulls in a CPU-only embedding
-# stack (candle); disable with `--no-default-features` for a lighter build.
-semantic = ["dep:globetrotter-semantic", "dep:indicatif"]
+# LLM-judged translation-consistency review during linting. Pulls in an HTTP
+# client stack (async-openai/reqwest); disable for a lighter build.
+llm-judge = ["dep:globetrotter-llm-judge", "dep:indicatif"]
 
 [package.metadata.cargo-fc]
 # Language backends are independent alternatives in the matrix. The `default` row
@@ -99,10 +100,10 @@ globetrotter-rust = { workspace = true, optional = true }
 globetrotter-golang = { workspace = true, optional = true }
 globetrotter-python = { workspace = true, optional = true }
 
-# optional: semantic drift detection
-globetrotter-semantic = { workspace = true, optional = true }
+# optional: LLM-judged translation-consistency review
+globetrotter-llm-judge = { workspace = true, optional = true }
 
-# optional: progress bars for the semantic phase
+# optional: progress bars for the judging phase
 indicatif = { version = "0.17", optional = true }
 
 # optional: rayon for parallel processing

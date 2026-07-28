@@ -26,150 +26,200 @@ pub struct FormatOptions {
     pub check: bool,
 }
 
-/// Cross-lingual model used for `--semantic`.
-#[cfg(feature = "semantic")]
+/// Reasoning effort requested from the judge model via `--llm-effort`.
+#[cfg(feature = "llm-judge")]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
-pub enum SemanticModel {
-    /// `intfloat/multilingual-e5-small` — small, fast bi-encoder (~470 MB).
-    #[clap(name = "e5-small", alias = "e5")]
-    E5Small,
-    /// `sentence-transformers/LaBSE` — bi-encoder purpose-built for cross-lingual
-    /// matching (~1.9 GB); the default and the most reliable single model.
+pub enum LlmEffort {
+    /// Send no reasoning-effort field at all.
+    None,
+    /// Minimal reasoning; fastest, least reliable.
+    Low,
+    /// Balanced reasoning; the tested sweet spot for drift detection.
     #[default]
-    #[clap(name = "labse")]
-    Labse,
-    /// `BAAI/bge-reranker-v2-m3` — cross-encoder reranker (~2.3 GB).
-    #[clap(name = "bge-reranker", aliases = ["reranker", "bge"])]
-    BgeRerankerV2M3,
-    /// `MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli` — NLI cross-encoder
-    /// scoring semantic entailment (~430 MB).
-    #[clap(name = "minilm-nli", aliases = ["nli", "minilm"])]
-    MultilingualMiniLmNli,
-    /// `MoritzLaurer/mDeBERTa-v3-base-mnli-xnli` — NLI cross-encoder on a
-    /// DeBERTa-v3 backbone (~560 MB). Note: NLI models score cross-lingual
-    /// *sentences* poorly (correct translations look like contradictions).
-    #[clap(name = "mdeberta-nli", aliases = ["mdeberta", "deberta"])]
-    MdebertaV3Nli,
+    Medium,
+    /// Maximal reasoning; slowest.
+    High,
 }
 
-#[cfg(feature = "semantic")]
-impl From<SemanticModel> for globetrotter::executor::SemanticModel {
-    fn from(model: SemanticModel) -> Self {
-        match model {
-            SemanticModel::E5Small => Self::MultilingualE5Small,
-            SemanticModel::Labse => Self::Labse,
-            SemanticModel::BgeRerankerV2M3 => Self::BgeRerankerV2M3,
-            SemanticModel::MultilingualMiniLmNli => Self::MultilingualMiniLmNli,
-            SemanticModel::MdebertaV3Nli => Self::MdebertaV3Nli,
+#[cfg(feature = "llm-judge")]
+impl From<LlmEffort> for Option<globetrotter::executor::LlmJudgeEffort> {
+    fn from(effort: LlmEffort) -> Self {
+        use globetrotter::executor::LlmJudgeEffort;
+        match effort {
+            LlmEffort::None => None,
+            LlmEffort::Low => Some(LlmJudgeEffort::Low),
+            LlmEffort::Medium => Some(LlmJudgeEffort::Medium),
+            LlmEffort::High => Some(LlmJudgeEffort::High),
         }
     }
 }
 
-/// Options for `--semantic` drift detection, flattened into [`LintOptions`].
+/// Options for the `--llm-judge` review, flattened into [`LintOptions`].
 ///
-/// Compiled in only with the `semantic` feature, so the whole flag group (and
-/// its embedding dependency) disappears cleanly when the feature is off.
-#[cfg(feature = "semantic")]
+/// Compiled in only with the `llm-judge` feature, so the whole flag group (and
+/// its HTTP client dependency) disappears cleanly when the feature is off.
+#[cfg(feature = "llm-judge")]
 #[derive(Parser, Debug)]
-pub struct SemanticOptions {
-    /// [experimental] Detect cross-lingual semantic drift between a key's
-    /// languages.
+pub struct LlmJudgeOptions {
+    /// (experimental) Ask an LLM whether each key's languages all tell the user
+    /// the same thing.
     ///
-    /// Embeds each language string with a multilingual model (downloaded on
-    /// first use) and reports pairs whose meanings appear to have drifted. This
-    /// is a best-effort review aid printed as notes; it never fails the lint and
-    /// produces many false positives on legitimately divergent translations, so
-    /// every finding needs human review.
-    #[clap(long = "semantic", action = clap::ArgAction::SetTrue)]
+    /// Each key is judged in one request against an OpenAI-compatible endpoint
+    /// (a local ollama by default). Findings are printed as notes with the
+    /// model's reason and never fail the lint: the judge is tuned for recall,
+    /// so treat every finding as a suggestion for inspection. Verdicts are
+    /// cached, so re-runs only pay for changed keys.
+    ///
+    /// Use a capable model: in testing, 4B-class models missed real drift and
+    /// hallucinated justifications, while `gemma4:12b` and `qwen3.5:9b` (Q4,
+    /// 4K context) with medium reasoning effort worked well.
+    #[clap(long = "llm-judge", action = clap::ArgAction::SetTrue)]
     pub enabled: bool,
 
-    /// Model used by `--semantic`.
-    #[clap(long = "semantic-model", value_enum, default_value_t = SemanticModel::default())]
-    pub model: SemanticModel,
-
-    /// Only report language pairs with similarity below this value.
-    #[clap(long = "semantic-threshold", value_name = "SIM", default_value_t = 0.6)]
-    pub threshold: f32,
-
-    /// Skip pairs where either string has fewer than this many words.
-    ///
-    /// Short labels (e.g. single words) are unreliable for every model, so the
-    /// default keeps the check to longer strings where drift is detectable. Set
-    /// to 0 or 1 to check everything. In `--semantic-hybrid` mode this is the
-    /// boundary between the word-level and multi-word routes instead.
-    #[clap(long = "semantic-min-words", value_name = "N", default_value_t = 3)]
-    pub min_words: usize,
-
-    /// Enable the hybrid router for short strings.
-    ///
-    /// Instead of skipping short strings, check them with a bilingual lexicon
-    /// (suppressing known translations) plus cross-lingual word vectors, which
-    /// are far more reliable than the transformer models on single words.
-    /// Requires `--semantic-data-dir`. Multi-word strings still use the model.
-    #[clap(long = "semantic-hybrid", action = clap::ArgAction::SetTrue)]
-    pub hybrid: bool,
-
-    /// Word-vector similarity threshold for short strings in hybrid mode.
+    /// Base URL of the OpenAI-compatible endpoint.
     #[clap(
-        long = "semantic-clwe-threshold",
-        value_name = "SIM",
-        default_value_t = 0.35
+        long = "llm-base-url",
+        value_name = "URL",
+        default_value = "http://localhost:11434/v1",
+        requires = "enabled"
     )]
-    pub clwe_threshold: f32,
+    pub base_url: String,
 
-    /// Directory with the hybrid data files: `wiki.multi.<lang>.vec` aligned
-    /// word vectors and `<a>-<b>.txt` bilingual dictionaries.
-    #[clap(long = "semantic-data-dir", value_name = "DIR")]
-    pub data_dir: Option<PathBuf>,
+    /// Model name as known to the endpoint.
+    #[clap(
+        long = "llm-model",
+        value_name = "MODEL",
+        default_value = "gemma4:12b",
+        requires = "enabled"
+    )]
+    pub model: String,
 
-    /// User glossary of app-specific terms merged into the lexicon.
+    /// Name of the environment variable holding the API key.
     ///
-    /// Tab-separated; the first non-comment line is a language-code header
-    /// (e.g. `en<TAB>de<TAB>fr`) and each following row gives the term in each
-    /// column's language (empty cells allowed). Every pair of non-empty cells in
-    /// a row is treated as a correct translation in both directions.
-    #[clap(long = "semantic-glossary", value_name = "FILE")]
-    pub glossary: Option<PathBuf>,
+    /// Local servers ignore the key, so leaving the variable unset is fine.
+    #[clap(
+        long = "llm-api-key-env",
+        value_name = "ENV",
+        default_value = "OPENAI_API_KEY",
+        requires = "enabled"
+    )]
+    pub api_key_env: String,
 
-    /// Cap the number of findings reported (`0` = no cap, the default).
+    /// Maximum number of concurrent requests.
+    #[clap(
+        long = "llm-concurrency",
+        value_name = "N",
+        default_value_t = 8,
+        requires = "enabled"
+    )]
+    pub concurrency: usize,
+
+    /// Sampling temperature. The default `0` keeps verdicts reproducible (and
+    /// cacheable) across runs.
+    #[clap(
+        long = "llm-temperature",
+        value_name = "T",
+        default_value_t = 0.0,
+        requires = "enabled"
+    )]
+    pub temperature: f32,
+
+    /// Reasoning effort, for models that support it.
+    #[clap(
+        long = "llm-effort",
+        value_enum,
+        default_value_t = LlmEffort::Medium,
+        requires = "enabled"
+    )]
+    pub effort: LlmEffort,
+
+    /// Minimum confidence a finding needs to be reported.
     ///
-    /// Every language pair scoring below `--semantic-threshold` is reported, so
-    /// a file with many drifted keys lists them all. Set a positive value only
-    /// to truncate noisy output.
-    #[clap(long = "semantic-top", value_name = "N", default_value_t = 0)]
-    pub top: usize,
+    /// Each finding carries the model's self-reported confidence (0 to 1),
+    /// which is only loosely calibrated — treat it as a ranking of findings,
+    /// not a probability. The default `0` reports everything, keeping recall
+    /// maximal; raise it to trade recall for fewer false positives. The
+    /// threshold applies after the verdict cache, so changing it re-filters
+    /// cached verdicts without new requests.
+    #[clap(
+        long = "llm-min-confidence",
+        value_name = "MIN",
+        value_parser = parse_confidence,
+        default_value_t = 0.0,
+        requires = "enabled"
+    )]
+    pub min_confidence: f64,
+
+    /// File with a custom judge prompt template.
+    ///
+    /// The template must contain the `{key}` and `{languages}` placeholders;
+    /// all other braces pass through verbatim. Prompt wording strongly affects
+    /// which findings a given model reports, and the best wording differs per
+    /// model, so tune the template together with `--llm-model`.
+    #[clap(long = "llm-prompt", value_name = "FILE", requires = "enabled")]
+    pub prompt: Option<PathBuf>,
+
+    /// Maximum number of cached verdicts kept on disk (least-recently-used
+    /// eviction); `0` disables the cache entirely.
+    #[clap(
+        long = "llm-cache-capacity",
+        value_name = "N",
+        default_value_t = 100_000,
+        requires = "enabled"
+    )]
+    pub cache_capacity: usize,
 }
 
-#[cfg(feature = "semantic")]
-impl SemanticOptions {
-    /// The executor parameters when `--semantic` is set, otherwise `None`.
+/// Parse a `--llm-min-confidence` value, requiring the 0–1 range so an
+/// out-of-range threshold errors instead of silently suppressing everything.
+#[cfg(feature = "llm-judge")]
+fn parse_confidence(value: &str) -> Result<f64, String> {
+    let parsed: f64 = value.parse().map_err(|error| format!("{error}"))?;
+    if (0.0..=1.0).contains(&parsed) {
+        Ok(parsed)
+    } else {
+        Err(format!("`{parsed}` is not between 0 and 1"))
+    }
+}
+
+#[cfg(feature = "llm-judge")]
+impl LlmJudgeOptions {
+    /// The executor parameters when `--llm-judge` is set, otherwise `None`.
     ///
-    /// `explicit_cache` is `--cache-dir`/`GLOBETROTTER_CACHE_DIR` if the user set
-    /// it, `default_cache` the OS user-cache fallback. Models reuse the standard
-    /// Hugging Face cache unless an explicit cache is given; downloaded vectors
-    /// and dictionaries go in `<cache>/semantic-data`.
-    #[must_use]
+    /// `cache_dir` is the resolved globetrotter cache directory; verdicts go in
+    /// its `llm-judge` subdirectory.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the `--llm-prompt` file cannot be read.
     pub fn params(
         &self,
-        explicit_cache: Option<&std::path::Path>,
-        default_cache: &std::path::Path,
-    ) -> Option<globetrotter::executor::SemanticParams> {
-        let data_root = explicit_cache.unwrap_or(default_cache);
-        self.enabled
-            .then(|| globetrotter::executor::SemanticParams {
-                model: self.model.into(),
-                hybrid: self.hybrid,
-                threshold: self.threshold,
-                clwe_threshold: self.clwe_threshold,
-                min_words: self.min_words,
-                top: self.top,
-                data_dir: self
-                    .data_dir
-                    .clone()
-                    .or_else(|| self.hybrid.then(|| data_root.join("semantic-data"))),
-                glossary: self.glossary.clone(),
-                cache_dir: explicit_cache.map(|cache| cache.join("models")),
-            })
+        cache_dir: &std::path::Path,
+    ) -> std::io::Result<Option<globetrotter::executor::LlmJudgeParams>> {
+        if !self.enabled {
+            return Ok(None);
+        }
+        let template = match &self.prompt {
+            Some(path) => Some(std::fs::read_to_string(path).map_err(|error| {
+                std::io::Error::new(
+                    error.kind(),
+                    format!("failed to read --llm-prompt {}: {error}", path.display()),
+                )
+            })?),
+            None => None,
+        };
+        Ok(Some(globetrotter::executor::LlmJudgeParams {
+            base_url: self.base_url.clone(),
+            model: self.model.clone(),
+            api_key_env: self.api_key_env.clone(),
+            concurrency: self.concurrency,
+            temperature: self.temperature,
+            effort: self.effort.into(),
+            template,
+            min_confidence: self.min_confidence,
+            cache_dir: Some(cache_dir.join("llm-judge")),
+            cache_capacity: self.cache_capacity,
+        }))
     }
 }
 
@@ -186,10 +236,10 @@ pub struct LintOptions {
     #[clap(long = "no-duplicates", action = clap::ArgAction::SetTrue)]
     pub no_duplicates: bool,
 
-    /// Semantic drift detection (only with the `semantic` feature).
-    #[cfg(feature = "semantic")]
+    /// LLM-judged consistency review (only with the `llm-judge` feature).
+    #[cfg(feature = "llm-judge")]
     #[clap(flatten)]
-    pub semantic: SemanticOptions,
+    pub llm_judge: LlmJudgeOptions,
 }
 
 /// Top-level CLI commands.
@@ -288,7 +338,16 @@ pub struct Options {
     )]
     pub dry_run: Option<bool>,
 
-    /// Directory for cached models and downloaded semantic data.
+    /// Process only the first N translation keys of each config.
+    ///
+    /// A debugging aid for large corpora: try a change — or the LLM judge —
+    /// against a small subset of real translations before paying for a full
+    /// run. Applies to linting and generation alike; the truncation is warned
+    /// about, never silent.
+    #[clap(long = "max-keys", value_name = "N", global = true)]
+    pub max_keys: Option<usize>,
+
+    /// Directory for cached data (e.g. LLM judge verdicts).
     ///
     /// Defaults to a `globetrotter` folder in the OS user cache directory
     /// (e.g. `~/.cache/globetrotter` on Linux).

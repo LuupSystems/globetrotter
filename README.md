@@ -131,6 +131,58 @@ globetrotter --config globetrotter.yaml
 globetrotter --dry-run
 ```
 
+### Linting
+
+`globetrotter lint` checks translation files for missing, empty, or
+whitespace-padded translations, templates that fail to compile, inconsistent
+placeholders, undeclared or unused arguments, duplicate strings, and (with
+`--usages <DIR>`) keys never referenced in your sources.
+
+With `--llm-judge`, an LLM additionally reviews each key for cross-language
+drift: it sees all of a key's languages in one prompt and flags any language
+that tells the user something different (wrong action, negated meaning,
+different quantity or timeframe, text from another string). Findings are
+printed as notes with the model's reason and never fail the lint — they are
+suggestions for inspection, tuned for recall. Verdicts are cached
+content-addressed, so re-runs only judge keys that changed.
+
+Each finding shows the model's self-reported confidence as a color-coded
+percentage. By default every finding is reported; `--llm-min-confidence 0.6`
+suppresses findings below 60%. Self-reported confidence is only loosely
+calibrated — treat it as a ranking of which findings to look at first, not a
+probability. The threshold applies after the verdict cache, so adjusting it
+re-filters instantly without new requests.
+
+```bash
+# Judge against a local ollama (the default endpoint)
+globetrotter lint --llm-judge --llm-model gemma4:12b
+
+# Try a model or prompt on the first 25 keys before paying for a full run
+globetrotter lint --llm-judge --max-keys 25
+
+# Any OpenAI-compatible endpoint works
+globetrotter lint --llm-judge \
+  --llm-base-url https://api.example.com/v1 \
+  --llm-model my-model \
+  --llm-api-key-env MY_API_KEY \
+  --llm-concurrency 8
+```
+
+Model choice matters more than anything else:
+
+- **4B-class models are not suited** for this task: in testing they missed
+  real drift and hallucinated justifications for correct translations.
+- `gemma4:12b` and `qwen3.5:9b` (Q4 quantization, 4K context) with the default
+  medium reasoning effort (`--llm-effort medium`) both worked well in testing;
+  gemma4:12b was the most reliable. These are suggestions, not requirements —
+  larger or hosted models also work.
+- Prompt wording interacts strongly with the model: the same prompt can make
+  one model stricter and another noisier. When switching models, consider
+  tuning a custom template via `--llm-prompt <FILE>`.
+
+Suppress a finding for an intentionally divergent key by adding
+`allow = ["llm-drift"]` to that key.
+
 ### Usage in Rust
 
 ```rust

@@ -32,16 +32,16 @@ default = [
   "golang",
   "python",
   "rayon",
-  "semantic",
+  "llm-judge",
 ]
 typescript = ["globetrotter/typescript"]
 rust = ["globetrotter/rust"]
 golang = ["globetrotter/golang"]
 python = ["globetrotter/python"]
 rayon = ["globetrotter/rayon"]
-# Disabling `semantic` drops the whole embedding stack (candle) from the build;
-# the `--semantic*` flags disappear with it.
-semantic = ["globetrotter/semantic"]
+# Disabling `llm-judge` drops the HTTP client stack from the build; the
+# `--llm-*` flags disappear with it.
+llm-judge = ["globetrotter/llm-judge"]
 
 [package.metadata.cargo-fc]
 # Language selectors are independent alternatives in the matrix. The `default` row
@@ -70,6 +70,7 @@ thiserror.workspace = true
 
 # colors and diagnostics
 termcolor = "1"
+colored = "3"
 codespan-reporting.workspace = true
 
 # argument parsing
@@ -80,7 +81,7 @@ tracing.workspace = true
 tracing-subscriber = { version = "0", features = ["json", "env-filter"] }
 
 # default-features off so the CLI's own features fully control globetrotter's
-# (notably `semantic`, so disabling it drops the candle dependency).
+# (notably `llm-judge`, so disabling it drops the HTTP client stack).
 globetrotter = { path = "../globetrotter", default-features = false }
 handlebars.workspace = true
 

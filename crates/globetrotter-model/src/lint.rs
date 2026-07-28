@@ -62,9 +62,9 @@ pub enum LintCode {
     IdenticalLanguages,
     /// A key is never referenced in the scanned source (see `--usages`).
     UnusedKey,
-    /// Two languages of one key appear to have semantically drifted apart
-    /// (see `--semantic`).
-    SemanticDrift,
+    /// A language of one key tells the user something different than the
+    /// others, as judged by an LLM (see `--llm-judge`).
+    LlmDrift,
 }
 
 /// Options controlling how translations are linted.

@@ -471,7 +471,7 @@ mod tests {
 
     #[test]
     fn accepts_known_allow_codes_and_all() {
-        for code in ["duplicate", "semantic-drift", "missing-language", "all"] {
+        for code in ["duplicate", "llm-drift", "missing-language", "all"] {
             let raw = format!("[greeting]\nen = \"Hi\"\nallow = [\"{code}\"]\n");
             assert!(parse(&raw).is_ok(), "{code}: {:?}", parse(&raw));
         }

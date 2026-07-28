@@ -97,10 +97,10 @@ pub enum Error {
     #[error("failed to emit diagnostic")]
     Diagnostic(#[from] codespan_reporting::files::Error),
 
-    /// Semantic drift analysis failed.
-    #[cfg(feature = "semantic")]
+    /// The LLM judge failed.
+    #[cfg(feature = "llm-judge")]
     #[error(transparent)]
-    Semantic(#[from] globetrotter_semantic::Error),
+    LlmJudge(#[from] globetrotter_llm_judge::Error),
 }
 
 /// Indicates that processing completed but surfaced one or more error
