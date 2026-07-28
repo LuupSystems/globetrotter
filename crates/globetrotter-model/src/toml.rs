@@ -487,8 +487,10 @@ mod tests {
 
     #[test]
     fn rejects_unknown_allow_code() {
+        // spellcheck:ignore-next-line
         let result = parse("[greeting]\nen = \"Hi\"\nallow = [\"duplicat\"]\n");
         assert!(
+            // spellcheck:ignore-next-line
             matches!(&result, Err(Error::UnknownLintCode { code, .. }) if code == "duplicat"),
             "{result:?}"
         );

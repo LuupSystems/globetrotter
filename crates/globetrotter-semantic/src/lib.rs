@@ -773,6 +773,7 @@ mod tests {
                 },
                 LanguageText {
                     language: "de",
+                    // spellcheck:ignore-next-line
                     text: "Speichern Sie Ihre Änderungen",
                 },
             ],

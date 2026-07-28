@@ -1,8 +1,10 @@
 .DS_Store
-target/
+/target/
 deprecated/
 output/
+.cooldown.lock
 
 # goreleaser
 goreleaser-dist/
 .intentionally-empty-file.o
+*_compiler_family.o

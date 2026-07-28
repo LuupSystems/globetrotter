@@ -1,0 +1,20 @@
+[settings]
+lockfile = true
+lockfile_platforms = ["linux-x64", "macos-arm64", "windows-x64"]
+
+[tools]
+# Developer tools
+task = "latest"
+typos = "latest"
+actionlint = "latest"
+"github:romnn/cooldown" = { version = "latest", minimum_release_age = "0" }
+"github:romnn/bumpversion" = { version = "latest", matching = "bumpversion", minimum_release_age = "0" }
+
+# Cargo plugins
+"aqua:nextest-rs/nextest/cargo-nextest" = "latest"
+"github:romnn/cargo-feature-combinations" = { version = "latest", matching = "cargo-fc", minimum_release_age = "0" }
+"aqua:rustsec/rustsec/cargo-audit" = "latest"
+"github:est31/cargo-udeps" = "latest"
+"github:romnn/cargo-watchdoc" = { version = "latest", minimum_release_age = "0" }
+"github:rust-cross/cargo-zigbuild" = "latest"
+zig = "latest"

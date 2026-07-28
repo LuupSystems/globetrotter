@@ -1,5 +1,10 @@
 # yaml-language-server: $schema=https://taskfile.dev/schema.json
 version: "3"
+
+vars:
+  ZIGBUILD_IMAGE: ghcr.io/rust-cross/cargo-zigbuild:latest
+  GORELEASER_VERSION: "2.17.0"
+
 tasks:
   default:
     cmds:
@@ -18,43 +23,42 @@ tasks:
   build:fc:
     desc: "build cargo workspace for each combination of features"
     cmds:
-      - cargo fc build --workspace --all-targets {{.CLI_ARGS}}
+      - cargo fc build --all-targets {{.CLI_ARGS}}
 
   build:release:
     desc: "build in release mode"
     cmds:
       - cargo build --all-targets --release {{.CLI_ARGS}}
 
-  build:env:
+  goreleaser:
     internal: true
+    requires:
+      vars: [GORELEASER_ARGS]
     cmds:
-      - docker build --load -t build-env -f ./docker/build_env.dockerfile .
+      # The image ships zig, cargo-zigbuild, rust and every release target; only goreleaser
+      # is missing. safe.directory: the bind-mounted repo is owned by another uid.
+      - >-
+        docker run --rm -e GITHUB_TOKEN -e TAP_GITHUB_TOKEN -e "HOST_UID=$(id -u)" -e "HOST_GID=$(id
+        -g)" -v "${PWD}:/workspace" -w /workspace {{.ZIGBUILD_IMAGE}} bash -euo pipefail -c '
+        fix_perms() { for d in target goreleaser-dist; do [ -e "$d" ] && chown -R
+        "${HOST_UID}:${HOST_GID}" "$d" || true; done; }; trap fix_perms EXIT; case "$(uname -m)" in
+        x86_64) arch=x86_64 ;; aarch64|arm64) arch=arm64 ;; *) echo "unsupported arch" >&2; exit 1
+        ;; esac; curl -sSfL
+        "https://github.com/goreleaser/goreleaser/releases/download/v{{.GORELEASER_VERSION}}/goreleaser_Linux_${arch}.tar.gz"
+        | tar -xz -C /usr/local/bin goreleaser; git config --global --add safe.directory "$(pwd)";
+        goreleaser {{.GORELEASER_ARGS}}'
 
   build:goreleaser:
-    desc: "cross compile using goreleaser"
-    deps: [build:env]
+    desc: "build in release mode using goreleaser"
     cmds:
-      # pretter-ignore
-      - >-
-        docker run --rm
-        -v "${PWD}:/workspace"
-        -w /workspace
-        build-env
-        bash -c 'source ./release.sh && goreleaser build --snapshot --clean --timeout 120m'
+      - task: goreleaser
+        vars: { GORELEASER_ARGS: "build --snapshot --clean --timeout 120m" }
 
   release:
     desc: "release using goreleaser"
-    deps: [build:env]
     cmds:
-      # pretter-ignore
-      - >-
-        docker run --rm
-        -e "GITHUB_TOKEN=${GITHUB_TOKEN}"
-        -e "TAP_GITHUB_TOKEN=${TAP_GITHUB_TOKEN}"
-        -v "${PWD}:/workspace"
-        -w /workspace
-        build-env
-        bash -c 'source ./release.sh && goreleaser release --clean --timeout 120m'
+      - task: goreleaser
+        vars: { GORELEASER_ARGS: "release --clean --timeout 120m" }
 
   typos:
     desc: "check repository for typos"
@@ -70,7 +74,7 @@ tasks:
   check:fc:
     desc: "check cargo workspace"
     cmds:
-      - cargo fc check --workspace --all-targets {{.CLI_ARGS}}
+      - cargo fc check --all-targets {{.CLI_ARGS}}
 
   clean:
     desc: "clean cargo workspace"
@@ -85,15 +89,38 @@ tasks:
       - cargo +nightly watchdoc --all-features {{.CLI_ARGS}}
 
   outdated:
-    desc: "check for outdated cargo workspace dependencies"
+    desc: "list outdated deps (incl. new majors): adoptable now vs still in cooldown"
     cmds:
-      - cargo outdated --workspace --ignore-external-rel --exit-code 1 -v {{.CLI_ARGS}}
+      - "cooldown outdated --sync {{.CLI_ARGS}}"
+
+  outdated:minor:
+    desc: "list outdated deps within the current major only"
+    cmds:
+      - "cooldown outdated --no-major --sync {{.CLI_ARGS}}"
+
+  upgrade:
+    desc: "upgrade all deps incl. cross-major bumps, within the cooldown"
+    aliases: [update]
+    cmds:
+      - "cooldown upgrade --major --sync {{.CLI_ARGS}}"
+
+  upgrade:minor:
+    desc: "upgrade all deps within their current major, within the cooldown"
+    cmds:
+      - "cooldown upgrade --no-major --sync {{.CLI_ARGS}}"
+
+  upgrade:latest:
+    desc: "upgrade ignoring the cooldown window — use deliberately"
+    prompt:
+      - "DANGER: this bypasses the supply-chain cooldown and adopts brand-new (possibly compromised) releases. Prefer 'task upgrade' / 'task upgrade:minor'. Continue?"
+    cmds:
+      - "cooldown upgrade --latest {{.CLI_ARGS}}"
 
   unused:
     desc: "check for unused cargo workspace dependencies"
     aliases: [unused-dependencies]
     cmds:
-      - cargo +nightly udeps {{.CLI_ARGS}}
+      - cargo +nightly fc udeps --maximal-features --all-targets {{.CLI_ARGS}}
 
   audit:
     desc: "audit cargo workspace dependencies"
@@ -108,17 +135,17 @@ tasks:
   test:
     desc: "test cargo workspace"
     cmds:
-      - cargo nextest run --workspace --all-targets --no-tests "warn" {{.CLI_ARGS}}
+      - cargo nextest run -P default --workspace --all-targets --no-tests warn {{.CLI_ARGS}}
 
   test:fc:
     desc: "test cargo workspace for all combinations of features"
     cmds:
-      - cargo fc nextest run --workspace --all-targets --no-tests "warn" {{.CLI_ARGS}}
+      - cargo fc nextest run -P default --all-targets --no-tests warn {{.CLI_ARGS}}
 
   test:doc:
     desc: "run doctests in cargo workspace"
     cmds:
-      - cargo test --doc {{.CLI_ARGS}}
+      - cargo test --doc --workspace {{.CLI_ARGS}}
 
   lint:
     desc: "lint cargo workspace"

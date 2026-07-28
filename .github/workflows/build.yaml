@@ -1,88 +1,62 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/SchemaStore/schemastore/refs/heads/master/src/schemas/json/github-workflow.json
 name: build
 on:
   push: {}
   pull_request:
     types: [opened, synchronize, reopened, edited]
-  schedule:
-    # 8AM first day of the month in JAN and JUNE to keep workflow badges up-to-date
-    - cron: "0 8 1 1,6 *"
+
+env:
+  MISE_GITHUB_TOKEN: ${{ github.token }}
+  MISE_AUTO_INSTALL: "0"
 
 jobs:
-  build:
-    name: build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, ubuntu-24.04, windows-2025]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: arduino/setup-task@v2
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "3.42.1"
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: romnn/cargo-feature-combinations@main
-
-      - name: Setup mold linker
-        if: matrix.os == 'ubuntu-24.04'
-        run: sudo apt-get update && sudo apt-get install -y clang mold
-
-      - name: Build (linux)
-        if: matrix.os == 'ubuntu-24.04'
-        env:
-          RUSTFLAGS: -C linker=clang -C link-arg=-fuse-ld=mold
-        run: task build:fc
-
-      - name: Build (non-linux)
-        if: matrix.os != 'ubuntu-24.04'
-        run: task build:fc
-
-  build-goreleaser:
+  goreleaser:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     outputs:
       precompiled-binaries: ${{ steps.upload.outputs.artifact-url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          persist-credentials: true
-      - uses: arduino/setup-task@v2
+      - uses: jdx/mise-action@v4
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "3.42.1"
+          install: false
+          cache: true
+          env: false
+      - run: mise install task
       - name: Release (dry-run)
         run: task build:goreleaser
       - name: Upload precompiled binaries
         id: upload
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: goreleaser-dist
           path: goreleaser-dist
 
   build-container:
     runs-on: ubuntu-24.04
-    needs: [build-goreleaser]
+    needs: [goreleaser]
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download precompiled binaries
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: goreleaser-dist
           path: goreleaser-dist
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
       - name: Log in to registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build multi-arch container
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/package_precompiled.dockerfile

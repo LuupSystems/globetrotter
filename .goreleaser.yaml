@@ -1,17 +1,47 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 version: 2
-
 dist: goreleaser-dist
 
-before:
-  hooks:
-    - rustup default stable
-    - cargo install --locked --force cargo-zigbuild
+builds:
+  - id: &bin globetrotter
+    builder: rust
+    binary: *bin
+    tool: cargo
+    command: zigbuild
+    # see: https://doc.rust-lang.org/nightly/rustc/platform-support.html
+    targets:
+      # linux
+      - x86_64-unknown-linux-musl
+      - aarch64-unknown-linux-musl
+      # apple
+      - x86_64-apple-darwin
+      - aarch64-apple-darwin
+      # windows
+      - x86_64-pc-windows-gnu
+      - aarch64-pc-windows-gnullvm
+    flags: ["--release", "--package=globetrotter-cli"]
+
+archives:
+  - id: *bin
+    ids: [*bin]
+    formats: ["tar.gz"]
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE]
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  use: github
+  filters:
+    exclude: ["^ci:", "^docs:", "^test:"]
 
 homebrew_casks:
-  - name: globetrotter
-    ids:
-      - globetrotter
+  - name: *bin
+    ids: [*bin]
     description: "Polyglot, type-safe internationalization"
     directory: Casks
     commit_author:
@@ -30,53 +60,6 @@ homebrew_casks:
           if OS.mac? && File.exist?("/usr/bin/xattr")
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/globetrotter"]
           end
-
-builds:
-  - id: "globetrotter"
-    builder: rust
-    binary: globetrotter
-    # see: https://doc.rust-lang.org/nightly/rustc/platform-support.html
-    targets:
-      # linux
-      - x86_64-unknown-linux-musl
-      - aarch64-unknown-linux-musl
-      # apple
-      - x86_64-apple-darwin
-      - aarch64-apple-darwin
-      # windows
-      - x86_64-pc-windows-gnu
-      - aarch64-pc-windows-gnullvm
-    dir: ./
-    tool: cargo
-    command: zigbuild
-    flags:
-      - "--release"
-      - "--package=globetrotter-cli"
-      - "--bin=globetrotter"
-      - "--target-dir=./target" # TODO: can we remove this once rust support is better?
-
-archives:
-  - id: globetrotter
-    formats: ["tar.gz"]
-    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    ids:
-      - globetrotter
-    files:
-      - LICENSE
-    format_overrides:
-      - goos: windows
-        formats: ["zip"]
-
-checksum:
-  name_template: "checksums.txt"
-
-changelog:
-  use: github
-  filters:
-    exclude:
-      - "^ci:"
-      - "^docs:"
-      - "^test:"
 
 release:
   draft: false
