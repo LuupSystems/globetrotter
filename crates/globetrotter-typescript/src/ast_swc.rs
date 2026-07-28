@@ -298,7 +298,6 @@ mod tests {
         let ts_compiler = Compiler::new(cm);
 
         let program = parse(&ts_compiler, fm)?;
-        dbg!(&program);
 
         let have = super::emit_code(&ts_compiler, &program).map_err(IntoEyre::into_eyre)?;
         println!("{have}");

@@ -171,7 +171,6 @@ mod tests {
     }
 
     fn build_translator(json_translations: &str) -> eyre::Result<MyTranslator<Translation<'_>>> {
-        let _ = dbg!(serde_json::from_str::<serde_json::Value>(json_translations));
         let reader = std::io::Cursor::new(json_translations);
         MyTranslator::from_reader(reader)
     }
