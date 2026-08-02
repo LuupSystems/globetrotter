@@ -3,8 +3,8 @@ current_version = "0.0.10"
 commit = true
 tag = true
 pre_commit_hooks = [
-  # update lockfile with new version
-  "cargo update --offline"
+  # Refresh workspace package versions without updating dependencies.
+  "cargo metadata --offline --format-version 1 >/dev/null"
 ]
 additional_files = [
   "Cargo.lock"
@@ -14,3 +14,8 @@ additional_files = [
 filename = "Cargo.toml"
 search = "version = \"{current_version}\""
 replace = "version = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "docs/content/docs/ci.md"
+search = "--version {current_version}"
+replace = "--version {new_version}"

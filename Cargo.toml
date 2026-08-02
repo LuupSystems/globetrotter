@@ -21,8 +21,8 @@ repository = "https://github.com/LuupSystems/globetrotter"
 [workspace.metadata.cargo-fc]
 install_missing_targets = true
 dedupe = true
-# We aggregate targets to reduce combinations of features that must be compiled
-aggregate_targets = true 
+# Batch targets to avoid repeating feature-combination setup for each platform.
+aggregate_targets = true
 targets = [
   "x86_64-unknown-linux-gnu",
   "x86_64-pc-windows-gnu",
