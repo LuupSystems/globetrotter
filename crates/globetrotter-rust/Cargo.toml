@@ -41,7 +41,7 @@ tracing.workspace = true
 globetrotter-model.workspace = true
 
 # rust codegen using syn
-syn = { version = "2", features = ["full"] }
+syn = { version = "3.0.0", features = ["full"] }
 proc-macro2 = "1"
 quote = "1"
 prettyplease = "0"
