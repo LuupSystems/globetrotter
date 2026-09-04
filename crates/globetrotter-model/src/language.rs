@@ -774,8 +774,8 @@ impl Language {
 
     /// Returns the ISO 639-1 code for this language, such as `"en"`.
     #[must_use]
-    pub fn code(&self) -> &'static str {
-        serde_variant::to_variant_name(self).unwrap_or_else(|_| self.into())
+    pub fn code(self) -> &'static str {
+        self.into()
     }
 
     /// Returns the English display name for this language, such as `"English"`.

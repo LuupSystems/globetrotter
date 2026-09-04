@@ -6,8 +6,6 @@
 
 /// Source-span aware diagnostic helpers shared across the model.
 pub mod diagnostics;
-/// Extension traits used throughout the crate.
-pub mod ext;
 /// JSON representation of translations for a single language.
 pub mod json;
 /// Supported languages.
@@ -28,54 +26,53 @@ pub use language::Language;
 use serde::{Deserialize, Serialize};
 
 /// Templating engine used to render template translations.
+///
+/// An engine is spelled by the same name on the command line, in config files,
+/// and in the JSON output; an unknown name is kept as [`Self::Other`].
 #[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, strum::Display,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::Display,
+    strum::EnumString,
 )]
 pub enum TemplateEngine {
     /// The [Handlebars](https://handlebarsjs.com/) template engine.
     #[serde(rename = "handlebars")]
+    #[strum(to_string = "handlebars")]
     Handlebars,
     /// The Go `text/template` template engine.
     #[serde(rename = "golang", alias = "go")]
+    #[strum(to_string = "golang", serialize = "go")]
     Golang,
     /// The [Mustache](https://mustache.github.io/) template engine.
     #[serde(rename = "mustache")]
+    #[strum(to_string = "mustache")]
     Mustache,
     /// The [Jinja2](https://jinja.palletsprojects.com/) template engine.
     #[serde(rename = "jinja2")]
+    #[strum(to_string = "jinja2")]
     Jinja2,
     /// Any other template engine, identified by name.
+    #[serde(untagged)]
+    #[strum(default)]
     Other(String),
-}
-
-impl std::str::FromStr for TemplateEngine {
-    type Err = ::strum::ParseError;
-
-    /// Parses the serde names and aliases declared on the variants, preserving
-    /// any other non-empty name as [`TemplateEngine::Other`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`strum::ParseError::VariantNotFound`] only for an empty name.
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "handlebars" => Ok(Self::Handlebars),
-            "golang" | "go" => Ok(Self::Golang),
-            "mustache" => Ok(Self::Mustache),
-            "jinja2" => Ok(Self::Jinja2),
-            "" => Err(::strum::ParseError::VariantNotFound),
-            other => Ok(Self::Other(other.to_string())),
-        }
-    }
 }
 
 #[cfg(test)]
 mod template_engine_tests {
     use super::TemplateEngine;
 
-    /// Known names, aliases, and custom engine names parse without recursion.
+    /// Known names, aliases, and custom engine names parse, and every engine
+    /// displays as the name it parses from.
     #[test_util::test]
-    fn parses_engine_names_without_recursing() {
+    fn parses_engine_names() {
         assert_eq!("handlebars".parse(), Ok(TemplateEngine::Handlebars));
         assert_eq!("golang".parse(), Ok(TemplateEngine::Golang));
         assert_eq!("go".parse(), Ok(TemplateEngine::Golang));
@@ -85,10 +82,36 @@ mod template_engine_tests {
             "tera".parse(),
             Ok(TemplateEngine::Other("tera".to_string()))
         );
+        for engine in [
+            TemplateEngine::Handlebars,
+            TemplateEngine::Golang,
+            TemplateEngine::Other("tera".to_string()),
+        ] {
+            assert_eq!(engine.to_string().parse(), Ok(engine));
+        }
+    }
+
+    /// Config files and JSON output use the same plain names as the command
+    /// line, including for engines globetrotter does not know.
+    #[test_util::test]
+    fn serde_uses_the_plain_name() -> serde_json::Result<()> {
+        for (engine, name) in [
+            (TemplateEngine::Handlebars, "handlebars"),
+            (TemplateEngine::Golang, "golang"),
+            (TemplateEngine::Other("tera".to_string()), "tera"),
+        ] {
+            assert_eq!(engine.to_string(), name);
+            assert_eq!(serde_json::to_value(&engine)?, serde_json::json!(name));
+            assert_eq!(
+                serde_json::from_value::<TemplateEngine>(serde_json::json!(name))?,
+                engine
+            );
+        }
         assert_eq!(
-            "".parse::<TemplateEngine>(),
-            Err(strum::ParseError::VariantNotFound)
+            serde_json::from_value::<TemplateEngine>(serde_json::json!("go"))?,
+            TemplateEngine::Golang
         );
+        Ok(())
     }
 }
 

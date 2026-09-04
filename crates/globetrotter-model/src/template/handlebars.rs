@@ -3,16 +3,21 @@
 //! Names are classified by where they appear: parameters of a conditional
 //! block select a wording, everything else reaches the output.
 
-use super::Analysis;
+use super::{Analysis, CompileError};
 use handlebars::template::{BlockParam, HelperTemplate, Parameter, Template, TemplateElement};
 use handlebars::{Path, PathSeg};
 
-/// Analyzes a Handlebars `source`, or returns `None` if it does not compile.
-pub(super) fn analyze(source: &str) -> Option<Analysis> {
-    let template = Template::compile(source).ok()?;
+/// Analyzes a Handlebars `source`.
+///
+/// The error carries only the parser's reason, not its multi-line rendering
+/// with a source excerpt, since a diagnostic already shows the source.
+pub(super) fn analyze(source: &str) -> Result<Analysis, CompileError> {
+    let template = Template::compile(source).map_err(|error| CompileError {
+        message: error.reason().to_string(),
+    })?;
     let mut walk = Walk::default();
     walk.elements(&template.elements, Role::Substituted);
-    Some(walk.analysis)
+    Ok(walk.analysis)
 }
 
 /// Block helpers whose parameters select a wording instead of reaching the
@@ -171,7 +176,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     fn handlebars(source: &str) -> eyre::Result<Analysis> {
-        analyze(source).ok_or_eyre("template did not compile")
+        Ok(analyze(source)?)
     }
 
     fn names(names: &[&str]) -> BTreeSet<String> {
@@ -278,9 +283,17 @@ mod tests {
         Ok(())
     }
 
+    /// A rejected template reports the parser's one-line reason.
     #[test_util::test]
-    fn invalid_template_returns_none() {
-        assert!(analyze("{{#each}}").is_none());
-        assert!(analyze("{{unclosed").is_none());
+    fn invalid_template_reports_the_reason() {
+        let error = analyze("{{unclosed")
+            .err()
+            .ok_or_eyre("template compiled")?;
+        assert!(
+            error.message.starts_with("invalid handlebars syntax"),
+            "{error}"
+        );
+        assert!(!error.message.contains('\n'), "{error}");
+        assert!(analyze("{{#each}}").is_err());
     }
 }

@@ -157,7 +157,7 @@ where
     T: PartialEq,
 {
     fn eq(&self, other: &T) -> bool {
-        (&self.inner as &dyn PartialEq<T>).eq(other)
+        self.inner == *other
     }
 }
 
@@ -166,7 +166,7 @@ where
     T: PartialEq,
 {
     fn eq(&self, other: &&T) -> bool {
-        (&self.inner as &dyn PartialEq<T>).eq(*other)
+        self.inner == **other
     }
 }
 

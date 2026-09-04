@@ -39,36 +39,47 @@ impl Analysis {
     }
 }
 
+/// A template that its engine refuses to compile.
+///
+/// The message is the engine's own one-line reason, suitable as a diagnostic
+/// label; it never includes a source excerpt.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("{message}")]
+pub struct CompileError {
+    /// The engine's reason for rejecting the template.
+    pub message: String,
+}
+
 /// The analysis function of one template engine.
 ///
 /// Resolve it once from the configured engine; a `None` from
 /// [`Analyzer::for_engine`] means the engine has no analysis support, and
 /// callers skip template checks entirely instead of asking per template.
 #[derive(Clone, Copy)]
-pub struct Analyzer(fn(&str) -> Option<Analysis>);
+pub struct Analyzer(fn(&str) -> Result<Analysis, CompileError>);
 
 impl Analyzer {
     /// The analyzer for `engine`, if it has one.
     ///
-    /// No configured engine counts as Handlebars, matching template validation.
     /// The match is exhaustive so that a new [`TemplateEngine`] variant forces
     /// a decision here.
     #[must_use]
-    pub fn for_engine(engine: Option<&TemplateEngine>) -> Option<Self> {
+    pub fn for_engine(engine: &TemplateEngine) -> Option<Self> {
         match engine {
-            None | Some(TemplateEngine::Handlebars) => Some(Self(handlebars::analyze)),
-            Some(
-                TemplateEngine::Golang
-                | TemplateEngine::Mustache
-                | TemplateEngine::Jinja2
-                | TemplateEngine::Other(_),
-            ) => None,
+            TemplateEngine::Handlebars => Some(Self(handlebars::analyze)),
+            TemplateEngine::Golang
+            | TemplateEngine::Mustache
+            | TemplateEngine::Jinja2
+            | TemplateEngine::Other(_) => None,
         }
     }
 
-    /// Analyzes `source`, or returns `None` if it does not compile.
-    #[must_use]
-    pub fn analyze(self, source: &str) -> Option<Analysis> {
+    /// Analyzes `source` as a template of this engine.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CompileError`] if the engine rejects `source`.
+    pub fn analyze(self, source: &str) -> Result<Analysis, CompileError> {
         (self.0)(source)
     }
 }
@@ -78,25 +89,18 @@ mod tests {
     use super::Analyzer;
     use crate::TemplateEngine;
 
-    /// Only Handlebars has analysis support; other engines are not guessed at,
-    /// and no configured engine is treated as Handlebars.
+    /// Only Handlebars has analysis support; other engines are not guessed at.
     #[test_util::test]
     fn resolves_by_engine() {
-        for engine in [None, Some(&TemplateEngine::Handlebars)] {
-            let analyzer = Analyzer::for_engine(engine);
-            assert!(analyzer.is_some(), "{engine:?}");
-            assert!(
-                analyzer.is_some_and(|analyzer| analyzer.analyze("{{name}}").is_some()),
-                "{engine:?}"
-            );
-        }
+        let analyzer = Analyzer::for_engine(&TemplateEngine::Handlebars);
+        assert!(analyzer.is_some_and(|analyzer| analyzer.analyze("{{name}}").is_ok()));
         for engine in [
             TemplateEngine::Jinja2,
             TemplateEngine::Golang,
             TemplateEngine::Mustache,
             TemplateEngine::Other("tera".to_string()),
         ] {
-            assert!(Analyzer::for_engine(Some(&engine)).is_none(), "{engine:?}");
+            assert!(Analyzer::for_engine(&engine).is_none(), "{engine:?}");
         }
     }
 }

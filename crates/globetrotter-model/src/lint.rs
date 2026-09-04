@@ -78,7 +78,10 @@ pub struct LintOptions<'a> {
     /// Languages every key is required to provide. When empty, the union of
     /// languages present across all keys is expected instead.
     pub required_languages: &'a [Spanned<Language>],
-    /// The template engine used to compile template translations, if any.
+    /// The template engine used to analyze template translations.
+    ///
+    /// Without one, the template checks are skipped and a note says so; an
+    /// engine is never guessed.
     pub template_engine: Option<&'a Spanned<TemplateEngine>>,
     /// Whether issues are reported as errors rather than warnings.
     pub strict: bool,
@@ -201,6 +204,42 @@ fn braces(name: &str) -> String {
     out
 }
 
+/// Decides once per catalog whether templates can be analyzed.
+///
+/// Templates are never analyzed with a guessed engine: a catalog written for
+/// another engine would fail to compile under the wrong parser and drown the
+/// real findings.
+/// Skipping is announced with a note rather than a warning, so a catalog
+/// without an engine still lints clean while pointing at the setting; a
+/// catalog that declares no arguments has nothing to announce.
+fn lint_analyzer(
+    translations: &Translations,
+    engine: Option<&Spanned<TemplateEngine>>,
+    diagnostics: &mut Vec<Diagnostic<FileId>>,
+) -> Option<template::Analyzer> {
+    let has_templates = translations.0.values().any(Translation::is_template);
+    let Some(engine) = engine else {
+        if has_templates {
+            diagnostics.push(
+                Diagnostic::note()
+                    .with_message("no template engine is configured, so templates were not checked")
+                    .with_notes(vec![
+                        "set `engine` in the config or pass `--engine` to check templates"
+                            .to_string(),
+                    ]),
+            );
+        }
+        return None;
+    };
+    let analyzer = template::Analyzer::for_engine(engine.as_ref());
+    if analyzer.is_none() && has_templates {
+        diagnostics.push(Diagnostic::note().with_message(format!(
+            "template checks are not supported for the `{engine}` engine, so templates were not checked"
+        )));
+    }
+    analyzer
+}
+
 impl Translations {
     /// Lints the translations and appends any issues to `diagnostics`.
     ///
@@ -208,9 +247,11 @@ impl Translations {
     /// templates that fail to compile, placeholders that are inconsistent across
     /// languages, template arguments that are used but not declared (or declared
     /// but never used), and — when [`LintOptions::detect_duplicates`] is enabled
-    /// — keys that share an identical translation. Existing diagnostics are
-    /// retained. Issues are warnings unless [`LintOptions::strict`] promotes
-    /// them to errors.
+    /// — keys that share an identical translation.
+    /// The template checks need [`LintOptions::template_engine`].
+    /// Existing diagnostics are retained.
+    /// Issues are warnings unless [`LintOptions::strict`] promotes them to
+    /// errors.
     pub fn lint(&self, diagnostics: &mut Vec<Diagnostic<FileId>>, options: &LintOptions<'_>) {
         // Determine the language set against which every key is checked.
         let required: BTreeSet<Language> = options
@@ -229,7 +270,7 @@ impl Translations {
             required
         };
 
-        let analyzer = template::Analyzer::for_engine(options.template_engine.map(Spanned::as_ref));
+        let analyzer = lint_analyzer(self, options.template_engine, diagnostics);
 
         // Run completeness, content, and template checks per key.
         for (key, translation) in &self.0 {
@@ -405,12 +446,12 @@ fn analyze_templates<'a>(
     let mut per_language = Vec::new();
     for (language, value) in &translation.language {
         match analyzer.analyze(value.as_ref()) {
-            Some(analysis) => per_language.push(Analyzed {
+            Ok(analysis) => per_language.push(Analyzed {
                 language: *language,
                 value,
                 analysis,
             }),
-            None => emit(
+            Err(error) => emit(
                 diagnostics,
                 &translation.allow,
                 LintCode::Template,
@@ -418,7 +459,7 @@ fn analyze_templates<'a>(
                     .with_message(format!("`{}` template fails to compile", language.code()))
                     .with_labels(vec![
                         Label::primary(translation.file_id, value.span.clone())
-                            .with_message("invalid template"),
+                            .with_message(error.to_string()),
                     ]),
             ),
         }
@@ -661,22 +702,27 @@ fn lint_duplicates(
 #[cfg(test)]
 mod tests {
     use super::LintOptions;
-    use crate::{Language, Translations, diagnostics::Spanned};
+    use crate::{Language, TemplateEngine, Translations, diagnostics::Spanned};
+    use codespan_reporting::diagnostic::Severity;
     use color_eyre::eyre;
     use similar_asserts::assert_eq as sim_assert_eq;
 
-    fn lint(
+    /// Lints `raw` with the given engine, returning each diagnostic's
+    /// severity, code, and message.
+    fn lint_with_engine(
         raw: &str,
         required: &[Language],
+        engine: Option<TemplateEngine>,
         detect_duplicates: bool,
-    ) -> eyre::Result<Vec<(Option<String>, String)>> {
+    ) -> eyre::Result<Vec<(Severity, Option<String>, String)>> {
         let mut parse_diagnostics = vec![];
         let translations = Translations::from_str(raw, 0, false, &mut parse_diagnostics)?;
         let required: Vec<Spanned<Language>> =
             required.iter().copied().map(Spanned::dummy).collect();
+        let engine = engine.map(Spanned::dummy);
         let options = LintOptions {
             required_languages: &required,
-            template_engine: None,
+            template_engine: engine.as_ref(),
             strict: false,
             detect_duplicates,
         };
@@ -684,8 +730,26 @@ mod tests {
         translations.lint(&mut diagnostics, &options);
         Ok(diagnostics
             .into_iter()
-            .map(|d| (d.code, d.message))
+            .map(|d| (d.severity, d.code, d.message))
             .collect())
+    }
+
+    /// Lints `raw` as Handlebars, the engine the template checks are written
+    /// against.
+    fn lint(
+        raw: &str,
+        required: &[Language],
+        detect_duplicates: bool,
+    ) -> eyre::Result<Vec<(Option<String>, String)>> {
+        Ok(lint_with_engine(
+            raw,
+            required,
+            Some(TemplateEngine::Handlebars),
+            detect_duplicates,
+        )?
+        .into_iter()
+        .map(|(_, code, message)| (code, message))
+        .collect())
     }
 
     fn messages(raw: &str, required: &[Language]) -> eyre::Result<Vec<String>> {
@@ -830,6 +894,42 @@ mod tests {
             msgs.iter().any(|m| m == "`en` template fails to compile"),
             "{msgs:?}"
         );
+    }
+
+    /// Without a configured engine the templates are left alone, since a
+    /// catalog written for another engine would fail under a guessed parser;
+    /// one note points at the setting instead.
+    #[test_util::test]
+    fn no_engine_skips_template_checks_with_a_note() {
+        let raw = indoc::indoc! {r#"
+            [greeting]
+            en = "Hello {{ name|upper }}"
+            de = "Hallo {% if formal %}there{% endif %}"
+            arguments = { name = "string" }
+        "#};
+        let found = lint_with_engine(raw, &[], None, false)?;
+        sim_assert_eq!(
+            have: found,
+            want: vec![(
+                Severity::Note,
+                None,
+                "no template engine is configured, so templates were not checked".to_string(),
+            )]
+        );
+
+        // An engine without analysis support is reported the same way.
+        let found = lint_with_engine(raw, &[], Some(TemplateEngine::Jinja2), false)?;
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, Severity::Note);
+        assert!(found[0].2.contains("`jinja2`"), "{}", found[0].2);
+
+        // A catalog without templates has nothing to announce.
+        let plain = indoc::indoc! {r#"
+            [greeting]
+            en = "Hello"
+        "#};
+        let found = lint_with_engine(plain, &[], None, false)?;
+        assert!(found.is_empty(), "{found:?}");
     }
 
     #[test_util::test]

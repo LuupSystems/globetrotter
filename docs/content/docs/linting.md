@@ -13,13 +13,17 @@ The deterministic checks report:
 
 - a missing required language;
 - empty text or leading/trailing whitespace;
-- a Handlebars template that does not compile;
+- a template that does not compile with the configured engine;
 - a value substituted in some languages but not in others; a name that only selects a wording,
   such as `{{#if my_condition}}`, may be absent from a language without that distinction;
 - a condition whose branches are identical, so it has no effect;
 - placeholders that are undeclared, or arguments that are never used;
 - identical translations within one key;
 - duplicate text shared by different keys.
+
+The template checks use the configured `engine` (or `--engine`) and are never run with a guessed
+one: without an engine, or with one that has no template analysis yet, they are skipped and a note
+says so. Handlebars is the only engine with template analysis today.
 
 Findings are warnings by default and errors when strict mode is active in the config or on the
 command line.
