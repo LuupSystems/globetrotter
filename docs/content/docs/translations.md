@@ -57,14 +57,20 @@ de = "Willkommen zurück, {{name}}!"
 arguments = { name = "string" }
 ```
 
-Supported types are:
+Supported types, with the type each generator emits for them, are:
 
-| Type | Meaning |
-|---|---|
-| `any` | The caller may provide any value. |
-| `string` | Text. |
-| `number` | A numeric value. |
-| `isodatetime` | An ISO 8601 date-time string. |
+| Type | Meaning | Rust | TypeScript |
+|---|---|---|---|
+| `any` | The caller may provide any value. | `serde_json::Value` | `any` |
+| `string` | Text. | `&str` | `string` |
+| `number` | A numeric value, treated like `integer`. | `i64` | `number` |
+| `integer` | A whole number. | `i64` | `number` |
+| `float` | A number that may have a fractional part. | `f64` | `number` |
+| `boolean` | A true or false value. | `bool` | `boolean` |
+| `isodatetime` | An ISO 8601 date-time string. | `&str` | `string` |
+
+The generated Rust enum derives only the comparison traits all of its fields support: a `float`
+argument removes `Eq` and `Ord`, and an `any` argument removes `PartialOrd` and `Ord`.
 
 An array shorthand declares untyped arguments:
 

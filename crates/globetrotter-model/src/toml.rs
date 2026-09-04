@@ -509,6 +509,61 @@ mod tests {
         );
     }
 
+    /// A typed `arguments` table accepts every supported type name.
+    #[test_util::test]
+    fn parses_typed_arguments() -> Result<(), Error> {
+        use crate::ArgumentType;
+
+        let raw = indoc::indoc! {r#"
+            [greeting]
+            en = "Hi {{name}}"
+
+            [greeting.arguments]
+            name = "string"
+            count = "number"
+            total = "integer"
+            price = "float"
+            admin = "boolean"
+            since = "isodatetime"
+            extra = "any"
+        "#};
+        let translations = parse(raw)?;
+
+        let mut arguments: Vec<_> = translations
+            .0
+            .values()
+            .flat_map(|translation| translation.arguments.iter())
+            .map(|(name, typ)| (name.as_str(), *typ))
+            .collect();
+        arguments.sort_unstable();
+
+        assert_eq!(
+            arguments,
+            vec![
+                ("admin", ArgumentType::Boolean),
+                ("count", ArgumentType::Number),
+                ("extra", ArgumentType::Any),
+                ("name", ArgumentType::String),
+                ("price", ArgumentType::Float),
+                ("since", ArgumentType::Iso8601DateTimeString),
+                ("total", ArgumentType::Integer),
+            ]
+        );
+        Ok(())
+    }
+
+    /// Only the documented type names are accepted, so `bool` is rejected
+    /// rather than silently treated as `any`.
+    #[test_util::test]
+    fn rejects_unknown_argument_type() {
+        let result = parse(indoc::indoc! {r#"
+            [greeting]
+            en = "Hi"
+            arguments = { flag = "bool" }
+        "#});
+        assert!(matches!(result, Err(Error::Serde { .. })), "{result:?}");
+    }
+
     /// Non-string leaf values produce the normal typed parse error instead of
     /// falling through an unfinished catch-all error path.
     #[test_util::test]

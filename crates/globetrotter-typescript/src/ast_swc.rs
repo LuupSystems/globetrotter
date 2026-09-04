@@ -24,9 +24,15 @@ pub trait IntoAST<T> {
 impl IntoAST<ast::TsType> for model::ArgumentType {
     fn into_ast(self) -> ast::TsType {
         match self {
-            Self::Number => ast::TsType::TsKeywordType(ast::TsKeywordType {
+            Self::Number | Self::Integer | Self::Float => {
+                ast::TsType::TsKeywordType(ast::TsKeywordType {
+                    span: DUMMY_SP,
+                    kind: ast::TsKeywordTypeKind::TsNumberKeyword,
+                })
+            }
+            Self::Boolean => ast::TsType::TsKeywordType(ast::TsKeywordType {
                 span: DUMMY_SP,
-                kind: ast::TsKeywordTypeKind::TsNumberKeyword,
+                kind: ast::TsKeywordTypeKind::TsBooleanKeyword,
             }),
             Self::String | Self::Iso8601DateTimeString => {
                 ast::TsType::TsKeywordType(ast::TsKeywordType {
@@ -253,6 +259,9 @@ mod tests {
                             ("arg-one".to_string(), model::ArgumentType::String),
                             ("ArgTwo".to_string(), model::ArgumentType::Number),
                             ("Arg_Three".to_string(), model::ArgumentType::Any),
+                            ("ArgFour".to_string(), model::ArgumentType::Boolean),
+                            ("ArgFive".to_string(), model::ArgumentType::Integer),
+                            ("ArgSix".to_string(), model::ArgumentType::Float),
                         ]
                         .into_iter()
                         .collect(),
@@ -272,6 +281,9 @@ mod tests {
                     readonly "arg-one": string;
                     readonly "ArgTwo": number;
                     readonly "Arg_Three": any;
+                    readonly "ArgFour": boolean;
+                    readonly "ArgFive": number;
+                    readonly "ArgSix": number;
                 }) => string;
             };
         "# };

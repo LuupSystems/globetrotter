@@ -7,7 +7,6 @@ pub use config::OutputConfig;
 
 use convert_case::{Case, Casing};
 use globetrotter_model as model;
-use globetrotter_model::ext::iter::TryUnzipExt;
 use quote::{format_ident, quote};
 
 /// Common header inserted at the top of generated Rust files.
@@ -37,27 +36,93 @@ pub fn key_to_rust_enum_variant(key: &str) -> String {
     variant_name.to_case(Case::UpperCamel)
 }
 
-trait IntoTokenStream {
-    fn into_token_stream(self) -> (proc_macro2::TokenStream, bool);
+/// The comparison traits a generated field type implements.
+///
+/// The generated enum can only derive a comparison trait when every field
+/// implements it, so these are combined across fields with [`Self::and`].
+#[derive(Clone, Copy, Debug)]
+struct Comparisons {
+    eq: bool,
+    partial_ord: bool,
+    ord: bool,
 }
 
-impl IntoTokenStream for model::ArgumentType {
-    fn into_token_stream(self) -> (proc_macro2::TokenStream, bool) {
+impl Comparisons {
+    /// `Eq` and `Ord`, as implemented by integers, booleans, and strings.
+    const TOTAL: Self = Self {
+        eq: true,
+        partial_ord: true,
+        ord: true,
+    };
+    /// `PartialOrd` only, as implemented by floats.
+    const PARTIAL: Self = Self {
+        eq: false,
+        partial_ord: true,
+        ord: false,
+    };
+    /// `Eq` without any ordering, as implemented by `serde_json::Value`.
+    const EQ_ONLY: Self = Self {
+        eq: true,
+        partial_ord: false,
+        ord: false,
+    };
+
+    /// Narrows to the traits both `self` and `other` implement.
+    fn and(self, other: Self) -> Self {
+        Self {
+            eq: self.eq && other.eq,
+            partial_ord: self.partial_ord && other.partial_ord,
+            ord: self.ord && other.ord,
+        }
+    }
+}
+
+/// The Rust type generated for one template argument.
+struct RustType {
+    tokens: proc_macro2::TokenStream,
+    /// Whether the type borrows from the deserialized input and therefore
+    /// needs the enum's lifetime parameter.
+    borrows: bool,
+    comparisons: Comparisons,
+}
+
+impl RustType {
+    /// An owned type with a total order.
+    fn owned(tokens: proc_macro2::TokenStream) -> Self {
+        Self {
+            tokens,
+            borrows: false,
+            comparisons: Comparisons::TOTAL,
+        }
+    }
+}
+
+trait IntoRustType {
+    fn into_rust_type(self) -> RustType;
+}
+
+impl IntoRustType for model::ArgumentType {
+    fn into_rust_type(self) -> RustType {
         match self {
-            Self::Number => {
-                let tokens = quote! {i64};
-                (tokens, false)
-            }
+            Self::Number | Self::Integer => RustType::owned(quote! {i64}),
+            Self::Float => RustType {
+                tokens: quote! {f64},
+                borrows: false,
+                comparisons: Comparisons::PARTIAL,
+            },
+            Self::Boolean => RustType::owned(quote! {bool}),
             // Keep ISO 8601 values as strings so generated bindings do not
             // impose a date-time crate.
-            Self::String | Self::Iso8601DateTimeString => {
-                let tokens = quote! {&'a str};
-                (tokens, true)
-            }
-            Self::Any => {
-                let tokens = quote! {serde_json::Value};
-                (tokens, false)
-            }
+            Self::String | Self::Iso8601DateTimeString => RustType {
+                tokens: quote! {&'a str},
+                borrows: true,
+                comparisons: Comparisons::TOTAL,
+            },
+            Self::Any => RustType {
+                tokens: quote! {serde_json::Value},
+                borrows: false,
+                comparisons: Comparisons::EQ_ONLY,
+            },
         }
     }
 }
@@ -120,6 +185,79 @@ pub enum Error {
     Syn(String),
 }
 
+/// One generated enum variant together with the properties of its fields.
+struct Variant {
+    tokens: proc_macro2::TokenStream,
+    /// Whether any field borrows from the deserialized input.
+    borrows: bool,
+    /// The comparison traits every field implements.
+    comparisons: Comparisons,
+}
+
+/// Generates the enum variant for one translation, rejecting argument names
+/// that normalize to the same field.
+fn generate_variant(
+    safe_key: &str,
+    key: &str,
+    translation: &model::Translation,
+) -> Result<Variant, Error> {
+    use itertools::Itertools;
+
+    let fields: Vec<_> = translation
+        .arguments
+        .iter()
+        .map(|(name, typ)| (argument_to_rust_field_name(name), name, typ))
+        .collect();
+
+    let duplicates: Vec<_> = fields
+        .iter()
+        .duplicates_by(|(safe_name, _, _)| safe_name)
+        .collect();
+
+    if let Some(first) = duplicates.first() {
+        let field = first.0.clone();
+        let arguments = duplicates
+            .into_iter()
+            .map(|(_, key, _)| (*key).clone())
+            .collect();
+        return Err(Error::from(DuplicateFieldError {
+            field,
+            arguments,
+            enum_variant: safe_key.to_string(),
+            key: key.to_string(),
+        }));
+    }
+
+    let mut borrows = false;
+    let mut comparisons = Comparisons::TOTAL;
+    let fields: Vec<_> = fields
+        .into_iter()
+        .map(|(safe_name, name, typ)| {
+            let field_ident = format_ident!("{safe_name}");
+            let typ = typ.into_rust_type();
+            borrows |= typ.borrows;
+            comparisons = comparisons.and(typ.comparisons);
+            let typ = typ.tokens;
+            quote! {
+                #[serde(rename = #name)]
+                #field_ident: #typ,
+            }
+        })
+        .collect();
+
+    let variant_name_ident = format_ident!("{safe_key}");
+    let tokens = quote! {
+        #variant_name_ident {
+            #(#fields)*
+        },
+    };
+    Ok(Variant {
+        tokens,
+        borrows,
+        comparisons,
+    })
+}
+
 /// Generates a Rust `Translation` enum for the given translations.
 ///
 /// The generated code includes a `key` method that maps each variant back to
@@ -155,60 +293,16 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
         return Err(DuplicateIdentifierError { identifier, keys }.into());
     }
 
-    // Generate each variant after validating its normalized field names.
-    let enum_variants = enum_variant_names
-        .iter()
-        .map(|(safe_key, key, translation)| {
-            let fields: Vec<_> = translation
-                .arguments
-                .iter()
-                .map(|(name, typ)| (argument_to_rust_field_name(name), name, typ))
-                .collect();
-
-            // Reject argument names that normalize to the same field.
-            let duplicates: Vec<_> = fields
-                .iter()
-                .duplicates_by(|(safe_name, _, _)| safe_name)
-                .collect();
-
-            if let Some(first) = duplicates.first() {
-                let field = first.0.clone();
-                let arguments = duplicates
-                    .into_iter()
-                    .map(|(_, key, _)| (*key).clone())
-                    .collect();
-                return Err(Error::from(DuplicateFieldError {
-                    field,
-                    arguments,
-                    enum_variant: safe_key.clone(),
-                    key: key.to_string(),
-                }));
-            }
-
-            let fields = fields.into_iter().map(|(safe_name, name, typ)| {
-                let field_ident = format_ident!("{safe_name}");
-                let (typ, uses_lifetime) = typ.into_token_stream();
-                let tokens = quote! {
-                    #[serde(rename = #name)]
-                    #field_ident: #typ,
-                };
-                (tokens, uses_lifetime)
-            });
-
-            let (fields, uses_lifetime): (Vec<_>, Vec<_>) = fields.unzip();
-            let uses_lifetime = uses_lifetime.iter().any(|v| *v);
-
-            let variant_name_ident = format_ident!("{safe_key}");
-            let tokens = quote! {
-                #variant_name_ident {
-                    #(#fields)*
-                },
-            };
-            Ok((tokens, uses_lifetime))
-        });
-
-    let (enum_variants, uses_lifetime): (Vec<_>, Vec<_>) = enum_variants.try_unzip()?;
-    let uses_lifetime = uses_lifetime.iter().any(|v| *v);
+    // Generate each variant, tracking what the enum as a whole can derive.
+    let mut uses_lifetime = false;
+    let mut comparisons = Comparisons::TOTAL;
+    let mut enum_variants = Vec::with_capacity(enum_variant_names.len());
+    for (safe_key, key, translation) in &enum_variant_names {
+        let variant = generate_variant(safe_key, key.as_ref(), translation)?;
+        uses_lifetime |= variant.borrows;
+        comparisons = comparisons.and(variant.comparisons);
+        enum_variants.push(variant.tokens);
+    }
 
     // Build the reverse mapping from generated variants to translation keys.
     let enum_variant_keys: Vec<_> = enum_variant_names
@@ -230,9 +324,15 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
     };
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+    // Derive only the comparisons every field supports: floats have no total
+    // order and `serde_json::Value` has no order at all.
+    let eq = comparisons.eq.then(|| quote! { Eq, });
+    let partial_ord = comparisons.partial_ord.then(|| quote! { PartialOrd, });
+    let ord = comparisons.ord.then(|| quote! { Ord, });
+
     let out = quote! {
         #[derive(
-            Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ::serde::Serialize, ::serde::Deserialize,
+            Debug, Clone, PartialEq, #eq #partial_ord #ord ::serde::Serialize, ::serde::Deserialize,
         )]
         #[serde(untagged)]
         pub enum Translation #generics {
@@ -268,7 +368,8 @@ mod tests {
     use globetrotter_model::{self as model, diagnostics::Spanned};
     use similar_asserts::assert_eq as sim_assert_eq;
 
-    /// String arguments introduce a lifetime on the generated enum.
+    /// String arguments introduce a lifetime on the generated enum, and an
+    /// `any` argument drops the ordering derives `serde_json::Value` lacks.
     #[test_util::test]
     fn generate_enum_with_lifetime() -> eyre::Result<()> {
         let translations = [
@@ -299,6 +400,8 @@ mod tests {
                         ("arg-one".to_string(), model::ArgumentType::String),
                         ("ArgTwo".to_string(), model::ArgumentType::Number),
                         ("Arg_Three".to_string(), model::ArgumentType::Any),
+                        ("ArgFour".to_string(), model::ArgumentType::Boolean),
+                        ("ArgFive".to_string(), model::ArgumentType::Integer),
                     ]
                     .into_iter()
                     .collect(),
@@ -312,16 +415,7 @@ mod tests {
         println!("{have}");
 
         let want = indoc::indoc! {r#"
-            #[derive(
-                Debug,
-                Clone,
-                PartialEq,
-                Eq,
-                PartialOrd,
-                Ord,
-                ::serde::Serialize,
-                ::serde::Deserialize,
-            )]
+            #[derive(Debug, Clone, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
             #[serde(untagged)]
             pub enum Translation<'a> {
                 TestOne {},
@@ -332,6 +426,10 @@ mod tests {
                     arg_two: i64,
                     #[serde(rename = "Arg_Three")]
                     arg_three: serde_json::Value,
+                    #[serde(rename = "ArgFour")]
+                    arg_four: bool,
+                    #[serde(rename = "ArgFive")]
+                    arg_five: i64,
                 },
             }
             impl<'a> Translation<'a> {
@@ -339,6 +437,56 @@ mod tests {
                     match self {
                         Self::TestOne { .. } => "test.one",
                         Self::TestTwo { .. } => "test.two",
+                    }
+                }
+            }
+        "# };
+        let want = format!("{}\n{}", super::preamble(), want);
+        sim_assert_eq!(have: have, want: want);
+        Ok(())
+    }
+
+    /// Float arguments keep `PartialOrd` but cannot derive `Eq` or `Ord`.
+    #[test_util::test]
+    fn generate_enum_with_float() -> eyre::Result<()> {
+        let translations = [(
+            Spanned::dummy("cart.total".to_string()),
+            model::Translation {
+                language: [(
+                    model::Language::En,
+                    Spanned::dummy("{{count}} items for {{price}}".to_string()),
+                )]
+                .into_iter()
+                .collect(),
+                arguments: [
+                    ("count".to_string(), model::ArgumentType::Integer),
+                    ("price".to_string(), model::ArgumentType::Float),
+                ]
+                .into_iter()
+                .collect(),
+                file_id: 0,
+                allow: std::collections::BTreeSet::new(),
+            },
+        )];
+        let translations = model::Translations(translations.into_iter().collect());
+        let have = super::generate_translation_enum(&translations)?;
+        println!("{have}");
+
+        let want = indoc::indoc! {r#"
+            #[derive(Debug, Clone, PartialEq, PartialOrd, ::serde::Serialize, ::serde::Deserialize)]
+            #[serde(untagged)]
+            pub enum Translation {
+                CartTotal {
+                    #[serde(rename = "count")]
+                    count: i64,
+                    #[serde(rename = "price")]
+                    price: f64,
+                },
+            }
+            impl Translation {
+                pub fn key(&self) -> &'static str {
+                    match self {
+                        Self::CartTotal { .. } => "cart.total",
                     }
                 }
             }

@@ -119,13 +119,26 @@ pub enum ArgumentType {
     #[strum(to_string = "string")]
     String,
     /// A numeric argument.
+    /// Generated bindings treat it like [`Self::Integer`].
     #[serde(rename = "number")]
     #[strum(to_string = "number")]
     Number,
+    /// A whole-number argument.
+    #[serde(rename = "integer")]
+    #[strum(to_string = "integer")]
+    Integer,
+    /// A numeric argument that may have a fractional part.
+    #[serde(rename = "float")]
+    #[strum(to_string = "float")]
+    Float,
     /// An ISO 8601 date-time string argument.
     #[serde(rename = "isodatetime")]
     #[strum(to_string = "isodatetime")]
     Iso8601DateTimeString,
+    /// A boolean argument.
+    #[serde(rename = "boolean")]
+    #[strum(to_string = "boolean")]
+    Boolean,
 }
 
 impl ArgumentType {
@@ -133,6 +146,42 @@ impl ArgumentType {
     #[must_use]
     pub fn display(&self) -> DisplayRepr<'_, Self> {
         DisplayRepr(self)
+    }
+}
+
+#[cfg(test)]
+mod argument_type_tests {
+    use super::ArgumentType;
+    use strum::IntoEnumIterator;
+
+    /// The name shown to users is the name accepted in translation files,
+    /// both through `FromStr` and through serde.
+    #[test_util::test]
+    fn type_names_round_trip() {
+        for typ in ArgumentType::iter() {
+            let name = typ.to_string();
+            assert_eq!(name.parse::<ArgumentType>(), Ok(typ), "{name}");
+
+            let json = serde_json::Value::String(name.clone());
+            assert_eq!(serde_json::to_value(typ).ok(), Some(json.clone()), "{name}");
+            assert_eq!(
+                serde_json::from_value::<ArgumentType>(json).ok(),
+                Some(typ),
+                "{name}"
+            );
+        }
+    }
+
+    /// Primitive types use the plain names users expect next to `string`
+    /// and `number`.
+    #[test_util::test]
+    fn primitive_type_names() {
+        assert_eq!("boolean".parse(), Ok(ArgumentType::Boolean));
+        assert_eq!("integer".parse(), Ok(ArgumentType::Integer));
+        assert_eq!("float".parse(), Ok(ArgumentType::Float));
+        assert_eq!(ArgumentType::Boolean.to_string(), "boolean");
+        assert_eq!(ArgumentType::Integer.to_string(), "integer");
+        assert_eq!(ArgumentType::Float.to_string(), "float");
     }
 }
 
