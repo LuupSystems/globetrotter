@@ -29,6 +29,10 @@ targets = [
   "aarch64-apple-darwin",
 ]
 
+[workspace.metadata.cargo-fc.subcommands.t]
+diagnostics_only = false
+dedupe = false
+
 [workspace.metadata.cargo-fc.subcommands.udeps]
 maximal_features = true
 
