@@ -833,7 +833,7 @@ dependencies = [
 
 [[package]]
 name = "example-rust"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "clap",
  "color-eyre",
@@ -1090,7 +1090,7 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
 name = "globetrotter"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "aho-corasick",
  "codespan-reporting",
@@ -1129,7 +1129,7 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-cli"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "clap",
  "codespan-reporting",
@@ -1154,56 +1154,56 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-cpp"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-csharp"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-dart"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-elixir"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-golang"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-java"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-kotlin"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-llm-judge"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "async-openai",
  "blake3",
@@ -1222,14 +1222,14 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-lua"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-model"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "codespan-reporting",
  "color-eyre",
@@ -1250,28 +1250,28 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-php"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-python"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-ruby"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-rust"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "color-eyre",
  "convert_case",
@@ -1291,14 +1291,14 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-swift"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "globetrotter-typescript"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "anyhow",
  "color-eyre",
@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "globetrotter-zig"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "serde",
 ]
@@ -4160,7 +4160,7 @@ dependencies = [
 
 [[package]]
 name = "test-util"
-version = "0.0.11"
+version = "0.0.12"
 dependencies = [
  "quote",
  "syn 3.0.3",
