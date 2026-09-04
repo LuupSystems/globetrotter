@@ -61,7 +61,7 @@ jobs:
 Pin the CLI version when output stability across tool upgrades matters:
 
 ```bash
-cargo install --locked globetrotter-cli --version 0.0.10
+cargo install --locked globetrotter-cli --version 0.0.11
 ```
 
 Update the pin and committed generated files together.
