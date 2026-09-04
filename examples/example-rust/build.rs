@@ -3,10 +3,7 @@
 use color_eyre::eyre;
 use globetrotter::{
     Language,
-    config::{
-        self,
-        v1::{Config, ConfigFile, Input, JsonOutputConfig, Outputs},
-    },
+    config::v1::{Config, ConfigFile, Input, JsonOutputConfig, Outputs},
     model::TemplateEngine,
 };
 use std::path::PathBuf;
@@ -27,7 +24,7 @@ async fn main() -> eyre::Result<()> {
         .with_json([JsonOutputConfig::new(
             out_dir.join("translations_{{language}}.json"),
         )])
-        .with_rust(config::rust::OutputConfig::new([
+        .with_rust(globetrotter::rust::OutputConfig::new([
             out_dir.join("translations.rs")
         ]));
 

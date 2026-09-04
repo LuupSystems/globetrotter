@@ -7,18 +7,6 @@ pub mod v1;
 
 pub use settings::{Settings, SettingsLayer};
 
-#[cfg(feature = "python")]
-pub use globetrotter_python as python;
-
-#[cfg(feature = "rust")]
-pub use globetrotter_rust as rust;
-
-#[cfg(feature = "typescript")]
-pub use globetrotter_typescript as typescript;
-
-#[cfg(feature = "golang")]
-pub use globetrotter_golang as golang;
-
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 use globetrotter_model::diagnostics::{DiagnosticExt, Span, ToDiagnostics};
@@ -55,42 +43,13 @@ pub fn config_file_names() -> impl Iterator<Item = &'static str> {
 /// Returns an error if accessing the filesystem fails while probing for the
 /// supported configuration file names.
 pub async fn find_config_file(dir: &Path) -> std::io::Result<Option<PathBuf>> {
-    use futures::{StreamExt, TryStreamExt, stream};
-    let mut found = stream::iter(config_file_names().map(|path| dir.join(path)))
-        .map(|path| async move {
-            match tokio::fs::canonicalize(&path).await {
-                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                Err(err) => Err(err),
-                Ok(path) => Ok(Some(path)),
-            }
-        })
-        .buffered(8)
-        .into_stream();
-
-    while let Some(path) = found.try_next().await? {
-        if let Some(path) = path {
-            return Ok(Some(path));
-        }
-    }
-    Ok(None)
-}
-
-/// Searches a directory synchronously for the first supported config file.
-///
-/// Unlike [`find_config_file`], the returned path is not canonicalized.
-///
-/// # Errors
-///
-/// Returns an error if accessing the filesystem fails while probing for the
-/// supported configuration file names.
-pub fn find_config_file_sync(dir: &Path) -> std::io::Result<Option<PathBuf>> {
-    for path in config_file_names().map(|path| dir.join(path)) {
-        match std::fs::exists(&path) {
-            Err(err) => return Err(err),
-            Ok(true) => return Ok(Some(path)),
-            Ok(false) => {
+    for path in config_file_names().map(|name| dir.join(name)) {
+        match tokio::fs::canonicalize(&path).await {
+            Ok(path) => return Ok(Some(path)),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                 // Try the next supported config file name.
             }
+            Err(err) => return Err(err),
         }
     }
     Ok(None)
@@ -99,8 +58,9 @@ pub fn find_config_file_sync(dir: &Path) -> std::io::Result<Option<PathBuf>> {
 /// Parses a raw YAML string into [`v1::Configs`].
 ///
 /// Version and schema diagnostics are appended to `diagnostics`; existing
-/// diagnostics are retained. `strict` overrides the file's setting while the
-/// file itself is being parsed.
+/// diagnostics are retained.
+/// `strict` decides whether those parse-time findings are errors; the file's
+/// own `strict` key governs generation only and is not consulted here.
 ///
 /// # Errors
 ///
@@ -346,6 +306,110 @@ mod tests {
             ]
             .into_iter()
             .collect()
+        );
+        Ok(())
+    }
+
+    /// A file with neither `config` nor `configs` parses to nothing but says
+    /// so, since silently generating nothing hides a misspelled key.
+    #[test_util::test]
+    fn warns_about_missing_configurations() -> eyre::Result<()> {
+        use codespan_reporting::diagnostic::Severity;
+
+        let raw = indoc::indoc! {"
+            version: 1
+            configuration: {}
+        "};
+        let mut diagnostics = vec![];
+        let configs = super::from_str(raw, std::path::Path::new("."), (), None, &mut diagnostics)?;
+
+        assert!(configs.is_empty());
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        assert_eq!(diagnostics[0].severity, Severity::Warning);
+        assert_eq!(diagnostics[0].message, "empty configurations");
+        Ok(())
+    }
+
+    /// Every typed output section accepts one path or a list of paths, so a
+    /// configured backend is never silently dropped.
+    #[test_util::test]
+    fn parses_typed_output_paths() -> eyre::Result<()> {
+        let raw = indoc::indoc! {"
+            version: 1
+            config:
+              languages: [en]
+              inputs: [./translations.toml]
+              outputs:
+                json: ./out/{{language}}.json
+                rust: ./out/translations.rs
+                golang: [./out/a.go, ./out/b.go]
+                python: ./out/translations.py
+        "};
+        let mut diagnostics = vec![];
+        let configs = super::from_str(raw, std::path::Path::new("."), (), None, &mut diagnostics)?;
+        let outputs = &configs[0].config.outputs;
+
+        #[cfg(feature = "rust")]
+        sim_assert_eq!(
+            have: outputs.rust.as_ref().map(|rust| rust.output_paths.clone()),
+            want: Some(vec![std::path::PathBuf::from("./out/translations.rs")])
+        );
+        #[cfg(feature = "golang")]
+        sim_assert_eq!(
+            have: outputs.golang.as_ref().map(|go| go.output_paths.clone()),
+            want: Some(vec![
+                std::path::PathBuf::from("./out/a.go"),
+                std::path::PathBuf::from("./out/b.go"),
+            ])
+        );
+        #[cfg(feature = "python")]
+        sim_assert_eq!(
+            have: outputs.python.as_ref().map(|python| python.output_paths.clone()),
+            want: Some(vec![std::path::PathBuf::from("./out/translations.py")])
+        );
+        assert!(!outputs.is_empty());
+        Ok(())
+    }
+
+    /// An input's `exclude` accepts one pattern or a list of patterns.
+    #[test_util::test]
+    fn parses_exclude_as_string_or_sequence() -> eyre::Result<()> {
+        let raw = indoc::indoc! {"
+            version: 1
+            configs:
+              app:
+                languages: [en]
+                inputs:
+                  - path: ./translations/**/*.toml
+                    exclude: ./translations/drafts/*.toml
+                  - path: ./translations/**/*.toml
+                    exclude:
+                      - ./translations/drafts/*.toml
+                      - ./translations/legacy.toml
+                outputs:
+                  json: ./out/{{language}}.json
+        "};
+        let mut diagnostics = vec![];
+        let configs = super::from_str(raw, std::path::Path::new("."), (), None, &mut diagnostics)?;
+
+        let excludes: Vec<Vec<&str>> = configs[0]
+            .config
+            .inputs
+            .iter()
+            .map(|input| {
+                input
+                    .exclude
+                    .iter()
+                    .map(|pattern| pattern.as_ref().as_str())
+                    .collect()
+            })
+            .collect();
+        sim_assert_eq!(
+            have: excludes,
+            want: vec![
+                vec!["./translations/drafts/*.toml"],
+                vec!["./translations/drafts/*.toml", "./translations/legacy.toml"],
+            ]
         );
         Ok(())
     }

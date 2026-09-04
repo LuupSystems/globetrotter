@@ -17,7 +17,6 @@ use globetrotter::{
     config,
     diagnostics::Printer as DiagnosticsPrinter,
     model::diagnostics::{FileId, ToDiagnostics},
-    progress::Logger,
 };
 use std::path::PathBuf;
 
@@ -166,20 +165,17 @@ impl Globetrotter {
     /// Returns an error if translation processing or output generation fails.
     pub async fn execute(self) -> Result<(), globetrotter::Error> {
         let start = std::time::Instant::now();
-        let logger = Logger::new(&self.configs);
 
         let executor = globetrotter::Executor {
             overrides: self.options.settings_layer(),
             global_base_dir_for_display: self.global_base_dir_for_display,
-            logger: logger.clone(),
-            diagnostic_printer: self.diagnostic_printer,
-            handlebars: handlebars::Handlebars::default(),
             max_keys: self.options.max_keys,
+            ..globetrotter::Executor::new(&self.configs, self.diagnostic_printer)
         };
 
         println!();
-        executor.execute(self.configs).await?;
-        println!("{}", logger.completed(&start.elapsed()));
+        let executor = executor.execute(self.configs).await?;
+        println!("{}", executor.logger.completed(&start.elapsed()));
 
         Ok(())
     }

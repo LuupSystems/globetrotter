@@ -57,27 +57,6 @@ pub struct Translations {
 }
 
 impl crate::Translations {
-    /// Writes one language as pretty-printed JSON.
-    ///
-    /// The serialized form is identical to [`Self::translations_json`] and has
-    /// no trailing newline.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if JSON serialization fails or if a required
-    /// translation is missing while `strict` is enabled.
-    pub fn write_translations_json(
-        &self,
-        language: Language,
-        template_engine: Option<TemplateEngine>,
-        strict: bool,
-        writer: impl std::io::Write,
-    ) -> Result<Translations, Error> {
-        let translations = self.translations_json(language, strict, template_engine)?;
-        serde_json::to_writer_pretty(writer, &translations)?;
-        Ok(translations)
-    }
-
     /// Builds the JSON representation for one language.
     ///
     /// When `strict` is `false`, a missing value is replaced with a descriptive
@@ -91,8 +70,8 @@ impl crate::Translations {
     pub fn translations_json(
         &self,
         language: Language,
-        strict: bool,
         template_engine: Option<TemplateEngine>,
+        strict: bool,
     ) -> Result<Translations, Error> {
         let translations = self
             .0

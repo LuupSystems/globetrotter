@@ -42,6 +42,8 @@ python = ["dep:globetrotter-python"]
 # LLM-judged translation-consistency review during linting. Pulls in an HTTP
 # client stack (async-openai/reqwest); disable for a lighter build.
 llm-judge = ["dep:globetrotter-llm-judge", "dep:indicatif"]
+# Parallel catalog validation and sorting in the model crate.
+rayon = ["globetrotter-model/rayon"]
 
 [package.metadata.cargo-fc]
 # Language backends are independent alternatives in the matrix. The `default` row
@@ -83,16 +85,18 @@ human_bytes = "0"
 glob = "0"
 pathdiff = "0"
 normalize-path = "0"
-handlebars = "6"
+handlebars.workspace = true
 
-# config parsing
+# config parsing and JSON output
 serde.workspace = true
-indexmap = { workspace = true, features = ["serde", "rayon"] }
+serde_json.workspace = true
+indexmap.workspace = true
 yaml-spanned = "0"
 toml-span = { version = "0", features = ["reporting", "serde"] }
 
-# model
-globetrotter-model.workspace = true
+# The model crate has its default features off so that `rayon` is opted into
+# through this crate's own feature rather than always pulled in.
+globetrotter-model = { path = "../globetrotter-model", default-features = false }
 
 # optional: language targets
 globetrotter-typescript = { workspace = true, optional = true }
@@ -105,9 +109,6 @@ globetrotter-llm-judge = { workspace = true, optional = true }
 
 # optional: progress bars for the judging phase
 indicatif = { version = "0.18.6", optional = true }
-
-# optional: rayon for parallel processing
-rayon = { version = "1", optional = true }
 
 [dev-dependencies]
 color-eyre.workspace = true

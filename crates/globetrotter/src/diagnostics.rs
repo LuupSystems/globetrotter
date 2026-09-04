@@ -1,7 +1,7 @@
 //! Concurrent diagnostic rendering backed by a shared source-file registry.
 
 use codespan_reporting::{diagnostic::Diagnostic, files, term};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, LazyLock};
 use tokio::sync::{Mutex, RwLock};
 
@@ -14,30 +14,6 @@ pub struct Printer {
     writer: Arc<Mutex<term::StylesWriter<'static, term::termcolor::StandardStream>>>,
     diagnostic_config: term::Config,
     files: Arc<RwLock<files::SimpleFiles<String, String>>>,
-}
-
-/// Converts a value into the display name used for a registered source file.
-pub trait ToSourceName {
-    /// Returns the source name for this value.
-    fn to_source_name(self) -> String;
-}
-
-impl ToSourceName for String {
-    fn to_source_name(self) -> String {
-        self
-    }
-}
-
-impl ToSourceName for &Path {
-    fn to_source_name(self) -> String {
-        self.to_string_lossy().to_string()
-    }
-}
-
-impl ToSourceName for &PathBuf {
-    fn to_source_name(self) -> String {
-        self.as_path().to_source_name()
-    }
 }
 
 impl Default for Printer {
@@ -62,10 +38,13 @@ impl Printer {
         }
     }
 
-    /// Registers a source file and returns its id for diagnostic labels.
-    pub async fn add_source_file(&self, name: impl ToSourceName, source: String) -> usize {
+    /// Registers a source file and returns the id its diagnostic labels use.
+    ///
+    /// `name` is the path diagnostics display for the file, so callers pass
+    /// the form they want shown, such as a path relative to the project.
+    pub async fn add_source_file(&self, name: impl AsRef<Path>, source: String) -> usize {
         let mut files = self.files.write().await;
-        files.add(name.to_source_name(), source)
+        files.add(name.as_ref().to_string_lossy().into_owned(), source)
     }
 
     /// Renders a diagnostic to an ANSI-colored string for printing above a

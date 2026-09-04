@@ -1,29 +1,17 @@
 //! Typed-language output generation selected by Cargo features.
 
 #[cfg(any(
-    feature = "typescript",
     feature = "rust",
+    feature = "typescript",
     feature = "golang",
     feature = "python"
 ))]
-use crate::{
-    config::{
-        settings::Settings,
-        v1::{self as config},
-    },
-    error::IoError,
-    model,
-};
+use crate::config::v1::{self as config};
 #[cfg(any(feature = "rust", feature = "typescript"))]
-use crate::{executor, progress::relative_to};
+use crate::{config::settings::Settings, error::IoError, executor, model};
 #[cfg(any(feature = "rust", feature = "typescript"))]
-use futures::stream::{self, StreamExt, TryStreamExt};
-#[cfg(any(
-    feature = "typescript",
-    feature = "rust",
-    feature = "golang",
-    feature = "python"
-))]
+use std::path::PathBuf;
+#[cfg(any(feature = "rust", feature = "typescript"))]
 use std::sync::Arc;
 
 /// A code generation target language.
@@ -94,67 +82,62 @@ pub enum TypescriptOutputError {
     Task(#[from] tokio::task::JoinError),
 }
 
-/// An error produced while generating Go output.
-#[cfg(feature = "golang")]
-#[derive(thiserror::Error, Debug)]
-pub enum GolangOutputError {
-    /// Writing the generated code to disk failed.
-    #[error(transparent)]
-    Io(#[from] IoError),
-
-    /// A spawned task failed to join.
-    #[error(transparent)]
-    Task(#[from] tokio::task::JoinError),
-}
-
-/// An error produced while generating Python output.
-#[cfg(feature = "python")]
-#[derive(thiserror::Error, Debug)]
-pub enum PythonOutputError {
-    /// Writing the generated code to disk failed.
-    #[error(transparent)]
-    Io(#[from] IoError),
-
-    /// A spawned task failed to join.
-    #[error(transparent)]
-    Task(#[from] tokio::task::JoinError),
-}
-
 impl crate::executor::Executor {
-    #[cfg(feature = "python")]
-    pub(crate) async fn generate_python_outputs<F>(
+    /// Writes one generated file to every configured path of a target.
+    #[cfg(any(feature = "rust", feature = "typescript"))]
+    async fn write_target_outputs<F>(
         &self,
         config_file: &config::ConfigFile<F>,
-        _translations: &Arc<model::Translations>,
-        _settings: &Settings,
-    ) -> Result<(), PythonOutputError> {
+        target: Target,
+        output_paths: impl IntoIterator<Item = &PathBuf>,
+        code: &str,
+        settings: &Settings,
+    ) -> Result<(), IoError> {
         let config = &config_file.config;
-        if config.outputs.python.is_none() {
-            return Ok(());
+        for output_path in output_paths {
+            let output_path =
+                executor::resolve_path(config_file.config_dir.as_deref(), output_path);
+            let outcome = self
+                .write_output(&output_path, code.as_bytes(), settings)
+                .await?;
+            println!(
+                "{} {outcome}",
+                self.logger.target_log_prefix(&config.name, target)
+            );
         }
-
-        // The Python backend has no emitter, but this future preserves the
-        // shared asynchronous target interface.
-        tokio::task::yield_now().await;
         Ok(())
     }
 
+    /// Warns when Go output is configured, since nothing generates it yet.
     #[cfg(feature = "golang")]
-    pub(crate) async fn generate_golang_outputs<F>(
-        &self,
-        config_file: &config::ConfigFile<F>,
-        _translations: &Arc<model::Translations>,
-        _settings: &Settings,
-    ) -> Result<(), GolangOutputError> {
-        let config = &config_file.config;
-        if config.outputs.golang.is_none() {
-            return Ok(());
+    pub(crate) fn warn_missing_golang_generator(config: &config::Config) {
+        if config
+            .outputs
+            .golang
+            .as_ref()
+            .is_some_and(|go| !go.is_empty())
+        {
+            tracing::warn!(
+                config = config.name.as_ref(),
+                "Go output is configured, but there is no Go code generator yet; nothing is written"
+            );
         }
+    }
 
-        // The Go backend has no emitter, but this future preserves the shared
-        // asynchronous target interface.
-        tokio::task::yield_now().await;
-        Ok(())
+    /// Warns when Python output is configured, since nothing generates it yet.
+    #[cfg(feature = "python")]
+    pub(crate) fn warn_missing_python_generator(config: &config::Config) {
+        if config
+            .outputs
+            .python
+            .as_ref()
+            .is_some_and(|python| !python.is_empty())
+        {
+            tracing::warn!(
+                config = config.name.as_ref(),
+                "Python output is configured, but there is no Python code generator yet; nothing is written"
+            );
+        }
     }
 
     #[cfg(feature = "rust")]
@@ -164,50 +147,28 @@ impl crate::executor::Executor {
         translations: &Arc<model::Translations>,
         settings: &Settings,
     ) -> Result<(), RustOutputError> {
-        let config = &config_file.config;
-        let Some(ref rust_config) = config.outputs.rust else {
+        let Some(rust_config) = &config_file.config.outputs.rust else {
             return Ok(());
         };
-        stream::iter(rust_config.output_paths.iter())
-            .map(|output_path| async move { Ok(output_path) })
-            .buffer_unordered(16)
-            .try_for_each(|output_path| {
-                let translations = Arc::clone(translations);
-                async move {
-                    let output_path =
-                        executor::resolve_path(config_file.config_dir.as_deref(), output_path);
+        if rust_config.is_empty() {
+            return Ok(());
+        }
 
-                    let code = tokio::task::spawn_blocking(move || {
-                        globetrotter_rust::generate_translation_enum(&translations)
-                    })
-                    .await??;
-
-                    if settings.dry_run {
-                        println!(
-                            "{} {}",
-                            self.logger.target_log_prefix(&config.name, Target::Rust),
-                            self.logger.dry_run_would_write(&output_path),
-                        );
-                    } else {
-                        executor::write_to_file(&output_path, code.as_bytes()).await?;
-                        let displayed_path = if settings.print_absolute_paths {
-                            output_path.display().to_string()
-                        } else {
-                            relative_to(self.global_base_dir_for_display.as_deref(), &output_path)
-                                .display()
-                                .to_string()
-                        };
-                        println!(
-                            "{} wrote {}",
-                            self.logger.target_log_prefix(&config.name, Target::Rust),
-                            displayed_path,
-                        );
-                    }
-
-                    Ok::<_, RustOutputError>(())
-                }
-            })
-            .await
+        // Generate once, then write the same code to every configured path.
+        let code = tokio::task::spawn_blocking({
+            let translations = Arc::clone(translations);
+            move || globetrotter_rust::generate_translation_enum(&translations)
+        })
+        .await??;
+        self.write_target_outputs(
+            config_file,
+            Target::Rust,
+            &rust_config.output_paths,
+            &code,
+            settings,
+        )
+        .await?;
+        Ok(())
     }
 
     #[cfg(feature = "typescript")]
@@ -217,50 +178,30 @@ impl crate::executor::Executor {
         translations: &Arc<model::Translations>,
         settings: &Settings,
     ) -> Result<(), TypescriptOutputError> {
-        let config = &config_file.config;
-        let Some(ref typescript_config) = config.outputs.typescript else {
+        let Some(typescript_config) = &config_file.config.outputs.typescript else {
             return Ok(());
         };
-        stream::iter(typescript_config.interface_type.iter())
-            .map(|interface| async move { Ok(interface) })
-            .buffer_unordered(16)
-            .try_for_each(|interface| {
-                let translations = Arc::clone(translations);
-                async move {
-                    let output_path =
-                        executor::resolve_path(config_file.config_dir.as_deref(), &interface.path);
+        if typescript_config.is_empty() {
+            return Ok(());
+        }
 
-                    let code = tokio::task::spawn_blocking(move || {
-                        globetrotter_typescript::generate_translations_type_export(&translations)
-                    })
-                    .await??;
-
-                    if settings.dry_run {
-                        println!(
-                            "{} {}",
-                            self.logger
-                                .target_log_prefix(&config.name, Target::Typescript),
-                            self.logger.dry_run_would_write(&output_path),
-                        );
-                    } else {
-                        executor::write_to_file(&output_path, code.as_bytes()).await?;
-                        let displayed_path = if settings.print_absolute_paths {
-                            output_path.display().to_string()
-                        } else {
-                            relative_to(self.global_base_dir_for_display.as_deref(), &output_path)
-                                .display()
-                                .to_string()
-                        };
-                        println!(
-                            "{} wrote {}",
-                            self.logger
-                                .target_log_prefix(&config.name, Target::Typescript),
-                            displayed_path,
-                        );
-                    }
-                    Ok::<_, TypescriptOutputError>(())
-                }
-            })
-            .await
+        // Generate once, then write the same code to every configured path.
+        let code = tokio::task::spawn_blocking({
+            let translations = Arc::clone(translations);
+            move || globetrotter_typescript::generate_translations_type_export(&translations)
+        })
+        .await??;
+        self.write_target_outputs(
+            config_file,
+            Target::Typescript,
+            typescript_config
+                .interface_type
+                .iter()
+                .map(|interface| &interface.path),
+            &code,
+            settings,
+        )
+        .await?;
+        Ok(())
     }
 }

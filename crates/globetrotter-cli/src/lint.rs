@@ -3,8 +3,8 @@
 use crate::options::LintOptions;
 use color_eyre::eyre;
 use globetrotter::config::v1::{Config, ConfigFile, Input};
+use globetrotter::error::FailedWithErrors;
 use globetrotter::executor::LintParams;
-use globetrotter::progress::Logger;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -65,7 +65,6 @@ impl crate::Globetrotter {
         }
 
         // Build an executor whose settings cannot write generated outputs.
-        let logger = Logger::new(&configs);
         let executor = globetrotter::Executor {
             overrides: globetrotter::config::SettingsLayer {
                 // Lint never writes outputs, so this invariant does not depend
@@ -74,10 +73,8 @@ impl crate::Globetrotter {
                 ..self.options.settings_layer()
             },
             global_base_dir_for_display: self.global_base_dir_for_display,
-            logger,
-            diagnostic_printer: self.diagnostic_printer,
-            handlebars: handlebars::Handlebars::default(),
             max_keys: self.options.max_keys,
+            ..globetrotter::Executor::new(&configs, self.diagnostic_printer)
         };
 
         #[cfg(feature = "llm-judge")]
@@ -108,24 +105,17 @@ impl crate::Globetrotter {
             }
             // Findings are an expected outcome, not a crash: report a clean
             // summary and exit non-zero without an error trace.
-            Err(globetrotter::Error::Failed(failed)) => {
-                let errors = pluralize(failed.num_errors, "error");
-                let warnings = pluralize(failed.num_warnings, "warning");
-                if failed.num_errors > 0 {
-                    tracing::error!("found {errors} and {warnings} in {elapsed}");
+            Err(globetrotter::Error::Failed(FailedWithErrors(tally))) => {
+                if tally.has_errors() {
+                    tracing::error!("found {tally} in {elapsed}");
                 } else {
-                    tracing::warn!("found {warnings} in {elapsed}");
+                    tracing::warn!("found {tally} in {elapsed}");
                 }
                 Ok(ExitCode::FAILURE)
             }
             Err(error) => Err(error.into()),
         }
     }
-}
-
-/// `"1 error"` / `"3 errors"`.
-fn pluralize(count: usize, noun: &str) -> String {
-    format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
 }
 
 /// Human-friendly elapsed time: `"2m 43s"`, `"12.3s"`, or `"450ms"`.

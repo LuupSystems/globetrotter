@@ -41,9 +41,8 @@ fn pad_right(value: &str, width: usize, fill: char) -> String {
 #[must_use]
 pub fn relative_to(base_dir: Option<&Path>, path: &Path) -> PathBuf {
     base_dir
-        .as_ref()
         .and_then(|base_dir| pathdiff::diff_paths(path, base_dir))
-        .unwrap_or(path.to_path_buf())
+        .unwrap_or_else(|| path.to_path_buf())
 }
 
 /// Formats aligned progress log lines for configs and targets.

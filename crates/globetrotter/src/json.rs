@@ -7,11 +7,8 @@ use crate::{
     },
     error::IoError,
     executor, model,
-    progress::relative_to,
 };
 use colored::Colorize;
-use futures::stream::{self, StreamExt, TryStreamExt};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -67,111 +64,79 @@ impl executor::Executor {
         Ok(path.into())
     }
 
+    /// Writes one language's JSON to every configured JSON output.
+    async fn generate_json_language<F>(
+        &self,
+        config_file: &config::ConfigFile<F>,
+        translations: &model::Translations,
+        settings: &Settings,
+        language: model::Language,
+    ) -> Result<(), JsonOutputError> {
+        let config = &config_file.config;
+
+        // Serialize the language once for every output path and for sizing.
+        let json = translations.translations_json(
+            language,
+            settings
+                .template_engine
+                .as_ref()
+                .map(|engine| engine.as_ref().clone()),
+            settings.strict,
+        )?;
+        let json = Arc::new(serde_json::to_vec_pretty(&json).map_err(model::json::Error::from)?);
+
+        // Compression is CPU-bound and only informs the log line, so it runs
+        // off the async runtime while the files are written.
+        let gzip_task = tokio::task::spawn_blocking({
+            let json = Arc::clone(&json);
+            move || crate::gzip::gzipped_size(&*json)
+        });
+
+        let mut outcomes = Vec::with_capacity(config.outputs.json.len());
+        for output in &config.outputs.json {
+            let output_path = self.resolve_json_output_path(&output.path, language)?;
+            let output_path =
+                executor::resolve_path(config_file.config_dir.as_deref(), &output_path);
+            outcomes.push(self.write_output(&output_path, &json, settings).await?);
+        }
+
+        let num_bytes_gzip = gzip_task.await?.unwrap_or(0);
+        let prefix = self.logger.language_log_prefix(&config.name, language);
+        for outcome in outcomes {
+            let sizes = if settings.dry_run {
+                format!(
+                    "({}, {} gzipped)",
+                    human_readable_bytes(json.len()),
+                    human_readable_bytes(num_bytes_gzip).bold()
+                )
+                .bright_black()
+            } else {
+                format!(
+                    "({}, {} gzipped)",
+                    human_readable_bytes(json.len()),
+                    human_readable_bytes(num_bytes_gzip).bold().magenta()
+                )
+                .normal()
+            };
+            println!("{prefix} {outcome} {sizes}");
+        }
+        Ok(())
+    }
+
     pub(crate) async fn generate_json_outputs<F>(
         &self,
         config_file: &config::ConfigFile<F>,
         translations: &Arc<model::Translations>,
         settings: &Settings,
     ) -> Result<(), JsonOutputError> {
-        let config = &config_file.config;
-
-        // Resolve every configured output template for every language.
-        let json_output_paths = config.languages.iter().flat_map(|language| {
-            config.outputs.json.iter().cloned().map(move |config| {
-                let output_path = self.resolve_json_output_path(&config.path, **language)?;
-                Ok::<_, JsonOutputError>((config, output_path, language))
-            })
-        });
-        stream::iter(json_output_paths)
-            .map(|res| async { res })
-            .buffer_unordered(16)
-            .try_for_each(|res| {
-                let translations = Arc::clone(translations);
-                async move {
-                    let (_json_config, json_output_path, language) = res;
-                    let json_output_path = executor::resolve_path(
-                        config_file.config_dir.as_deref(),
-                        &json_output_path,
-                    );
-
-                    // Serialize one language once for both writing and sizing.
-                    let mut json = Vec::new();
-                    {
-                        let mut writer = std::io::BufWriter::new(std::io::Cursor::new(&mut json));
-                        translations.write_translations_json(
-                            **language,
-                            settings
-                                .template_engine
-                                .as_ref()
-                                .map(|tpl| tpl.as_ref().clone()),
-                            settings.strict,
-                            &mut writer,
-                        )?;
-                        let _ = writer.flush();
-                    }
-
-                    let json = Arc::new(json);
-
-                    // Compute the gzipped display size off the async runtime.
-                    // Compression is CPU-bound and can run alongside the write.
-                    let gzip_task = tokio::task::spawn_blocking({
-                        let json = Arc::clone(&json);
-                        move || crate::gzip::gzipped_size(&*json)
-                    });
-
-                    // Write the same serialized bytes unless this is a dry run.
-                    let dry_run = settings.dry_run;
-                    let write_task = tokio::task::spawn({
-                        let json_output_path = json_output_path.clone();
-                        let json = Arc::clone(&json);
-                        async move {
-                            if dry_run {
-                                return Ok(());
-                            }
-                            executor::write_to_file(&json_output_path, &*json).await?;
-                            Ok::<_, JsonOutputError>(())
-                        }
-                    });
-
-                    // Wait for both tasks before reporting their output sizes.
-                    let () = write_task.await??;
-                    let num_bytes_gzip = gzip_task.await?.unwrap_or(0);
-
-                    if dry_run {
-                        println!(
-                            "{} {} {}",
-                            self.logger.language_log_prefix(&config.name, **language),
-                            self.logger.dry_run_would_write(&json_output_path),
-                            format!(
-                                "({}, {} gzipped)",
-                                human_readable_bytes(json.len()),
-                                human_readable_bytes(num_bytes_gzip).bold()
-                            )
-                            .bright_black()
-                        );
-                    } else {
-                        let displayed_path = if settings.print_absolute_paths {
-                            json_output_path.display().to_string()
-                        } else {
-                            relative_to(
-                                self.global_base_dir_for_display.as_deref(),
-                                &json_output_path,
-                            )
-                            .display()
-                            .to_string()
-                        };
-                        println!(
-                            "{} wrote {} ({}, {} gzipped)",
-                            self.logger.language_log_prefix(&config.name, **language),
-                            displayed_path,
-                            human_readable_bytes(json.len()),
-                            human_readable_bytes(num_bytes_gzip).bold().magenta()
-                        );
-                    }
-
-                    Ok::<_, JsonOutputError>(())
-                }
-            })
-            .await
+        if config_file.config.outputs.json.is_empty() {
+            return Ok(());
+        }
+        // Languages are independent, so their files are written concurrently.
+        futures::future::try_join_all(config_file.config.languages.iter().map(|language| {
+            self.generate_json_language(config_file, translations, settings, **language)
+        }))
+        .await?;
+        Ok(())
     }
 }

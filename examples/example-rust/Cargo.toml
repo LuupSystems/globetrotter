@@ -17,7 +17,7 @@ globetrotter-rust.workspace = true
 globetrotter-model.workspace = true
 
 # template engine
-handlebars = "6"
+handlebars.workspace = true
 
 # read translations
 serde.workspace = true

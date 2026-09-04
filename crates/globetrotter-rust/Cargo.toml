@@ -36,16 +36,15 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 thiserror.workspace = true
 indoc.workspace = true
-tracing.workspace = true
 
 globetrotter-model.workspace = true
 
 # rust codegen using syn
-syn = { version = "3.0.0", features = ["full"] }
+syn = { version = "3", features = ["full"] }
 proc-macro2 = "1"
 quote = "1"
-prettyplease = "0"
-convert_case = "0"
+prettyplease = "0.3"
+convert_case = "0.11"
 itertools.workspace = true
 
 # optional: serde

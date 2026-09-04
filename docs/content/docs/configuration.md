@@ -105,6 +105,17 @@ The path may be a single file or a glob. The optional fields compose the final k
 | `prepend_relative_path` | Adds directories below the glob's base path. |
 | `separator` | Changes the separator used when joining key components. |
 
+`exclude` removes files a glob would otherwise select. It takes one pattern or a list, and a
+pattern that matches nothing is not an error:
+
+```yaml
+inputs:
+  - path: ./translations/**/*.toml
+    exclude:
+      - ./translations/drafts/*.toml
+      - ./translations/legacy.toml
+```
+
 Use the smallest namespace that prevents collisions. A fixed application or package prefix is
 usually enough; path-derived prefixes are useful for a large catalog split across directories.
 

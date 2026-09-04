@@ -27,7 +27,7 @@ pub struct LoggingOptions {
         long = "log-format",
         env = "LOG_FORMAT",
         global = true,
-        help = "log format (json or pretty)"
+        help = "log format (json, pretty, or pretty-compact)"
     )]
     pub log_format: Option<crate::telemetry::LogFormat>,
 

@@ -188,22 +188,9 @@ pub fn parse_input<F>(
 
             // Parse the exclusion field in either accepted shape.
             let exclude = match mapping.get("exclude") {
-                None => Ok(vec![]),
-                Some(yaml_spanned::Spanned {
-                    span,
-                    inner: Value::String(path_or_glob_pattern),
-                }) => Ok(vec![Spanned::new(*span, path_or_glob_pattern.clone())]),
-                Some(yaml_spanned::Spanned {
-                    inner: Value::Sequence(_sequence),
-                    ..
-                }) => Ok(vec![]),
-                Some(other) => Err(ConfigError::UnexpectedType {
-                    message: "exclude must be a path or a sequence of paths".to_string(),
-                    found: other.kind(),
-                    expected: vec![Kind::Sequence, Kind::String],
-                    span: other.span().into(),
-                }),
-            }?;
+                None => vec![],
+                Some(value) => parse_patterns(value, "exclude")?,
+            };
 
             // Parse the optional key-prefixing policy.
             let prefix = parse_optional::<String>(mapping.get("prefix"))?;
@@ -229,6 +216,43 @@ pub fn parse_input<F>(
     }
 }
 
+/// Parses a field that holds one path or glob pattern, or a sequence of them.
+///
+/// `field` names the field in the error message.
+///
+/// # Errors
+///
+/// Returns an error if the value is neither a string nor a sequence of
+/// strings.
+fn parse_patterns(
+    value: &yaml_spanned::Spanned<Value>,
+    field: &str,
+) -> Result<Vec<Spanned<PathOrGlobPattern>>, ConfigError> {
+    match value.as_ref() {
+        Value::String(pattern) => Ok(vec![Spanned::new(value.span, pattern.clone())]),
+        Value::Sequence(patterns) => patterns
+            .iter()
+            .map(|pattern| {
+                let text = pattern
+                    .as_str()
+                    .ok_or_else(|| ConfigError::UnexpectedType {
+                        message: format!("{field} entries must be paths or glob patterns"),
+                        expected: vec![Kind::String],
+                        found: pattern.kind(),
+                        span: pattern.span().into(),
+                    })?;
+                Ok(Spanned::new(pattern.span, text.to_string()))
+            })
+            .collect(),
+        _other => Err(ConfigError::UnexpectedType {
+            message: format!("{field} must be a path or a sequence of paths"),
+            expected: vec![Kind::Sequence, Kind::String],
+            found: value.kind(),
+            span: value.span().into(),
+        }),
+    }
+}
+
 /// Borrows a YAML value as a sequence.
 ///
 /// # Errors
@@ -245,42 +269,39 @@ pub fn expect_sequence(value: &yaml_spanned::Spanned<Value>) -> Result<&Sequence
         })
 }
 
-/// Borrows a YAML value as a mapping together with its source span.
+/// Borrows a YAML value as a mapping.
 ///
 /// # Errors
 ///
 /// Returns an error if the value is not a mapping.
-pub fn expect_mapping(
-    value: &yaml_spanned::Spanned<Value>,
-) -> Result<(&yaml_spanned::spanned::Span, &Mapping), ConfigError> {
-    let mapping = value
+pub fn expect_mapping(value: &yaml_spanned::Spanned<Value>) -> Result<&Mapping, ConfigError> {
+    value
         .as_mapping()
         .ok_or_else(|| ConfigError::UnexpectedType {
             message: "expected mapping".to_string(),
             expected: vec![Kind::Mapping],
             found: value.kind(),
             span: value.span().into(),
-        })?;
-    Ok((value.span(), mapping))
+        })
 }
 
-/// Parses the Rust output configuration.
+/// Parses an output section that is one file path or a sequence of them.
+///
+/// The section is looked up under each of `keys` in turn, so a target can
+/// accept an alias.
+/// Returns `None` when none of the keys is present.
 ///
 /// # Errors
 ///
-/// Returns an error if the `rust`/`rs` output configuration has an unexpected
-/// type or contains invalid output paths.
-#[cfg(feature = "rust")]
-pub fn parse_rust_outputs(
-    value: &Mapping,
-) -> Result<Option<globetrotter_rust::OutputConfig>, ConfigError> {
-    use globetrotter_rust::config::OutputConfig;
-
-    let Some(outputs) = value.get("rust").or_else(|| value.get("rs")) else {
+/// Returns an error if the section is neither a string nor a sequence of
+/// strings.
+#[cfg(any(feature = "rust", feature = "golang", feature = "python"))]
+fn parse_output_paths(value: &Mapping, keys: &[&str]) -> Result<Option<Vec<PathBuf>>, ConfigError> {
+    let Some(outputs) = keys.iter().find_map(|key| value.get(key)) else {
         return Ok(None);
     };
     let paths = match outputs.as_ref() {
-        Value::String(path) => Ok(vec![path.into()]),
+        Value::String(path) => vec![path.into()],
         Value::Sequence(paths) => paths
             .iter()
             .map(|path| {
@@ -294,17 +315,59 @@ pub fn parse_rust_outputs(
                     })?;
                 Ok(path.into())
             })
-            .collect::<Result<Vec<PathBuf>, ConfigError>>(),
-        other => Err(ConfigError::UnexpectedType {
-            message: "expected file path or sequence of file paths".to_string(),
-            expected: vec![Kind::Sequence, Kind::String],
-            found: other.kind(),
-            span: outputs.span().into(),
-        }),
-    }?;
-    Ok(Some(OutputConfig {
-        output_paths: paths,
-    }))
+            .collect::<Result<Vec<PathBuf>, ConfigError>>()?,
+        other => {
+            return Err(ConfigError::UnexpectedType {
+                message: "expected file path or sequence of file paths".to_string(),
+                expected: vec![Kind::Sequence, Kind::String],
+                found: other.kind(),
+                span: outputs.span().into(),
+            });
+        }
+    };
+    Ok(Some(paths))
+}
+
+/// Parses the Rust output configuration.
+///
+/// # Errors
+///
+/// Returns an error if the `rust`/`rs` output configuration has an unexpected
+/// type or contains invalid output paths.
+#[cfg(feature = "rust")]
+pub fn parse_rust_outputs(
+    value: &Mapping,
+) -> Result<Option<globetrotter_rust::OutputConfig>, ConfigError> {
+    Ok(parse_output_paths(value, &["rust", "rs"])?
+        .map(|output_paths| globetrotter_rust::OutputConfig { output_paths }))
+}
+
+/// Parses the Go output configuration.
+///
+/// # Errors
+///
+/// Returns an error if the `golang`/`go` output configuration has an
+/// unexpected type or contains invalid output paths.
+#[cfg(feature = "golang")]
+pub fn parse_golang_outputs(
+    value: &Mapping,
+) -> Result<Option<globetrotter_golang::OutputConfig>, ConfigError> {
+    Ok(parse_output_paths(value, &["golang", "go"])?
+        .map(|output_paths| globetrotter_golang::OutputConfig { output_paths }))
+}
+
+/// Parses the Python output configuration.
+///
+/// # Errors
+///
+/// Returns an error if the `python`/`py` output configuration has an
+/// unexpected type or contains invalid output paths.
+#[cfg(feature = "python")]
+pub fn parse_python_outputs(
+    value: &Mapping,
+) -> Result<Option<globetrotter_python::OutputConfig>, ConfigError> {
+    Ok(parse_output_paths(value, &["python", "py"])?
+        .map(|output_paths| globetrotter_python::OutputConfig { output_paths }))
 }
 
 /// Parses the TypeScript output configuration.
@@ -322,7 +385,7 @@ pub fn parse_typescript_outputs(
     let Some(outputs) = value.get("typescript").or_else(|| value.get("ts")) else {
         return Ok(None);
     };
-    let (_span, outputs) = expect_mapping(outputs)?;
+    let outputs = expect_mapping(outputs)?;
 
     let interface_type: Vec<_> = outputs
         .get("type")
@@ -478,7 +541,7 @@ pub fn parse_outputs<F: Copy + PartialEq>(
         diagnostics.push(diagnostic);
         return Ok(Outputs::default());
     };
-    let (_span, outputs) = expect_mapping(outputs)?;
+    let outputs = expect_mapping(outputs)?;
 
     Ok(Outputs {
         json: parse_json_outputs(outputs)?,
@@ -487,9 +550,9 @@ pub fn parse_outputs<F: Copy + PartialEq>(
         #[cfg(feature = "rust")]
         rust: parse_rust_outputs(outputs)?,
         #[cfg(feature = "golang")]
-        golang: None,
+        golang: parse_golang_outputs(outputs)?,
         #[cfg(feature = "python")]
-        python: None,
+        python: parse_python_outputs(outputs)?,
     })
 }
 
@@ -579,11 +642,12 @@ pub fn parse_configs<F: Copy + PartialEq>(
     }
 
     let Some(configs) = value.get("configs") else {
-        let _diagnostic = Diagnostic::warning_or_error(strict.unwrap_or(false))
+        let diagnostic = Diagnostic::warning_or_error(strict.unwrap_or(false))
             .with_message("empty configurations")
             .with_labels(vec![Label::primary(file_id, value.span).with_message(
                 "no configurations specified - no output will be generated",
             )]);
+        diagnostics.push(diagnostic);
         return Ok(Configs::default());
     };
 

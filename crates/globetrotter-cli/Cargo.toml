@@ -65,8 +65,6 @@ path = "src/main.rs"
 tokio.workspace = true
 futures.workspace = true
 color-eyre.workspace = true
-strum.workspace = true
-thiserror.workspace = true
 
 # colors and diagnostics
 termcolor = "1"
@@ -83,7 +81,6 @@ tracing-subscriber = { version = "0", features = ["json", "env-filter"] }
 # default-features off so the CLI's own features fully control globetrotter's
 # (notably `llm-judge`, so disabling it drops the HTTP client stack).
 globetrotter = { path = "../globetrotter", default-features = false }
-handlebars.workspace = true
 
 # OS-standard user cache directory for models and downloaded data
 dirs = "6"
