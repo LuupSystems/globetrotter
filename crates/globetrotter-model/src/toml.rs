@@ -78,12 +78,12 @@ mod diagnostics {
                             Label::primary(file_id, span.clone())
                                 .with_message(format!("expected {expected}")),
                         ])
-                        .with_notes(vec![unindent::unindent(&format!(
+                        .with_notes(vec![indoc::formatdoc!(
                             "
-                        expected type {expected}
-                           found type `{found:?}`
-                        "
-                        ))]);
+                            expected type {expected}
+                               found type `{found:?}`
+                            "
+                        )]);
                     vec![diagnostic]
                 }
                 Self::MissingLanguageKey { language } => {
@@ -471,26 +471,38 @@ mod tests {
 
     #[test_util::test]
     fn rejects_unknown_allow_code() {
-        // spellcheck:ignore-next-line
-        let result = parse("[greeting]\nen = \"Hi\"\nallow = [\"duplicat\"]\n");
+        // spellcheck:ignore-start
+        let result = parse(indoc::indoc! {r#"
+            [greeting]
+            en = "Hi"
+            allow = ["duplicat"]
+        "#});
         assert!(
-            // spellcheck:ignore-next-line
             matches!(&result, Err(Error::UnknownLintCode { code, .. }) if code == "duplicat"),
             "{result:?}"
         );
+        // spellcheck:ignore-end
     }
 
     #[test_util::test]
     fn accepts_known_allow_codes_and_all() {
         for code in ["duplicate", "llm-drift", "missing-language", "all"] {
-            let raw = format!("[greeting]\nen = \"Hi\"\nallow = [\"{code}\"]\n");
+            let raw = indoc::formatdoc! {r#"
+                [greeting]
+                en = "Hi"
+                allow = ["{code}"]
+            "#};
             assert!(parse(&raw).is_ok(), "{code}: {:?}", parse(&raw));
         }
     }
 
     #[test_util::test]
     fn rejects_unknown_single_string_allow() {
-        let result = parse("[greeting]\nen = \"Hi\"\nallow = \"nope\"\n");
+        let result = parse(indoc::indoc! {r#"
+            [greeting]
+            en = "Hi"
+            allow = "nope"
+        "#});
         assert!(
             matches!(result, Err(Error::UnknownLintCode { .. })),
             "{result:?}"
@@ -501,7 +513,10 @@ mod tests {
     /// falling through an unfinished catch-all error path.
     #[test_util::test]
     fn rejects_non_string_translation_values() {
-        let result = parse("[greeting]\nen = 42\n");
+        let result = parse(indoc::indoc! {"
+            [greeting]
+            en = 42
+        "});
         assert!(
             matches!(
                 result,

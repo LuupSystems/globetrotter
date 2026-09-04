@@ -46,7 +46,7 @@ tracing.workspace = true
 
 globetrotter-model.workspace = true
 
-unindent = "0"
+indoc.workspace = true
 
 # optional: swc based typescript codegen
 swc_core = { version = "77.0.2", features = ["base", "common", "ecma_ast"], optional = true }
@@ -59,7 +59,6 @@ serde_json = { workspace = true }
 [dev-dependencies]
 color-eyre.workspace = true
 similar-asserts.workspace = true
-indoc = "2"
 test-util.workspace = true
 # include ecma parser for reference
 swc_core = { version = "77.0.2", features = ["base", "common", "ecma_ast", "ecma_parser"] }

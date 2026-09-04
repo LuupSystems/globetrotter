@@ -1110,6 +1110,7 @@ dependencies = [
  "ignore",
  "indexmap",
  "indicatif",
+ "indoc",
  "itertools",
  "normalize-path",
  "pathdiff",
@@ -1123,7 +1124,6 @@ dependencies = [
  "tokio",
  "toml-span",
  "tracing",
- "unindent",
  "yaml-spanned",
 ]
 
@@ -1210,6 +1210,7 @@ dependencies = [
  "color-eyre",
  "dirs",
  "futures",
+ "indoc",
  "schemars",
  "serde",
  "serde_json",
@@ -1234,6 +1235,7 @@ dependencies = [
  "color-eyre",
  "handlebars",
  "indexmap",
+ "indoc",
  "rayon",
  "serde",
  "serde_json",
@@ -1244,7 +1246,6 @@ dependencies = [
  "thiserror 2.0.20",
  "toml-span",
  "tracing",
- "unindent",
 ]
 
 [[package]]
@@ -1310,7 +1311,6 @@ dependencies = [
  "test-util",
  "thiserror 2.0.20",
  "tracing",
- "unindent",
 ]
 
 [[package]]
@@ -4561,12 +4561,6 @@ name = "unicode-width"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
-
-[[package]]
-name = "unindent"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7264e107f553ccae879d21fbea1d6724ac785e8c3bfc762137959b5802826ef3"
 
 [[package]]
 name = "unit-prefix"

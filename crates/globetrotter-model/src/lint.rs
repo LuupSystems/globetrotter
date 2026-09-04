@@ -681,7 +681,10 @@ mod tests {
 
     #[test_util::test]
     fn flags_missing_required_language() {
-        let raw = "\n[greeting]\nen = \"Hello\"\n";
+        let raw = indoc::indoc! {r#"
+            [greeting]
+            en = "Hello"
+        "#};
         let msgs = messages(raw, &[Language::En, Language::De])?;
         assert!(
             msgs.iter().any(|m| m == "missing `de` translation"),
@@ -691,7 +694,11 @@ mod tests {
 
     #[test_util::test]
     fn flags_empty_and_whitespace_values() {
-        let raw = "\n[a]\nen = \"\"\nde = \" Hallo \"\n";
+        let raw = indoc::indoc! {r#"
+            [a]
+            en = ""
+            de = " Hallo "
+        "#};
         let msgs = messages(raw, &[])?;
         assert!(
             msgs.iter().any(|m| m == "empty `en` translation"),
@@ -706,7 +713,12 @@ mod tests {
 
     #[test_util::test]
     fn flags_template_argument_problems() {
-        let raw = "\n[greeting]\nen = \"Hello {{name}}\"\nde = \"Hallo\"\narguments = { title = \"string\" }\n";
+        let raw = indoc::indoc! {r#"
+            [greeting]
+            en = "Hello {{name}}"
+            de = "Hallo"
+            arguments = { title = "string" }
+        "#};
         let msgs = messages(raw, &[])?;
         assert!(
             msgs.iter()
@@ -727,7 +739,10 @@ mod tests {
 
     #[test_util::test]
     fn flags_undeclared_arguments_without_arguments_table() {
-        let raw = "\n[greeting]\nen = \"Hello {{name}}\"\n";
+        let raw = indoc::indoc! {r#"
+            [greeting]
+            en = "Hello {{name}}"
+        "#};
         let msgs = messages(raw, &[])?;
         assert!(
             msgs.iter()
@@ -738,7 +753,10 @@ mod tests {
 
     #[test_util::test]
     fn flags_template_compile_error() {
-        let raw = "\n[a]\nen = \"{{#each}}\"\n";
+        let raw = indoc::indoc! {r#"
+            [a]
+            en = "{{#each}}"
+        "#};
         let msgs = messages(raw, &[])?;
         assert!(
             msgs.iter().any(|m| m == "`en` template fails to compile"),
@@ -748,7 +766,12 @@ mod tests {
 
     #[test_util::test]
     fn clean_translations_produce_no_diagnostics() {
-        let raw = "\n[greeting]\nde = \"Hallo {{name}}\"\nen = \"Hello {{name}}\"\narguments = { name = \"string\" }\n";
+        let raw = indoc::indoc! {r#"
+            [greeting]
+            de = "Hallo {{name}}"
+            en = "Hello {{name}}"
+            arguments = { name = "string" }
+        "#};
         let msgs = messages(raw, &[Language::De, Language::En])?;
         assert!(msgs.is_empty(), "{msgs:?}");
     }
@@ -756,20 +779,28 @@ mod tests {
     #[test_util::test]
     fn allow_key_suppresses_a_lint() {
         // `b` is missing `de` but allows the missing-language lint.
-        let raw = concat!(
-            "\n[a]\nen = \"Hello\"\nde = \"Hallo\"\n",
-            "\n[b]\nen = \"Bye\"\nallow = [\"missing-language\"]\n"
-        );
+        let raw = indoc::indoc! {r#"
+            [a]
+            en = "Hello"
+            de = "Hallo"
+
+            [b]
+            en = "Bye"
+            allow = ["missing-language"]
+        "#};
         let msgs = messages(raw, &[Language::En, Language::De])?;
         assert!(msgs.iter().all(|m| !m.contains("missing `de`")), "{msgs:?}");
     }
 
     #[test_util::test]
     fn detects_identical_translations_ignoring_case() {
-        let raw = concat!(
-            "\n[one]\nen = \"please upload your documents now\"\n",
-            "\n[two]\nen = \"Please upload your documents now\"\n"
-        );
+        let raw = indoc::indoc! {r#"
+            [one]
+            en = "please upload your documents now"
+
+            [two]
+            en = "Please upload your documents now"
+        "#};
         let found = lint(raw, &[], true)?;
         assert!(
             found
@@ -784,10 +815,13 @@ mod tests {
     fn near_duplicates_are_not_reported() {
         // A one-word variation (`connect`/`connected`) must not satisfy exact
         // duplicate matching.
-        let raw = concat!(
-            "\n[connect]\nen = \"connect to the Europace service\"\n",
-            "\n[connected]\nen = \"connected to the Europace service\"\n"
-        );
+        let raw = indoc::indoc! {r#"
+            [connect]
+            en = "connect to the Europace service"
+
+            [connected]
+            en = "connected to the Europace service"
+        "#};
         let found = lint(raw, &[], true)?;
         assert!(
             found
@@ -801,7 +835,13 @@ mod tests {
     #[test_util::test]
     fn detects_single_word_duplicates() {
         // One shared word still forms an exact duplicate.
-        let raw = concat!("\n[save]\nen = \"Save\"\n", "\n[store]\nen = \"Save\"\n");
+        let raw = indoc::indoc! {r#"
+            [save]
+            en = "Save"
+
+            [store]
+            en = "Save"
+        "#};
         let found = lint(raw, &[], true)?;
         assert!(
             found
@@ -815,7 +855,12 @@ mod tests {
     #[test_util::test]
     fn flags_identical_languages_within_a_key() {
         // English copied into German is likely untranslated.
-        let raw = "\n[greeting]\nen = \"Hello\"\nde = \"Hello\"\nfr = \"Bonjour\"\n";
+        let raw = indoc::indoc! {r#"
+            [greeting]
+            en = "Hello"
+            de = "Hello"
+            fr = "Bonjour"
+        "#};
         let found = lint(raw, &[], true)?;
         assert!(
             found
@@ -825,7 +870,12 @@ mod tests {
         );
 
         // Distinct translations are not flagged.
-        let ok = "\n[hi]\nen = \"Hello\"\nde = \"Hallo\"\nfr = \"Bonjour\"\n";
+        let ok = indoc::indoc! {r#"
+            [hi]
+            en = "Hello"
+            de = "Hallo"
+            fr = "Bonjour"
+        "#};
         let found = lint(ok, &[], true)?;
         assert!(
             found
@@ -837,10 +887,14 @@ mod tests {
 
     #[test_util::test]
     fn allow_suppresses_duplicate() {
-        let raw = concat!(
-            "\n[one]\nen = \"please upload your documents now\"\n",
-            "\n[two]\nen = \"please upload your documents now\"\nallow = [\"duplicate\"]\n"
-        );
+        let raw = indoc::indoc! {r#"
+            [one]
+            en = "please upload your documents now"
+
+            [two]
+            en = "please upload your documents now"
+            allow = ["duplicate"]
+        "#};
         let found = lint(raw, &[], true)?;
         assert!(
             found

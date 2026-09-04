@@ -36,6 +36,7 @@ tracing.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 futures.workspace = true
+indoc.workspace = true
 
 # Chat-completions client for any OpenAI-compatible endpoint (base URL is
 # configurable, so local servers like ollama/vLLM/llama.cpp work unchanged).

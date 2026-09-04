@@ -297,10 +297,18 @@ mod tests {
     #[test_util::test]
     fn explicit_root_with_config_file_is_still_scanned() -> eyre::Result<()> {
         let dir = temp_dir("root-config")?;
-        std::fs::write(dir.join(".globetrotter.yaml"), "version: 1\nconfigs: []\n")?;
+        std::fs::write(
+            dir.join(".globetrotter.yaml"),
+            indoc::indoc! {"
+                version: 1
+                configs: []
+            "},
+        )?;
         std::fs::write(
             dir.join("app.ts"),
-            "export const title = t('upload.title');\n",
+            indoc::indoc! {"
+                export const title = t('upload.title');
+            "},
         )?;
 
         let key = DefinedKey {

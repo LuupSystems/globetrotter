@@ -135,8 +135,8 @@ mod tests {
     /// while serialization remains pinned to its stable version number.
     #[test_util::test]
     fn latest_alias_resolves_to_v1() -> serde_json::Result<()> {
-        assert_eq!(serde_json::from_str::<Version>("\"latest\"")?, Version::V1);
-        assert_eq!(serde_json::to_string(&Version::V1)?, "\"1\"");
+        assert_eq!(serde_json::from_str::<Version>(r#""latest""#)?, Version::V1);
+        assert_eq!(serde_json::to_string(&Version::V1)?, r#""1""#);
         Ok(())
     }
 }

@@ -1008,10 +1008,10 @@ mod tests {
         let input = config::Input::new("translations/a.toml").with_prepend_filename(true);
         let input_path = PathBuf::from("/base/dialogs/delete-user.toml");
         let file_id: FileId = 0;
-        let raw_translations = r#"
+        let raw_translations = indoc::indoc! {r#"
             [section]
             en = "Hello"
-        "#;
+        "#};
 
         let (_input, _path, _file_id, translations, _diagnostics) = executor
             .process_translation_file(
@@ -1044,10 +1044,10 @@ mod tests {
         let base_dir = PathBuf::from("/workspace/translations/airtype");
         let input_path = base_dir.join("dialogs/chat/too-many-files.toml");
         let file_id: FileId = 0;
-        let raw_translations = r#"
+        let raw_translations = indoc::indoc! {r#"
             [section]
             en = "Hello"
-        "#;
+        "#};
 
         let (_input, _path, _file_id, translations, _diagnostics) = executor
             .process_translation_file(
@@ -1086,10 +1086,10 @@ mod tests {
         let input = config::Input::new("translations/upload.toml").with_prefix("upload");
         let input_path = PathBuf::from("/base/upload.toml");
         let file_id: FileId = 0;
-        let raw_translations = r#"
+        let raw_translations = indoc::indoc! {r#"
             [message]
             en = "Hello"
-        "#;
+        "#};
 
         let (_input, _path, _file_id, translations, _diagnostics) = executor
             .process_translation_file(
@@ -1115,8 +1115,20 @@ mod tests {
         let dir = temp_dir("exclude-patterns")?;
         let keep = dir.join("keep.toml");
         let skip = dir.join("skip.toml");
-        std::fs::write(&keep, "[a]\nen = \"Hello\"\n")?;
-        std::fs::write(&skip, "[b]\nen = \"Bye\"\n")?;
+        std::fs::write(
+            &keep,
+            indoc::indoc! {r#"
+                [a]
+                en = "Hello"
+            "#},
+        )?;
+        std::fs::write(
+            &skip,
+            indoc::indoc! {r#"
+                [b]
+                en = "Bye"
+            "#},
+        )?;
 
         let input = config::Input::new(dir.join("*.toml").to_string_lossy().into_owned())
             .with_exclude([skip.to_string_lossy().into_owned()]);

@@ -14,47 +14,48 @@ use crate::KeyInput;
 /// Placeholders: `{key}` is replaced with the dotted key path, `{languages}`
 /// with one `code: text` line per language. All other braces are passed through
 /// verbatim, so JSON examples and `{{placeholder}}` samples need no escaping.
-pub const DEFAULT_TEMPLATE: &str = "\
-These are the translations of ONE string of an application, shown to users in \
-their own language:
+pub const DEFAULT_TEMPLATE: &str = indoc::indoc! {r#"
+    These are the translations of ONE string of an application, shown to users in
+    their own language:
 
-Translation key: {key}
+    Translation key: {key}
 
-{languages}
+    {languages}
 
-Report a language ONLY if its users are told a genuinely different fact or \
-action than users of the other languages — you must be able to complete the \
-sentence \"users of <lang> are told <A>, everyone else is told <B>\" where A \
-and B would lead a user to do or believe something different. Examples of real \
-issues: an opposite or negated meaning, a different action (save vs discard), \
-a different object (bank statement vs rental contract), a different quantity, \
-timeframe, or unit, or text that clearly belongs to a completely different UI \
-string.
+    Report a language ONLY if its users are told a genuinely different fact or
+    action than users of the other languages — you must be able to complete the
+    sentence "users of <lang> are told <A>, everyone else is told <B>" where A
+    and B would lead a user to do or believe something different. Examples of real
+    issues: an opposite or negated meaning, a different action (save vs discard),
+    a different object (bank statement vs rental contract), a different quantity,
+    timeframe, or unit, or text that clearly belongs to a completely different UI
+    string.
 
-Everything below is normal translation practice. NEVER report:
-- restructured sentences: noun phrase vs verb phrase, active vs passive, \
-different word order, added or dropped minor words — same content, different \
-shape
-- each market's standard terminology or abbreviations for the same concept, \
-even when they look nothing like the source term
-- spelling, grammar, accents, or word forms — assume every text is written \
-correctly in its own language; you are not a proofreader
-- formality or register (du/Sie, tu/vous), tone, idioms, more or less literal \
-phrasing
-- English loanwords kept in the target language, or translated vs untranslated \
-product terms
-- locale-adapted examples and placeholders: phone formats, example email \
-domains, currencies
+    Everything below is normal translation practice. NEVER report:
+    - restructured sentences: noun phrase vs verb phrase, active vs passive,
+      different word order, added or dropped minor words — same content, different
+      shape
+    - each market's standard terminology or abbreviations for the same concept,
+      even when they look nothing like the source term
+    - spelling, grammar, accents, or word forms — assume every text is written
+      correctly in its own language; you are not a proofreader
+    - formality or register (du/Sie, tu/vous), tone, idioms, more or less literal
+      phrasing
+    - English loanwords kept in the target language, or translated vs untranslated
+      product terms
+    - locale-adapted examples and placeholders: phone formats, example email
+      domains, currencies
 
-If in doubt, or your concern is about HOW something is phrased rather than \
-WHAT the user is told, answer consistent: true.
+    If in doubt, or your concern is about HOW something is phrased rather than
+    WHAT the user is told, answer consistent: true.
 
-Answer with JSON: {\"consistent\": true/false, \"issues\": [{\"language\": \
-\"xx\", \"problem\": \"users of xx are told ... while the others say ...\", \
-\"confidence\": 0.0-1.0}]} — issues empty when consistent. confidence is how \
-certain you are that the difference changes what the user is told: 1.0 only \
-for unmistakable contradictions, lower when the texts could still mean the \
-same thing.";
+    Answer with JSON: {"consistent": true/false, "issues": [{"language": "xx",
+    "problem": "users of xx are told ... while the others say ...",
+    "confidence": 0.0-1.0}]} — issues empty when consistent. confidence is how
+    certain you are that the difference changes what the user is told: 1.0 only
+    for unmistakable contradictions, lower when the texts could still mean the
+    same thing.
+"#};
 
 /// Renders `template` for one key, substituting the `{key}` and `{languages}`
 /// placeholders.

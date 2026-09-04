@@ -191,12 +191,12 @@ impl ToDiagnostics for ConfigError {
                         Label::primary(file_id, span.clone())
                             .with_message(format!("expected {expected}")),
                     ])
-                    .with_notes(vec![unindent::unindent(&format!(
+                    .with_notes(vec![indoc::formatdoc!(
                         "
                         expected type {expected}
                            found type `{found:?}`
                         "
-                    ))]);
+                    )]);
                 vec![diagnostic]
             }
             Self::Serde { source, span } => vec![
@@ -264,8 +264,7 @@ mod tests {
     fn parses_settings_keys_and_aliases() -> eyre::Result<()> {
         use globetrotter_model::{TemplateEngine, diagnostics::Spanned};
 
-        let raw = unindent::unindent(
-            r#"
+        let raw = indoc::indoc! {r#"
             version: 1
             config:
               languages: ["en"]
@@ -279,10 +278,9 @@ mod tests {
               outputs:
                 json:
                   - ./out/{{language}}.json
-            "#,
-        );
+        "#};
         let mut diagnostics = vec![];
-        let configs = super::from_str(&raw, std::path::Path::new("."), (), None, &mut diagnostics)?;
+        let configs = super::from_str(raw, std::path::Path::new("."), (), None, &mut diagnostics)?;
 
         // Spanned comparisons ignore spans, so dummy spans match parsed ones.
         sim_assert_eq!(

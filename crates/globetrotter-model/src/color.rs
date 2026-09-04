@@ -119,8 +119,7 @@ impl std::fmt::Display for ColorChoiceParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
-            "unrecognized color choice '{}': valid choices are: \
-             always, always-ansi, never, auto",
+            "unrecognized color choice '{}': valid choices are: always, always-ansi, never, auto",
             self.unknown_choice,
         )
     }

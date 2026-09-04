@@ -51,7 +51,7 @@ toml-span = { version = "0", features = ["reporting", "serde"] }
 
 # Parser diagnostics
 codespan-reporting.workspace = true
-unindent = "0"
+indoc.workspace = true
 
 # Template engines to validate templates
 handlebars = "6"

@@ -526,8 +526,12 @@ mod tests {
     /// prose-wrapped JSON object must still parse.
     #[test_util::test]
     fn parses_a_fenced_verdict() {
-        let content = "Here is my verdict:\n```json\n{\"consistent\": false, \
-                       \"issues\": [{\"language\": \"de\", \"problem\": \"says {x}\"}]}\n```";
+        let content = indoc::indoc! {r#"
+            Here is my verdict:
+            ```json
+            {"consistent": false, "issues": [{"language": "de", "problem": "says {x}"}]}
+            ```
+        "#};
         let verdict = parse_verdict(content)?;
         assert!(!verdict.consistent);
         assert_eq!(verdict.issues[0].language, "de");
@@ -556,8 +560,10 @@ mod tests {
     /// Explicit confidence values survive response parsing.
     #[test_util::test]
     fn parses_an_explicit_confidence() {
-        let content = r#"{"consistent": false, "issues": [{"language": "fr",
-            "problem": "different action", "confidence": 0.4}]}"#;
+        let content = indoc::indoc! {r#"
+            {"consistent": false, "issues": [{"language": "fr",
+            "problem": "different action", "confidence": 0.4}]}
+        "#};
         let verdict = parse_verdict(content)?;
         assert!((verdict.issues[0].confidence - 0.4).abs() < f64::EPSILON);
     }

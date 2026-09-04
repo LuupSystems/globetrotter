@@ -69,7 +69,7 @@ futures.workspace = true
 codespan-reporting.workspace = true
 colored = "3"
 strip-ansi-escapes = "0"
-unindent = "0"
+indoc.workspace = true
 
 # multi-pattern search and gitignore-aware walking for dead-key detection
 aho-corasick = "1"
