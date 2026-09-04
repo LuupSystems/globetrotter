@@ -22,6 +22,12 @@ pub const DEFAULT_TEMPLATE: &str = indoc::indoc! {r#"
 
     {languages}
 
+    The texts may contain template syntax: {{name}} is a value filled in at
+    runtime, and {{#if condition}}…{{else}}…{{/if}} selects a wording. Compare
+    what each language shows the user in the same situation. A language that
+    does not branch where another one does is fine when its single wording fits
+    every situation.
+
     Report a language ONLY if its users are told a genuinely different fact or
     action than users of the other languages — you must be able to complete the
     sentence "users of <lang> are told <A>, everyone else is told <B>" where A
