@@ -101,18 +101,40 @@ key.
 
 ## Local lint exceptions
 
-Every lint finding has a stable code. Suppress one code for a key only when the divergence is
-intentional:
+Every lint finding has a stable code. Suppress one code for a key, only when the divergence is
+intentional, by listing it with the `lint:` prefix:
 
 ```toml
 [product.proper_name]
 en = "Globetrotter"
 de = "Globetrotter"
-allow = ["identical-languages"]
+allow = ["lint:identical-languages"]
 ```
 
-`allow = "all"` silences every lint for the key and should be rare; a specific code records the
-reason more clearly and allows other checks to keep working.
+The prefix is required. A bare `identical-languages` is rejected rather than silently ignored, and
+the namespace keeps the list open to non-lint directives later without a name ever meaning two
+things.
+
+An `allow` applies to the table it is written on and to every key nested under it, so a group or a
+whole file can share one exception:
+
+```toml
+# Applies to every key in this file.
+allow = ["lint:duplicate"]
+
+[checkout]
+# Applies to every key under `checkout`.
+allow = ["lint:missing-language"]
+
+[checkout.submit]
+en = "Continue"
+```
+
+`allow = "lint:all"` silences every lint for the keys it covers and should be rare; a specific code
+records the reason more clearly and allows other checks to keep working.
+
+To suppress a code for a whole build rather than one file, use the config file's `allow` list — see
+[configuration]({{< relref "configuration.md" >}}).
 
 Next: [generated outputs]({{< relref "outputs.md" >}}) and
 [linting]({{< relref "linting.md" >}}).

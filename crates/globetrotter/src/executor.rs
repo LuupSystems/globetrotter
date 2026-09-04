@@ -18,7 +18,7 @@ use futures::future::{Future, TryFutureExt};
 use futures::stream::{self, StreamExt, TryStreamExt};
 use globetrotter_model::{
     diagnostics::{DiagnosticExt, FileId, Spanned, ToDiagnostics},
-    lint::LintOptions,
+    lint::{AllowEntry, LintOptions},
     validation::ValidationOptions,
 };
 use itertools::Itertools;
@@ -222,6 +222,26 @@ fn combine_translations(
             .flat_map(|res| (res.3).0.into_iter())
             .collect(),
     )
+}
+
+/// Assembles one configuration's catalog from its parsed input files.
+///
+/// Every file's keys are merged, reporting any key defined more than once, the
+/// optional `max_keys` limit is applied, and the config's own `allow` entries
+/// are added to every key.
+/// Adding them here, rather than in one consumer, is what lets every pass that
+/// reads a key's `allow` — linting, dead-key detection, the LLM judge — see the
+/// same suppressions.
+fn assemble_catalog(
+    translations: Vec<TranslationResult>,
+    max_keys: Option<usize>,
+    allow: &BTreeSet<AllowEntry>,
+    diagnostics: &mut Vec<Diagnostic<FileId>>,
+) -> model::Translations {
+    let mut translations = combine_translations(translations, diagnostics);
+    limit_keys(max_keys, &mut translations);
+    translations.extend_allow(allow);
+    translations
 }
 
 /// Truncates `translations` to its first `max_keys` keys, warning about what is
@@ -566,12 +586,12 @@ impl Executor {
             .into());
         }
 
-        // Merge catalogs and apply the optional key limit off the async runtime.
+        // Assemble the catalog off the async runtime.
         let max_keys = self.max_keys;
+        let allow = config_file.config.allow.clone();
         let (translations, mut diagnostics) = tokio::task::spawn_blocking(move || {
             let mut diagnostics: Vec<Diagnostic<FileId>> = vec![];
-            let mut translations = combine_translations(translations, &mut diagnostics);
-            limit_keys(max_keys, &mut translations);
+            let translations = assemble_catalog(translations, max_keys, &allow, &mut diagnostics);
             Ok::<_, Error>((Arc::new(translations), diagnostics))
         })
         .await??;
@@ -736,10 +756,10 @@ impl Executor {
         }
 
         let max_keys = self.max_keys;
+        let allow = config_file.config.allow.clone();
         let (translations, combine_diagnostics) = tokio::task::spawn_blocking(move || {
             let mut diagnostics = vec![];
-            let mut translations = combine_translations(translations, &mut diagnostics);
-            limit_keys(max_keys, &mut translations);
+            let translations = assemble_catalog(translations, max_keys, &allow, &mut diagnostics);
             (Arc::new(translations), diagnostics)
         })
         .await?;

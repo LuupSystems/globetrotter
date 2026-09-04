@@ -4,9 +4,11 @@
 //! missing or empty translations, stray whitespace, broken templates,
 //! inconsistent or undeclared template arguments, and duplicated strings.
 //!
-//! Every diagnostic carries a stable [`crate::lint::LintCode`]; a translation key can
-//! suppress a code by listing its kebab-case name in an `allow` key, e.g.
-//! `allow = ["duplicate"]` (or `allow = "all"` to silence the key entirely).
+//! Every diagnostic carries a stable [`crate::lint::LintCode`]; a translation key
+//! can suppress a code by listing its `lint:`-prefixed name in an `allow` key,
+//! e.g. `allow = ["lint:duplicate"]` (or `allow = "lint:all"` to silence the key
+//! entirely).
+//! An `allow` on an enclosing table applies to every key below it.
 
 use crate::{
     Language, TemplateEngine, Translation, Translations,
@@ -19,8 +21,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 /// A stable identifier for a translation lint.
 ///
-/// Diagnostics display it as `warning[code]: …`, and translation keys may use
-/// its kebab-case form (`missing-language`, `unused-key`, …) in an `allow` list.
+/// Diagnostics display it as `warning[code]: …`, and an `allow` list names it in
+/// its prefixed kebab-case form (`lint:missing-language`, `lint:unused-key`, …).
 #[derive(
     Clone,
     Copy,
@@ -82,21 +84,40 @@ pub struct LintOptions<'a> {
     pub detect_duplicates: bool,
 }
 
-/// An entry in a translation key's `allow` list: a specific [`LintCode`] to
-/// suppress, or the catch-all `all` that suppresses every lint for the key.
+/// An entry in an `allow` list: a specific [`LintCode`] to suppress, or the
+/// catch-all `all` that suppresses every lint.
+///
+/// Entries always carry the `lint:` prefix (`lint:duplicate`, `lint:all`), which
+/// keeps room for future non-lint directives without risking a collision with a
+/// lint code.
 ///
 /// `all` is intentionally *not* a [`LintCode`] variant — no diagnostic is ever
 /// emitted with code `all`; it is only meaningful as an allow directive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AllowEntry {
-    /// Suppress every lint for this key.
+    /// Suppress every lint.
     All,
     /// Suppress one specific lint.
     Code(LintCode),
 }
 
+impl AllowEntry {
+    /// The namespace prefix every entry carries.
+    pub const PREFIX: &'static str = "lint:";
+
+    /// Every accepted entry, spelled exactly as it must be written.
+    pub fn variants() -> impl Iterator<Item = String> {
+        use strum::VariantNames;
+        LintCode::VARIANTS
+            .iter()
+            .map(|code| format!("{}{code}", Self::PREFIX))
+            .chain(std::iter::once(Self::All.to_string()))
+    }
+}
+
 impl std::fmt::Display for AllowEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(Self::PREFIX)?;
         match self {
             Self::All => f.write_str("all"),
             Self::Code(code) => std::fmt::Display::fmt(code, f),
@@ -104,14 +125,49 @@ impl std::fmt::Display for AllowEntry {
     }
 }
 
+/// Why an `allow` entry could not be parsed into an [`AllowEntry`].
+#[derive(thiserror::Error, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ParseAllowEntryError {
+    /// The entry does not carry the required namespace prefix.
+    #[error("missing `{}` prefix", AllowEntry::PREFIX)]
+    MissingPrefix,
+    /// The name after the prefix is neither a lint code nor `all`.
+    #[error("unknown lint code")]
+    UnknownCode,
+}
+
+impl ParseAllowEntryError {
+    /// A diagnostic note that helps fix `entry`.
+    ///
+    /// An entry that is otherwise valid and only lacks the prefix gets the
+    /// corrected spelling; anything else gets the full list of accepted entries.
+    #[must_use]
+    pub fn note(self, entry: &str) -> String {
+        let prefixed = format!("{}{entry}", AllowEntry::PREFIX);
+        if self == Self::MissingPrefix && prefixed.parse::<AllowEntry>().is_ok() {
+            return format!("write `{prefixed}` instead");
+        }
+        let valid = AllowEntry::variants()
+            .map(|entry| format!("`{entry}`"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("valid entries are: {valid}")
+    }
+}
+
 impl std::str::FromStr for AllowEntry {
-    type Err = strum::ParseError;
+    type Err = ParseAllowEntryError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        if text == "all" {
+        let code = text
+            .strip_prefix(Self::PREFIX)
+            .ok_or(ParseAllowEntryError::MissingPrefix)?;
+        if code == "all" {
             Ok(Self::All)
         } else {
-            text.parse::<LintCode>().map(Self::Code)
+            code.parse::<LintCode>()
+                .map(Self::Code)
+                .map_err(|_source| ParseAllowEntryError::UnknownCode)
         }
     }
 }
@@ -284,6 +340,16 @@ impl Translations {
                 lint_identical_languages(translation, options.strict, diagnostics);
             }
             lint_duplicates(self, options.strict, diagnostics);
+        }
+    }
+
+    /// Adds `allow` entries to every key in the catalog.
+    ///
+    /// This is how suppressions declared outside the translation files reach
+    /// the keys they cover, such as a config file's config-wide `allow` list.
+    pub fn extend_allow(&mut self, allow: &BTreeSet<AllowEntry>) {
+        for translation in self.0.values_mut() {
+            translation.allow.extend(allow.iter().copied());
         }
     }
 }
@@ -786,10 +852,58 @@ mod tests {
 
             [b]
             en = "Bye"
-            allow = ["missing-language"]
+            allow = ["lint:missing-language"]
         "#};
         let msgs = messages(raw, &[Language::En, Language::De])?;
         assert!(msgs.iter().all(|m| !m.contains("missing `de`")), "{msgs:?}");
+    }
+
+    /// An `allow` on a group table reaches the keys nested under it instead of
+    /// being silently dropped.
+    #[test_util::test]
+    fn group_allow_suppresses_nested_keys() {
+        let raw = indoc::indoc! {r#"
+            [checkout]
+            allow = ["lint:missing-language"]
+
+            [checkout.button]
+            en = "Continue"
+
+            [greeting]
+            en = "Hello"
+        "#};
+        let msgs = messages(raw, &[Language::En, Language::De])?;
+        // Only `greeting`, outside the group, is still reported.
+        sim_assert_eq!(have: msgs, want: vec!["missing `de` translation".to_string()]);
+    }
+
+    /// Entries added by an outer scope, such as a config file, suppress lints
+    /// for every key.
+    #[test_util::test]
+    fn extend_allow_suppresses_every_key() {
+        use crate::lint::{AllowEntry, LintCode};
+
+        let raw = indoc::indoc! {r#"
+            [a]
+            en = "Hello"
+
+            [b]
+            en = "Bye"
+        "#};
+        let mut parse_diagnostics = vec![];
+        let mut translations = Translations::from_str(raw, 0, false, &mut parse_diagnostics)?;
+        translations.extend_allow(&[AllowEntry::Code(LintCode::MissingLanguage)].into());
+
+        let required = [Spanned::dummy(Language::En), Spanned::dummy(Language::De)];
+        let options = LintOptions {
+            required_languages: &required,
+            template_engine: None,
+            strict: false,
+            detect_duplicates: false,
+        };
+        let mut diagnostics = vec![];
+        translations.lint(&mut diagnostics, &options);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test_util::test]
@@ -893,7 +1007,7 @@ mod tests {
 
             [two]
             en = "please upload your documents now"
-            allow = ["duplicate"]
+            allow = ["lint:duplicate"]
         "#};
         let found = lint(raw, &[], true)?;
         assert!(

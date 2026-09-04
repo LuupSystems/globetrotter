@@ -22,6 +22,10 @@ The deterministic checks report:
 Findings are warnings by default and errors when strict mode is active in the config or on the
 command line.
 
+Every finding carries the code shown in brackets, as in `warning[duplicate]: …`. Suppress one by
+listing it with the `lint:` prefix in an `allow` list — on the key, on an enclosing table, or on the
+whole config. See [local lint exceptions]({{< relref "translations.md" >}}) for the scoping rules.
+
 ## Find unused keys
 
 Pass one or more source directories to report translation keys that application code never
@@ -39,7 +43,7 @@ Disable duplicate detection for a run with `--no-duplicates`. For a deliberate e
 key, prefer its local `allow` list:
 
 ```toml
-allow = ["duplicate"]
+allow = ["lint:duplicate"]
 ```
 
 ## LLM-assisted drift review
@@ -74,7 +78,7 @@ the reproducible default, and treat reported confidence as a ranking rather than
 Suppress a reviewed, intentional divergence with:
 
 ```toml
-allow = ["llm-drift"]
+allow = ["lint:llm-drift"]
 ```
 
 The [CLI reference]({{< relref "cli.md" >}}) lists the endpoint, prompt, concurrency, effort, cache,

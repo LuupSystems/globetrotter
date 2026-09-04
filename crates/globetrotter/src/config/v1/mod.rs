@@ -5,8 +5,9 @@ use super::settings::SettingsLayer;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use globetrotter_model::{
     self as model,
-    diagnostics::{DiagnosticExt, DisplayRepr, Spanned},
+    diagnostics::{DiagnosticExt, DisplayRepr, Span, Spanned},
 };
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use yaml_spanned::{Mapping, Sequence, Value, value::Kind};
 
@@ -63,6 +64,58 @@ pub fn parse_languages<F>(
             Ok(languages)
         }
     }
+}
+
+/// Parses the optional config-wide `allow` list of lint suppressions.
+///
+/// Entries use the same spelling as a translation key's own `allow` list
+/// (`lint:duplicate`, `lint:all`) and apply to every key this config lints.
+///
+/// # Errors
+///
+/// Returns an error if `allow` is present but is not a string or a sequence of
+/// strings, or if any entry is not a valid
+/// [`AllowEntry`](model::lint::AllowEntry).
+pub fn parse_allow(
+    value: &yaml_spanned::Spanned<Value>,
+) -> Result<BTreeSet<model::lint::AllowEntry>, ConfigError> {
+    let Some(value) = value.get("allow") else {
+        return Ok(BTreeSet::new());
+    };
+    match value.as_ref() {
+        Value::String(entry) => Ok([parse_allow_entry(entry, value.span().into())?].into()),
+        Value::Sequence(entries) => entries
+            .iter()
+            .map(|entry| {
+                let text = entry.as_str().ok_or_else(|| ConfigError::UnexpectedType {
+                    message: "allow entries must be strings".to_string(),
+                    expected: vec![Kind::String],
+                    found: entry.kind(),
+                    span: entry.span().into(),
+                })?;
+                parse_allow_entry(text, entry.span().into())
+            })
+            .collect(),
+        _other => Err(ConfigError::UnexpectedType {
+            message: "allow must be a string or a sequence of strings".to_string(),
+            expected: vec![Kind::String, Kind::Sequence],
+            found: value.kind(),
+            span: value.span().into(),
+        }),
+    }
+}
+
+/// Parses one `allow` entry into a typed [`AllowEntry`](model::lint::AllowEntry),
+/// rejecting anything that is not a prefixed, known entry so typos fail loudly
+/// rather than silently doing nothing.
+fn parse_allow_entry(entry: &str, span: Span) -> Result<model::lint::AllowEntry, ConfigError> {
+    entry
+        .parse::<model::lint::AllowEntry>()
+        .map_err(|source| ConfigError::InvalidAllowEntry {
+            entry: entry.to_string(),
+            source,
+            span,
+        })
 }
 
 /// Parses a source-located typed value from YAML.
@@ -458,6 +511,7 @@ pub fn parse_config<F: Copy + PartialEq>(
     let strict_config = parse_optional::<bool>(value.get("strict"))?.map(Spanned::into_inner);
     let strict = strict_override.unwrap_or(false);
     let languages = parse_languages(value, file_id, strict, diagnostics)?;
+    let allow = parse_allow(value)?;
     let template_engine = parse_optional::<model::TemplateEngine>(
         value.get("engine").or_else(|| value.get("template_engine")),
     )?;
@@ -478,6 +532,7 @@ pub fn parse_config<F: Copy + PartialEq>(
     Ok(Config {
         name,
         languages,
+        allow,
         settings: SettingsLayer {
             strict: strict_config,
             check_templates,
@@ -848,6 +903,8 @@ pub struct Config {
     pub name: Spanned<String>,
     /// The languages that must be present in the translations.
     pub languages: Vec<Spanned<model::Language>>,
+    /// Lints suppressed for every key this configuration lints.
+    pub allow: BTreeSet<model::lint::AllowEntry>,
     /// This config's settings layer.
     ///
     /// These are raw, unresolved values: caller overrides and built-in
@@ -869,6 +926,7 @@ impl Config {
         Self {
             name: Spanned::dummy(name.into()),
             languages: vec![],
+            allow: BTreeSet::new(),
             settings: SettingsLayer::default(),
             inputs: vec![],
             outputs: Outputs::default(),

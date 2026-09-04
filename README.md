@@ -183,7 +183,7 @@ Model choice matters more than anything else:
   tuning a custom template via `--llm-prompt <FILE>`.
 
 Suppress a finding for an intentionally divergent key by adding
-`allow = ["llm-drift"]` to that key.
+`allow = ["lint:llm-drift"]` to that key.
 
 ### Usage in Rust
 

@@ -202,8 +202,11 @@ pub struct Translation {
     /// The id of the source file this translation was parsed from.
     #[serde(skip)]
     pub file_id: FileId,
-    /// Lint codes explicitly allowed (suppressed) for this translation key,
-    /// declared via an `allow` key in the translation file.
+    /// The lints suppressed for this key.
+    ///
+    /// These are the entries of the key's own `allow` list plus those inherited
+    /// from enclosing tables; [`Translations::extend_allow`] adds a config's
+    /// own entries when its catalog is assembled.
     #[serde(skip)]
     pub allow: std::collections::BTreeSet<lint::AllowEntry>,
 }

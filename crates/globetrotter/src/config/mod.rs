@@ -148,6 +148,17 @@ pub enum ConfigError {
         /// The span of the offending value.
         span: Span,
     },
+    /// An `allow` entry could not be parsed into a lint suppression.
+    #[error("invalid `allow` entry `{entry}`: {source}")]
+    InvalidAllowEntry {
+        /// The entry as written.
+        entry: String,
+        /// Why the entry could not be parsed.
+        #[source]
+        source: globetrotter_model::lint::ParseAllowEntryError,
+        /// The span of the offending entry.
+        span: Span,
+    },
     /// Deserialization of a value into a typed representation failed.
     #[error("{source}")]
     Serde {
@@ -199,6 +210,18 @@ impl ToDiagnostics for ConfigError {
                     )]);
                 vec![diagnostic]
             }
+            Self::InvalidAllowEntry {
+                entry,
+                source,
+                span,
+            } => vec![
+                Diagnostic::error()
+                    .with_message(self.to_string())
+                    .with_labels(vec![
+                        Label::primary(file_id, span.clone()).with_message(source.to_string()),
+                    ])
+                    .with_notes(vec![source.note(entry)]),
+            ],
             Self::Serde { source, span } => vec![
                 Diagnostic::error()
                     .with_message(self.to_string())
@@ -294,6 +317,64 @@ mod tests {
             }
         );
         Ok(())
+    }
+
+    /// A config-wide `allow` list parses into typed suppression entries.
+    #[test_util::test]
+    fn parses_config_allow_list() -> eyre::Result<()> {
+        use globetrotter_model::lint::{AllowEntry, LintCode};
+
+        let raw = indoc::indoc! {r#"
+            version: 1
+            config:
+              languages: ["en"]
+              allow: ["lint:duplicate", "lint:llm-drift"]
+              inputs:
+                - ./translations/a.toml
+              outputs:
+                json:
+                  - ./out/{{language}}.json
+        "#};
+        let mut diagnostics = vec![];
+        let configs = super::from_str(raw, std::path::Path::new("."), (), None, &mut diagnostics)?;
+
+        sim_assert_eq!(
+            have: configs[0].config.allow,
+            want: [
+                AllowEntry::Code(LintCode::Duplicate),
+                AllowEntry::Code(LintCode::LlmDrift),
+            ]
+            .into_iter()
+            .collect()
+        );
+        Ok(())
+    }
+
+    /// A bare lint code is rejected in the config file just as it is in a
+    /// translation file, so the `lint:` prefix stays the only spelling.
+    #[test_util::test]
+    fn rejects_unprefixed_config_allow_entry() {
+        use globetrotter_model::lint::ParseAllowEntryError;
+
+        let raw = indoc::indoc! {r#"
+            version: 1
+            config:
+              languages: ["en"]
+              allow: ["duplicate"]
+        "#};
+        let mut diagnostics = vec![];
+        let result = super::from_str(raw, std::path::Path::new("."), (), None, &mut diagnostics);
+        assert!(
+            matches!(
+                &result,
+                Err(ConfigError::InvalidAllowEntry {
+                    entry,
+                    source: ParseAllowEntryError::MissingPrefix,
+                    ..
+                }) if entry == "duplicate"
+            ),
+            "{result:?}"
+        );
     }
 
     /// Numeric, string, and prefixed version-one spellings parse identically.

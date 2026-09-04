@@ -63,6 +63,19 @@ check_templates: true
 The matching CLI flags override config values for an individual run. For example,
 `globetrotter --dry-run` exercises the full pipeline without writing files.
 
+## Lint exceptions
+
+`allow` suppresses lint codes for every key this config lints:
+
+```yaml
+allow: ["lint:duplicate", "lint:llm-drift"]
+```
+
+Entries use the same `lint:`-prefixed spelling as a translation key's own `allow` list, and the two
+add up: a config-wide entry cannot be re-enabled for a single key. Suppress a code here only when it
+is noise across the whole catalog. A single intentional exception belongs on the key, where the
+reason sits next to the translation (see [translations]({{< relref "translations.md" >}})).
+
 ## Inputs
 
 An input can be a path:

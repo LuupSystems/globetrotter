@@ -28,11 +28,14 @@ pub enum Error {
         /// The missing language key.
         language: String,
     },
-    /// An `allow` entry was neither a known lint code nor the catch-all `all`.
-    #[error("unknown lint code `{code}` in `allow`")]
-    UnknownLintCode {
-        /// The unrecognized code.
-        code: String,
+    /// An `allow` entry could not be parsed into a lint suppression.
+    #[error("invalid `allow` entry `{entry}`: {source}")]
+    InvalidAllowEntry {
+        /// The entry as written.
+        entry: String,
+        /// Why the entry could not be parsed.
+        #[source]
+        source: crate::lint::ParseAllowEntryError,
         /// The source span of the offending entry.
         span: Span,
     },
@@ -94,21 +97,17 @@ mod diagnostics {
                         )]);
                     vec![diagnostic]
                 }
-                Self::UnknownLintCode { span, .. } => {
-                    use strum::VariantNames;
-                    let valid = crate::lint::LintCode::VARIANTS
-                        .iter()
-                        .map(|code| format!("`{code}`"))
-                        .chain(std::iter::once("`all`".to_string()))
-                        .collect::<Vec<_>>()
-                        .join(", ");
+                Self::InvalidAllowEntry {
+                    entry,
+                    source,
+                    span,
+                } => {
                     let diagnostic = Diagnostic::error()
                         .with_message(self.to_string())
                         .with_labels(vec![
-                            Label::primary(file_id, span.clone())
-                                .with_message("not a known lint code"),
+                            Label::primary(file_id, span.clone()).with_message(source.to_string()),
                         ])
-                        .with_notes(vec![format!("valid codes are: {valid}")]);
+                        .with_notes(vec![source.note(entry)]);
                     vec![diagnostic]
                 }
                 Self::Serde { source, span } => {
@@ -164,13 +163,18 @@ impl<'de> From<&toml_span::value::ValueInner<'de>> for ValueKind {
     }
 }
 
-/// Parses the optional `allow` key listing lint codes to suppress for a key.
+/// Removes the optional `allow` key from `table` and parses its entries.
+///
+/// Entries carry the `lint:` prefix (`lint:duplicate`, `lint:all`).
+/// Removing the key here is also what keeps it from being mistaken for a
+/// language code when [`parse_translation`] scans the table's scalar entries,
+/// which is why it runs first.
 ///
 /// # Errors
 ///
 /// Returns an error if `allow` is present but is not a string or an array of
-/// strings, or if any entry is not a known [`LintCode`](crate::lint::LintCode)
-/// (or the catch-all `all`).
+/// strings, or if any entry is not a valid
+/// [`AllowEntry`](crate::lint::AllowEntry).
 fn parse_allow(
     table: &mut toml_span::value::Table,
 ) -> Result<std::collections::BTreeSet<crate::lint::AllowEntry>, Error> {
@@ -205,26 +209,32 @@ fn parse_allow(
 }
 
 /// Parses one `allow` entry into a typed [`AllowEntry`](crate::lint::AllowEntry),
-/// rejecting anything that is neither a known lint code nor `all` so typos fail
-/// loudly rather than silently doing nothing.
-fn parse_allow_entry(code: &str, span: Span) -> Result<crate::lint::AllowEntry, Error> {
-    code.parse::<crate::lint::AllowEntry>()
-        .map_err(|_| Error::UnknownLintCode {
-            code: code.to_string(),
+/// rejecting anything that is not a prefixed, known entry so typos fail loudly
+/// rather than silently doing nothing.
+fn parse_allow_entry(entry: &str, span: Span) -> Result<crate::lint::AllowEntry, Error> {
+    entry
+        .parse::<crate::lint::AllowEntry>()
+        .map_err(|source| Error::InvalidAllowEntry {
+            entry: entry.to_string(),
+            source,
             span,
         })
 }
 
 /// Parses a single translation table from a TOML value.
 ///
+/// `allow` is the effective suppression list for this table: its own entries as
+/// returned by [`parse_allow`], plus those inherited from enclosing tables.
+///
 /// # Errors
 ///
 /// Returns an error if the TOML structure does not match the expected
 /// translation layout (for example, if argument or language values have
 /// an unexpected type).
-pub fn parse_translation(
+fn parse_translation(
     table: &mut toml_span::value::Table,
     file_id: FileId,
+    allow: &std::collections::BTreeSet<crate::lint::AllowEntry>,
 ) -> Result<Option<crate::Translation>, Error> {
     let arguments = table.remove("arguments").or(table.remove("args"));
     let arguments = arguments
@@ -271,10 +281,6 @@ pub fn parse_translation(
             }),
         })
         .transpose()?;
-
-    // Remove `allow` before scanning scalar entries so it cannot be mistaken
-    // for a language code.
-    let allow = parse_allow(table)?;
 
     let languages: Vec<String> = table
         .iter()
@@ -326,86 +332,101 @@ pub fn parse_translation(
             language,
             arguments: arguments.unwrap_or_default(),
             file_id,
-            allow,
+            allow: allow.clone(),
         }))
     }
 }
 
-fn flatten_toml_span(
-    value: &mut toml_span::value::ValueInner,
-    span: toml_span::Span,
-    key: &str,
-    out: &mut super::Translations,
-    file_id: usize,
+/// The destination and settings shared by every table of one flattening pass.
+///
+/// Only the position in the document and the inherited `allow` entries change
+/// as [`Flattener::flatten`] recurses, so everything else is held here.
+struct Flattener<'a> {
+    out: &'a mut super::Translations,
+    file_id: FileId,
     strict: bool,
-    diagnostics: &mut Vec<Diagnostic<FileId>>,
-) -> Result<(), Error> {
-    match value {
-        toml_span::value::ValueInner::Table(table) => {
-            // Parse translation fields attached directly to this table.
-            if let Some(translation) = parse_translation(table, file_id)? {
-                out.0
-                    .insert(Spanned::new(span, key.to_owned()), translation);
-            }
+    diagnostics: &'a mut Vec<Diagnostic<FileId>>,
+}
 
-            // Descend into any remaining nested translation tables.
-            for (child_key, value) in table.iter_mut() {
-                let new_key: String = if key.is_empty() {
-                    child_key.to_string()
-                } else {
-                    format!("{key}.{child_key}")
-                };
+impl Flattener<'_> {
+    /// Flattens one TOML value into dotted translation keys.
+    ///
+    /// `key` is the dotted path to `value`, empty at the document root.
+    /// `inherited_allow` holds the entries declared by the enclosing tables,
+    /// which apply to every key below them.
+    fn flatten(
+        &mut self,
+        value: &mut toml_span::value::ValueInner,
+        span: toml_span::Span,
+        key: &str,
+        inherited_allow: &std::collections::BTreeSet<crate::lint::AllowEntry>,
+    ) -> Result<(), Error> {
+        match value {
+            toml_span::value::ValueInner::Table(table) => {
+                // An `allow` here covers this table and every key nested under
+                // it, so it is merged with the enclosing tables' entries before
+                // either is used.
+                let mut allow = parse_allow(table)?;
+                allow.extend(inherited_allow.iter().copied());
 
-                match value.take() {
-                    toml_span::value::ValueInner::Array(mut tables) => {
-                        for nested_table in &mut tables {
-                            flatten_toml_span(
-                                &mut nested_table.take(),
-                                nested_table.span,
-                                &new_key,
-                                out,
-                                file_id,
-                                strict,
-                                diagnostics,
-                            )?;
+                // Parse translation fields attached directly to this table.
+                if let Some(translation) = parse_translation(table, self.file_id, &allow)? {
+                    self.out
+                        .0
+                        .insert(Spanned::new(span, key.to_owned()), translation);
+                }
+
+                // Descend into any remaining nested translation tables.
+                for (child_key, value) in table.iter_mut() {
+                    let new_key: String = if key.is_empty() {
+                        child_key.to_string()
+                    } else {
+                        format!("{key}.{child_key}")
+                    };
+
+                    match value.take() {
+                        toml_span::value::ValueInner::Array(mut tables) => {
+                            for nested_table in &mut tables {
+                                self.flatten(
+                                    &mut nested_table.take(),
+                                    nested_table.span,
+                                    &new_key,
+                                    &allow,
+                                )?;
+                            }
                         }
-                    }
-                    mut nested_table @ toml_span::value::ValueInner::Table(_) => {
-                        flatten_toml_span(
-                            &mut nested_table,
-                            value.span,
-                            &new_key,
-                            out,
-                            file_id,
-                            strict,
-                            diagnostics,
-                        )?;
-                    }
-                    other => {
-                        return Err(Error::UnexpectedType {
-                            message: format!(
-                                "translation value at `{new_key}` must be a string, table, or array of tables"
-                            ),
-                            expected: vec![ValueKind::String, ValueKind::Table, ValueKind::Array],
-                            found: (&other).into(),
-                            span: value.span.into(),
-                        });
+                        mut nested_table @ toml_span::value::ValueInner::Table(_) => {
+                            self.flatten(&mut nested_table, value.span, &new_key, &allow)?;
+                        }
+                        other => {
+                            return Err(Error::UnexpectedType {
+                                message: format!(
+                                    "translation value at `{new_key}` must be a string, table, or array of tables"
+                                ),
+                                expected: vec![
+                                    ValueKind::String,
+                                    ValueKind::Table,
+                                    ValueKind::Array,
+                                ],
+                                found: (&other).into(),
+                                span: value.span.into(),
+                            });
+                        }
                     }
                 }
             }
+            other => {
+                let diagnostic = Diagnostic::warning_or_error(self.strict)
+                    .with_message("unexpected value")
+                    .with_labels(vec![Label::primary(self.file_id, span).with_message(
+                        format!("ignoring {} value at key {key:?}", other.type_str()),
+                    )]);
+                self.diagnostics.push(diagnostic);
+            }
         }
-        other => {
-            let diagnostic = Diagnostic::warning_or_error(strict)
-                .with_message("unexpected value")
-                .with_labels(vec![Label::primary(file_id, span).with_message(format!(
-                    "ignoring {} value at key {key:?}",
-                    other.type_str()
-                ))]);
-            diagnostics.push(diagnostic);
-        }
-    }
 
-    Ok(())
+        Ok(())
+    }
 }
 
 impl crate::Translations {
@@ -426,14 +447,17 @@ impl crate::Translations {
         diagnostics: &mut Vec<Diagnostic<FileId>>,
     ) -> Result<Self, Error> {
         let mut translations = Self::default();
-        flatten_toml_span(
-            &mut value.take(),
-            value.span,
-            "",
-            &mut translations,
+        Flattener {
+            out: &mut translations,
             file_id,
             strict,
             diagnostics,
+        }
+        .flatten(
+            &mut value.take(),
+            value.span,
+            "",
+            &std::collections::BTreeSet::new(),
         )?;
         Ok(translations)
     }
@@ -471,22 +495,109 @@ mod tests {
 
     #[test_util::test]
     fn rejects_unknown_allow_code() {
+        use crate::lint::ParseAllowEntryError;
+
         // spellcheck:ignore-start
         let result = parse(indoc::indoc! {r#"
             [greeting]
             en = "Hi"
-            allow = ["duplicat"]
+            allow = ["lint:duplicat"]
         "#});
         assert!(
-            matches!(&result, Err(Error::UnknownLintCode { code, .. }) if code == "duplicat"),
+            matches!(
+                &result,
+                Err(Error::InvalidAllowEntry {
+                    entry,
+                    source: ParseAllowEntryError::UnknownCode,
+                    ..
+                }) if entry == "lint:duplicat"
+            ),
             "{result:?}"
         );
         // spellcheck:ignore-end
     }
 
+    /// The `lint:` prefix is mandatory, so a bare lint code is an error rather
+    /// than a suppression that silently does nothing.
+    #[test_util::test]
+    fn rejects_unprefixed_allow_entry() {
+        use crate::lint::ParseAllowEntryError;
+
+        let result = parse(indoc::indoc! {r#"
+            [greeting]
+            en = "Hi"
+            allow = ["duplicate"]
+        "#});
+        assert!(
+            matches!(
+                &result,
+                Err(Error::InvalidAllowEntry {
+                    entry,
+                    source: ParseAllowEntryError::MissingPrefix,
+                    ..
+                }) if entry == "duplicate"
+            ),
+            "{result:?}"
+        );
+    }
+
+    /// An `allow` on an enclosing table covers every key nested under it, and a
+    /// file-level one covers the whole file.
+    #[test_util::test]
+    fn enclosing_tables_contribute_their_allow_entries() -> Result<(), Error> {
+        use crate::lint::{AllowEntry, LintCode};
+
+        let translations = parse(indoc::indoc! {r#"
+            allow = ["lint:duplicate"]
+
+            [checkout]
+            allow = ["lint:missing-language"]
+
+            [checkout.button]
+            en = "Continue"
+
+            [greeting]
+            en = "Hi"
+        "#})?;
+
+        let allow = |key: &str| {
+            translations
+                .0
+                .iter()
+                .find(|(name, _)| name.as_ref() == key)
+                .map(|(_, translation)| translation.allow.clone())
+        };
+
+        assert_eq!(
+            allow("checkout.button"),
+            Some(
+                [
+                    AllowEntry::Code(LintCode::Duplicate),
+                    AllowEntry::Code(LintCode::MissingLanguage),
+                ]
+                .into_iter()
+                .collect()
+            )
+        );
+        assert_eq!(
+            allow("greeting"),
+            Some(
+                [AllowEntry::Code(LintCode::Duplicate)]
+                    .into_iter()
+                    .collect()
+            )
+        );
+        Ok(())
+    }
+
     #[test_util::test]
     fn accepts_known_allow_codes_and_all() {
-        for code in ["duplicate", "llm-drift", "missing-language", "all"] {
+        for code in [
+            "lint:duplicate",
+            "lint:llm-drift",
+            "lint:missing-language",
+            "lint:all",
+        ] {
             let raw = indoc::formatdoc! {r#"
                 [greeting]
                 en = "Hi"
@@ -501,10 +612,10 @@ mod tests {
         let result = parse(indoc::indoc! {r#"
             [greeting]
             en = "Hi"
-            allow = "nope"
+            allow = "lint:nope"
         "#});
         assert!(
-            matches!(result, Err(Error::UnknownLintCode { .. })),
+            matches!(result, Err(Error::InvalidAllowEntry { .. })),
             "{result:?}"
         );
     }
