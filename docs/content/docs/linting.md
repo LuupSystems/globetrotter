@@ -14,7 +14,9 @@ The deterministic checks report:
 - a missing required language;
 - empty text or leading/trailing whitespace;
 - a Handlebars template that does not compile;
-- placeholders that differ between languages;
+- a value substituted in some languages but not in others; a name that only selects a wording,
+  such as `{{#if my_condition}}`, may be absent from a language without that distinction;
+- a condition whose branches are identical, so it has no effect;
 - placeholders that are undeclared, or arguments that are never used;
 - identical translations within one key;
 - duplicate text shared by different keys.

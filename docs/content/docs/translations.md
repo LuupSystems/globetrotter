@@ -79,7 +79,10 @@ arguments = ["name"]
 ```
 
 Prefer the typed table when a useful type is known. Globetrotter checks that every declared
-argument is used and that every Handlebars placeholder is declared and present in each language.
+argument is used by at least one language, that every Handlebars placeholder is declared, and that a
+value substituted in one language is substituted in every language. An argument that only selects
+a wording, as in `{{#if my_condition}}…{{else}}…{{/if}}`, may be left out of a language that has no
+such distinction; a condition whose branches are identical is reported instead.
 
 ## Formatting
 

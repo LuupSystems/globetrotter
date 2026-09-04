@@ -2,7 +2,8 @@
 //!
 //! These checks go beyond what code generation strictly requires: they look for
 //! missing or empty translations, stray whitespace, broken templates,
-//! inconsistent or undeclared template arguments, and duplicated strings.
+//! inconsistent or undeclared template arguments, conditions that have no
+//! effect, and duplicated strings.
 //!
 //! Every diagnostic carries a stable [`crate::lint::LintCode`]; a translation key
 //! can suppress a code by listing its `lint:`-prefixed name in an `allow` key,
@@ -13,10 +14,9 @@
 use crate::{
     Language, TemplateEngine, Translation, Translations,
     diagnostics::{DiagnosticExt, FileId, Spanned},
+    template,
 };
 use codespan_reporting::diagnostic::{Diagnostic, Label};
-use handlebars::template::{BlockParam, HelperTemplate, Parameter, Template, TemplateElement};
-use handlebars::{Path, PathSeg};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 /// A stable identifier for a translation lint.
@@ -57,6 +57,9 @@ pub enum LintCode {
     UndeclaredArgument,
     /// A declared argument is never referenced by any template.
     UnusedArgument,
+    /// A `{{#if}}`-style condition whose branches are identical, so it has no
+    /// effect on the translation.
+    DeadCondition,
     /// Two keys share an identical translation.
     Duplicate,
     /// Within one key, two or more languages have an identical translation
@@ -189,97 +192,6 @@ fn emit(
     }
 }
 
-/// Extract the top-level variable names referenced by a Handlebars template.
-///
-/// Returns `None` if the template does not compile. Helper names, block-local
-/// parameters (`{{#each xs as |x|}}`), `this`, and `@`-variables are excluded,
-/// so only the names that should be declared as arguments are returned.
-#[must_use]
-pub fn handlebars_variables(source: &str) -> Option<BTreeSet<String>> {
-    let template = Template::compile(source).ok()?;
-    let mut variables = BTreeSet::new();
-    let mut locals = Vec::new();
-    collect_elements(&template.elements, &mut variables, &mut locals);
-    Some(variables)
-}
-
-fn collect_elements(
-    elements: &[TemplateElement],
-    variables: &mut BTreeSet<String>,
-    locals: &mut Vec<String>,
-) {
-    for element in elements {
-        match element {
-            TemplateElement::Expression(helper)
-            | TemplateElement::HtmlExpression(helper)
-            | TemplateElement::HelperBlock(helper) => collect_helper(helper, variables, locals),
-            _ => {}
-        }
-    }
-}
-
-fn collect_helper(
-    helper: &HelperTemplate,
-    variables: &mut BTreeSet<String>,
-    locals: &mut Vec<String>,
-) {
-    collect_parameter(&helper.name, variables, locals);
-    for parameter in &helper.params {
-        collect_parameter(parameter, variables, locals);
-    }
-    for parameter in helper.hash.values() {
-        collect_parameter(parameter, variables, locals);
-    }
-
-    // Block parameters (`as |x|`) shadow outer names inside the block body.
-    let depth = locals.len();
-    if let Some(block_param) = &helper.block_param {
-        match block_param {
-            BlockParam::Single(Parameter::Name(name)) => locals.push(name.clone()),
-            BlockParam::Pair((first, second)) => {
-                for parameter in [first, second] {
-                    if let Parameter::Name(name) = parameter {
-                        locals.push(name.clone());
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    if let Some(template) = &helper.template {
-        collect_elements(&template.elements, variables, locals);
-    }
-    if let Some(template) = &helper.inverse {
-        collect_elements(&template.elements, variables, locals);
-    }
-    locals.truncate(depth);
-}
-
-fn collect_parameter(
-    parameter: &Parameter,
-    variables: &mut BTreeSet<String>,
-    locals: &mut Vec<String>,
-) {
-    match parameter {
-        Parameter::Path(Path::Relative((segments, _))) => {
-            if let Some(PathSeg::Named(first)) = segments.first()
-                && first != "this"
-                && !locals.iter().any(|local| local == first)
-            {
-                variables.insert(first.clone());
-            }
-        }
-        Parameter::Subexpression(subexpression) => {
-            collect_elements(
-                std::slice::from_ref(subexpression.element.as_ref()),
-                variables,
-                locals,
-            );
-        }
-        _ => {}
-    }
-}
-
 /// Wrap a variable name in Handlebars delimiters for display, e.g. `{{name}}`.
 fn braces(name: &str) -> String {
     let mut out = String::with_capacity(name.len() + 4);
@@ -317,10 +229,7 @@ impl Translations {
             required
         };
 
-        let handlebars = matches!(
-            options.template_engine.map(Spanned::as_ref),
-            None | Some(TemplateEngine::Handlebars)
-        );
+        let analyzer = template::Analyzer::for_engine(options.template_engine.map(Spanned::as_ref));
 
         // Run completeness, content, and template checks per key.
         for (key, translation) in &self.0 {
@@ -328,7 +237,7 @@ impl Translations {
                 key,
                 translation,
                 &expected,
-                handlebars,
+                analyzer,
                 options.strict,
                 diagnostics,
             );
@@ -411,7 +320,7 @@ fn lint_translation(
     key: &Spanned<String>,
     translation: &Translation,
     expected_languages: &BTreeSet<Language>,
-    handlebars: bool,
+    analyzer: Option<template::Analyzer>,
     strict: bool,
     diagnostics: &mut Vec<Diagnostic<FileId>>,
 ) {
@@ -474,47 +383,83 @@ fn lint_translation(
     }
 
     // Validate template syntax and arguments after basic content checks.
-    if handlebars {
-        lint_templates(key, translation, strict, diagnostics);
+    if let Some(analyzer) = analyzer {
+        lint_templates(key, translation, analyzer, strict, diagnostics);
     }
+}
+
+/// One language's template together with what the analysis found in it.
+struct Analyzed<'a> {
+    language: Language,
+    value: &'a Spanned<String>,
+    analysis: template::Analysis,
+}
+
+/// Analyzes every language of a key, reporting the templates that do not
+/// compile and returning the rest for the cross-language checks.
+fn analyze_templates<'a>(
+    translation: &'a Translation,
+    analyzer: template::Analyzer,
+    diagnostics: &mut Vec<Diagnostic<FileId>>,
+) -> Vec<Analyzed<'a>> {
+    let mut per_language = Vec::new();
+    for (language, value) in &translation.language {
+        match analyzer.analyze(value.as_ref()) {
+            Some(analysis) => per_language.push(Analyzed {
+                language: *language,
+                value,
+                analysis,
+            }),
+            None => emit(
+                diagnostics,
+                &translation.allow,
+                LintCode::Template,
+                Diagnostic::error()
+                    .with_message(format!("`{}` template fails to compile", language.code()))
+                    .with_labels(vec![
+                        Label::primary(translation.file_id, value.span.clone())
+                            .with_message("invalid template"),
+                    ]),
+            ),
+        }
+    }
+    per_language
 }
 
 fn lint_templates(
     key: &Spanned<String>,
     translation: &Translation,
+    analyzer: template::Analyzer,
     strict: bool,
     diagnostics: &mut Vec<Diagnostic<FileId>>,
 ) {
     let file_id = translation.file_id;
     let allow = &translation.allow;
+    let per_language = analyze_templates(translation, analyzer, diagnostics);
 
-    // Compile each template and collect its placeholder names.
-    let mut per_language: Vec<(Language, &Spanned<String>, BTreeSet<String>)> = Vec::new();
-    for (language, value) in &translation.language {
-        match handlebars_variables(value.as_ref()) {
-            Some(variables) => per_language.push((*language, value, variables)),
-            None => emit(
-                diagnostics,
-                allow,
-                LintCode::Template,
-                Diagnostic::error()
-                    .with_message(format!("`{}` template fails to compile", language.code()))
-                    .with_labels(vec![
-                        Label::primary(file_id, value.span.clone())
-                            .with_message("invalid handlebars template"),
-                    ]),
-            ),
-        }
-    }
-
-    let used: BTreeSet<&str> = per_language
+    let used: BTreeSet<String> = per_language
         .iter()
-        .flat_map(|(_, _, variables)| variables.iter().map(String::as_str))
+        .flat_map(|analyzed| analyzed.analysis.variables())
+        .collect();
+    let substituted: BTreeSet<&str> = per_language
+        .iter()
+        .flat_map(|analyzed| analyzed.analysis.substituted.iter().map(String::as_str))
         .collect();
 
-    // A placeholder used in one language should be present in every language.
-    for (language, value, variables) in &per_language {
-        for missing in used.iter().filter(|name| !variables.contains(**name)) {
+    // A value substituted in one language must be substituted in every
+    // language.
+    // Names that only select a wording are exempt: a language without the
+    // distinction simply does not branch on them.
+    for Analyzed {
+        language,
+        value,
+        analysis,
+    } in &per_language
+    {
+        for missing in substituted
+            .iter()
+            .filter(|name| !analysis.substituted.contains(**name))
+        {
             emit(
                 diagnostics,
                 allow,
@@ -535,11 +480,19 @@ fn lint_templates(
         }
     }
 
+    lint_dead_conditions(&per_language, file_id, allow, strict, diagnostics);
+
     let declared: BTreeSet<&str> = translation.arguments.keys().map(String::as_str).collect();
 
     // Report placeholders that have no matching argument declaration.
-    for (language, value, variables) in &per_language {
-        for undeclared in variables
+    for Analyzed {
+        language,
+        value,
+        analysis,
+    } in &per_language
+    {
+        for undeclared in analysis
+            .variables()
             .iter()
             .filter(|name| !declared.contains(name.as_str()))
         {
@@ -576,6 +529,46 @@ fn lint_templates(
                         .with_message(format!("`{unused}` is not referenced by any template")),
                 ]),
         );
+    }
+}
+
+/// Reports conditions with identical branches.
+/// They change nothing and are usually a leftover from working around the
+/// placeholder check.
+fn lint_dead_conditions(
+    per_language: &[Analyzed<'_>],
+    file_id: FileId,
+    allow: &BTreeSet<AllowEntry>,
+    strict: bool,
+    diagnostics: &mut Vec<Diagnostic<FileId>>,
+) {
+    for Analyzed {
+        language,
+        value,
+        analysis,
+    } in per_language
+    {
+        for dead in &analysis.dead_conditions {
+            emit(
+                diagnostics,
+                allow,
+                LintCode::DeadCondition,
+                Diagnostic::warning_or_error(strict)
+                    .with_message(format!(
+                        "`{dead}` has no effect on the `{}` translation",
+                        language.code()
+                    ))
+                    .with_labels(vec![
+                        Label::primary(file_id, value.span.clone())
+                            .with_message("both branches render the same text"),
+                    ])
+                    .with_notes(vec![
+                        "a language need not vary on every condition; remove the block or give \
+                         the branches different text"
+                            .to_string(),
+                    ]),
+            );
+        }
     }
 }
 
@@ -667,53 +660,10 @@ fn lint_duplicates(
 
 #[cfg(test)]
 mod tests {
-    use super::{LintOptions, handlebars_variables};
+    use super::LintOptions;
     use crate::{Language, Translations, diagnostics::Spanned};
-    use color_eyre::eyre::{self, OptionExt};
+    use color_eyre::eyre;
     use similar_asserts::assert_eq as sim_assert_eq;
-    use std::collections::BTreeSet;
-
-    fn vars(source: &str) -> Vec<String> {
-        handlebars_variables(source)
-            .unwrap_or_default()
-            .into_iter()
-            .collect()
-    }
-
-    #[test_util::test]
-    fn extracts_simple_and_helper_variables() {
-        sim_assert_eq!(have: vars("{{name}}"), want: vec!["name".to_string()]);
-        sim_assert_eq!(have: vars("{{uppercase name}}"), want: vec!["name".to_string()]);
-        sim_assert_eq!(
-            have: vars("Hello {{name}}, you are {{age}} years old."),
-            want: vec!["age".to_string(), "name".to_string()]
-        );
-    }
-
-    #[test_util::test]
-    fn excludes_block_locals_and_this() {
-        sim_assert_eq!(
-            have: vars("{{#each items}}{{this}}{{/each}}"),
-            want: vec!["items".to_string()]
-        );
-        sim_assert_eq!(
-            have: vars("{{#each rows as |row|}}{{row}}{{/each}}"),
-            want: vec!["rows".to_string()]
-        );
-    }
-
-    #[test_util::test]
-    fn invalid_template_returns_none() {
-        assert!(handlebars_variables("{{#each}}").is_none());
-        assert!(handlebars_variables("{{unclosed").is_none());
-    }
-
-    #[test_util::test]
-    fn plain_text_has_no_variables() {
-        let variables =
-            handlebars_variables("just text").ok_or_eyre("plain text did not compile")?;
-        sim_assert_eq!(have: variables, want: BTreeSet::new());
-    }
 
     fn lint(
         raw: &str,
@@ -800,6 +750,58 @@ mod tests {
             msgs.iter()
                 .any(|m| m == "argument `title` is declared but never used"),
             "{msgs:?}"
+        );
+    }
+
+    /// A name that only selects a wording may be absent from a language
+    /// without the distinction; the empty-block workaround is not needed.
+    #[test_util::test]
+    fn condition_only_names_are_not_required_everywhere() {
+        let raw = indoc::indoc! {r#"
+            [greeting]
+            en = "Hello {{name}}"
+            de = "{{#if my_condition}}Hallo {{name}}{{else}}Hi {{name}}{{/if}}"
+            arguments = { name = "string", my_condition = "boolean" }
+        "#};
+        let msgs = messages(raw, &[Language::En, Language::De])?;
+        assert!(msgs.is_empty(), "{msgs:?}");
+    }
+
+    /// The empty `{{#if}}` block that used to satisfy the placeholder check is
+    /// reported, naming the language it does nothing for.
+    #[test_util::test]
+    fn flags_dead_conditions() {
+        let raw = indoc::indoc! {r#"
+            [greeting]
+            en = "{{#if my_condition}}{{/if}}Hello {{name}}"
+            de = "{{#if my_condition}}Hallo {{name}}{{else}}Hi {{name}}{{/if}}"
+            arguments = { name = "string", my_condition = "boolean" }
+        "#};
+        let found = lint(raw, &[], false)?;
+        let dead: Vec<_> = found
+            .iter()
+            .filter(|(code, _)| code.as_deref() == Some("dead-condition"))
+            .map(|(_, message)| message.as_str())
+            .collect();
+        assert_eq!(
+            dead,
+            vec!["`{{#if my_condition}}` has no effect on the `en` translation"]
+        );
+    }
+
+    #[test_util::test]
+    fn allow_suppresses_dead_condition() {
+        let raw = indoc::indoc! {r#"
+            [greeting]
+            en = "{{#if my_condition}}{{/if}}Hello"
+            allow = ["lint:dead-condition"]
+        "#};
+        let found = lint(raw, &[], false)?;
+        assert!(
+            found
+                .iter()
+                .all(|(code, _)| code.as_deref() != Some("dead-condition")),
+            "{found:?}"
         );
     }
 

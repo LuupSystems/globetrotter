@@ -14,6 +14,8 @@ pub mod json;
 pub mod language;
 /// Linting of translation files.
 pub mod lint;
+/// Analysis of template sources for linting.
+pub mod template;
 /// TOML parsing of translation files.
 pub mod toml;
 /// Validation of translations against a set of options.
