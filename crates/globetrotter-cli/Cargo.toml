@@ -65,6 +65,7 @@ path = "src/main.rs"
 tokio.workspace = true
 futures.workspace = true
 color-eyre.workspace = true
+indoc.workspace = true
 
 # colors and diagnostics
 termcolor = "1"
@@ -95,5 +96,4 @@ mimalloc = "0"
 [dev-dependencies]
 color-eyre.workspace = true
 similar-asserts.workspace = true
-indoc.workspace = true
 test-util.workspace = true

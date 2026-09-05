@@ -350,7 +350,13 @@ pub fn generate_translation_enum(translations: &model::Translations) -> Result<S
 
     // Render and format the complete generated source file.
     let code = pretty_print(&out).map_err(|err| Error::Syn(err.to_string()))?;
-    let code = format!("{}\n{}", preamble(), code);
+    let code = format!(
+        indoc::indoc! {r"
+        {}
+        {}"},
+        preamble(),
+        code
+    );
     Ok(code)
 }
 
@@ -441,7 +447,13 @@ mod tests {
                 }
             }
         "# };
-        let want = format!("{}\n{}", super::preamble(), want);
+        let want = format!(
+            indoc::indoc! {r"
+            {}
+            {}"},
+            super::preamble(),
+            want
+        );
         sim_assert_eq!(have: have, want: want);
         Ok(())
     }
@@ -491,7 +503,13 @@ mod tests {
                 }
             }
         "# };
-        let want = format!("{}\n{}", super::preamble(), want);
+        let want = format!(
+            indoc::indoc! {r"
+            {}
+            {}"},
+            super::preamble(),
+            want
+        );
         sim_assert_eq!(have: have, want: want);
         Ok(())
     }
@@ -560,7 +578,13 @@ mod tests {
                 }
             }
         "# };
-        let want = format!("{}\n{}", super::preamble(), want);
+        let want = format!(
+            indoc::indoc! {r"
+            {}
+            {}"},
+            super::preamble(),
+            want
+        );
         sim_assert_eq!(have: have, want: want);
         Ok(())
     }

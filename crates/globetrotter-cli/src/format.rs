@@ -122,8 +122,11 @@ fn format_str(input: &str, order: SortOrder) -> eyre::Result<String> {
         // Document trailing decor can contain blank lines even without keys.
         // The file header owns the spacing before the rest of the document.
         Ok(format!(
-            "{file_comments}\n{}",
-            formatted.trim_start_matches([' ', '\t', '\r', '\n'])
+            indoc::indoc! {r"
+                {file_comments}
+                {}"},
+            formatted.trim_start_matches([' ', '\t', '\r', '\n']),
+            file_comments = file_comments,
         ))
     }
 }
@@ -356,12 +359,21 @@ mod tests {
         sim_assert_eq!(have: format_str(&have, SortOrder::Ascending)?, want: want);
 
         // Adding an earlier key must not take ownership of the file header.
-        let extended = format!("{have}\n[account]\nen = \"Account\"\n");
+        let extended = format!(
+            indoc::indoc! {r#"
+            {have}
+            [account]
+            en = "Account"
+            "#},
+            have = have
+        );
         for order in [SortOrder::Ascending, SortOrder::Descending] {
             let formatted = format_str(&extended, order)?;
-            assert!(formatted.starts_with(
-                "#! Advisor-facing document groups.\n#! Keep them filesystem-friendly.\n\n["
-            ));
+            assert!(formatted.starts_with(indoc::indoc! {r"
+                    #! Advisor-facing document groups.
+                    #! Keep them filesystem-friendly.
+
+                    ["}));
             sim_assert_eq!(have: format_str(&formatted, order)?, want: formatted);
         }
     }
@@ -459,8 +471,10 @@ mod tests {
     #[test_util::test]
     fn file_comment_text_and_paragraph_breaks_are_verbatim() {
         // Explicit escapes keep significant spaces, tabs, and CRLF visible.
-        let input = "[a]\r\nen = \"A\"\r\n  #!  Grüße!  \t\r\n#!\r\n\t#!\tSecond paragraph.  ";
-        let want = "  #!  Grüße!  \t\n#!\n\t#!\tSecond paragraph.  \n\n[a]\nen = \"A\"\n";
+        let input = indoc::indoc! {"[a]\r\nen = \"A\"\r\n  #!  Grüße!  \t\r\n#!\r\n\t#!\tSecond paragraph.  "};
+        assert!(input.contains("\r\n"));
+        let want =
+            indoc::indoc! {"  #!  Grüße!  \t\n#!\n\t#!\tSecond paragraph.  \n\n[a]\nen = \"A\"\n"};
         let have = format_str(input, SortOrder::Ascending)?;
         sim_assert_eq!(have: have, want: want);
         sim_assert_eq!(have: format_str(&have, SortOrder::Ascending)?, want: want);
@@ -469,13 +483,44 @@ mod tests {
     #[test_util::test]
     fn file_comments_work_without_table_headers() {
         for (input, want) in [
-            ("#! Header.", "#! Header.\n\n"),
-            ("\n#!\n\n\n", "#!\n\n"),
             (
-                "#! Header.\n# Ordinary footer.\n",
-                "#! Header.\n\n# Ordinary footer.\n",
+                "#! Header.",
+                indoc::indoc! {r"
+                #! Header.
+
+                "},
             ),
-            ("z = 1\n#! Header.\na = 2\n", "#! Header.\n\na = 2\nz = 1\n"),
+            (
+                concat!("\n", indoc::indoc! {"#!\n\n\n"}),
+                indoc::indoc! {r"
+                #!
+
+                "},
+            ),
+            (
+                indoc::indoc! {r"
+                    #! Header.
+                    # Ordinary footer.
+                    "},
+                indoc::indoc! {r"
+                    #! Header.
+
+                    # Ordinary footer.
+                    "},
+            ),
+            (
+                indoc::indoc! {r"
+                z = 1
+                #! Header.
+                a = 2
+                "},
+                indoc::indoc! {r"
+                #! Header.
+
+                a = 2
+                z = 1
+                "},
+            ),
         ] {
             let have = format_str(input, SortOrder::Ascending)?;
             sim_assert_eq!(have: have, want: want);
@@ -510,9 +555,17 @@ mod tests {
     #[test_util::test]
     fn file_comments_do_not_hide_invalid_toml() {
         for input in [
-            "#! Header.\n[a\nen = \"A\"\n",
-            "#! Invalid control character: \u{0001}\n[a]\nen = \"A\"\n",
-            "[a]\nen = \"\"\"\n#! Unterminated translation.\n",
+            indoc::indoc! {r#"
+                #! Header.
+                [a
+                en = "A"
+                "#},
+            indoc::indoc! {"#! Invalid control character: \u{0001}\n[a]\nen = \"A\"\n"},
+            indoc::indoc! {r#"
+                [a]
+                en = """
+                #! Unterminated translation.
+                "#},
         ] {
             assert!(format_str(input, SortOrder::Ascending).is_err());
         }
