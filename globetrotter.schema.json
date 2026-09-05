@@ -1,8 +1,577 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "additionalProperties": false,
+  "title": "Globetrotter configuration",
   "description": "Globetrotter configuration",
-  "properties": {},
-  "required": [],
-  "type": "object"
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "The configuration schema version. Omitting it assumes the latest and warns.",
+      "oneOf": [
+        {
+          "const": 1
+        },
+        {
+          "enum": [
+            "1",
+            "v1",
+            "V1",
+            "latest"
+          ]
+        }
+      ]
+    },
+    "config": {
+      "description": "A single unnamed build. Diagnostics call it `config`. Mutually exclusive with `configs`, which is ignored when this is present.",
+      "$ref": "#/definitions/config"
+    },
+    "configs": {
+      "description": "Named or positional builds. A mapping keeps its names in diagnostics; a sequence is named `configs[0]`, `configs[1]`, and so on.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/config"
+          }
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/config"
+          }
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "config": {
+      "type": "object",
+      "description": "One independent translation build: its catalogs, the languages they must cover, and the files generated from them.",
+      "additionalProperties": false,
+      "properties": {
+        "languages": {
+          "description": "The languages every key is expected to provide, and the JSON files to generate. Missing or empty means the union of languages found across all keys is expected instead.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/language"
+          }
+        },
+        "inputs": {
+          "$ref": "#/definitions/inputs"
+        },
+        "translations": {
+          "description": "Deprecated alias for `inputs`.",
+          "$ref": "#/definitions/inputs"
+        },
+        "outputs": {
+          "$ref": "#/definitions/outputs"
+        },
+        "usages": {
+          "$ref": "#/definitions/usages"
+        },
+        "allow": {
+          "description": "Lints suppressed for every key this config lints. A key's own `allow` list uses the same spelling.",
+          "oneOf": [
+            {
+              "$ref": "#/definitions/allowEntry"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/allowEntry"
+              }
+            }
+          ]
+        },
+        "engine": {
+          "$ref": "#/definitions/templateEngine"
+        },
+        "template_engine": {
+          "description": "Alias for `engine`.",
+          "$ref": "#/definitions/templateEngine"
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "Promote lint warnings to errors, including the empty-languages, empty-inputs, and empty-outputs diagnostics."
+        },
+        "check_templates": {
+          "type": "boolean",
+          "description": "Validate that every template renders successfully."
+        },
+        "dry_run": {
+          "type": "boolean",
+          "description": "Report what would be written without writing any file."
+        },
+        "print_absolute_paths": {
+          "type": "boolean",
+          "description": "Print absolute paths in progress output and diagnostics instead of paths relative to the config file."
+        },
+        "absolute": {
+          "type": "boolean",
+          "description": "Alias for `print_absolute_paths`."
+        }
+      }
+    },
+    "usages": {
+      "type": "object",
+      "description": "The application sources this catalog belongs to, and how its keys may be referenced. Drives the `unused-key` and `dynamic-usage` lints.",
+      "additionalProperties": false,
+      "properties": {
+        "roots": {
+          "type": "array",
+          "description": "Source roots owned by this config, resolved relative to this configuration file. Empty disables unused-key checking unless `--usages` supplies roots, which replace these.",
+          "items": {
+            "type": "string",
+            "description": "A path or glob pattern, resolved relative to this configuration file."
+          }
+        },
+        "dynamic": {
+          "description": "How a translation call that builds its key at runtime is treated. `--dynamic-usages` overrides this.",
+          "type": "string",
+          "default": "allow",
+          "oneOf": [
+            {
+              "const": "allow",
+              "description": "A known literal prefix keeps matching keys alive, and the call is not reported."
+            },
+            {
+              "const": "warn",
+              "description": "Accept the same prefixes, and report `dynamic-usage` for review."
+            },
+            {
+              "const": "deny",
+              "description": "Report `dynamic-usage` as an error, and do not let an inferred prefix keep keys alive."
+            }
+          ]
+        },
+        "functions": {
+          "type": "array",
+          "description": "Callees whose first argument is a translation key. Replaces the defaults rather than extending them. A name without a dot also matches the final member of a callee, so `t` matches `i18n.t`; a dotted name must match the whole callee.",
+          "default": [
+            "t",
+            "$t",
+            "translate"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "respect_ignore_files": {
+          "type": "boolean",
+          "default": true,
+          "description": "Apply `.ignore` rules while discovering sources. `--no-ignore` overrides this."
+        },
+        "respect_gitignore": {
+          "type": "boolean",
+          "default": true,
+          "description": "Apply `.gitignore`, Git's global excludes, and `.git/info/exclude` while discovering sources. `--no-gitignore` overrides this."
+        }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "description": "The translation catalogs this config reads.",
+      "items": {
+        "$ref": "#/definitions/input"
+      }
+    },
+    "input": {
+      "description": "A catalog path or glob, or a mapping that also says how its keys are prefixed.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "A path or glob pattern, resolved relative to this configuration file."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "A path or glob pattern, resolved relative to this configuration file."
+            },
+            "exclude": {
+              "description": "Paths or glob patterns removed from what `path` matched.",
+              "oneOf": [
+                {
+                  "type": "string",
+                  "description": "A path or glob pattern, resolved relative to this configuration file."
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "description": "A path or glob pattern, resolved relative to this configuration file."
+                  }
+                }
+              ]
+            },
+            "prefix": {
+              "type": "string",
+              "description": "Prepended to every key read from this input."
+            },
+            "prepend_filename": {
+              "type": "boolean",
+              "description": "Prepend each file's stem to its keys, keeping catalogs from colliding."
+            },
+            "prepend_relative_path": {
+              "type": "boolean",
+              "description": "Prepend each file's path relative to this input's root to its keys."
+            },
+            "separator": {
+              "type": "string",
+              "description": "Joins the prefix segments. Defaults to `.`."
+            }
+          }
+        }
+      ]
+    },
+    "outputs": {
+      "type": "object",
+      "description": "The files generated from this config's catalogs. Output paths are resolved relative to this configuration file.",
+      "additionalProperties": false,
+      "properties": {
+        "json": {
+          "$ref": "#/definitions/jsonOutputs"
+        },
+        "translations": {
+          "description": "Alias for `json`.",
+          "$ref": "#/definitions/jsonOutputs"
+        },
+        "typescript": {
+          "$ref": "#/definitions/typescriptOutput"
+        },
+        "ts": {
+          "description": "Alias for `typescript`.",
+          "$ref": "#/definitions/typescriptOutput"
+        },
+        "rust": {
+          "$ref": "#/definitions/paths"
+        },
+        "rs": {
+          "description": "Alias for `rust`.",
+          "$ref": "#/definitions/paths"
+        },
+        "golang": {
+          "$ref": "#/definitions/paths"
+        },
+        "go": {
+          "description": "Alias for `golang`.",
+          "$ref": "#/definitions/paths"
+        },
+        "python": {
+          "$ref": "#/definitions/paths"
+        },
+        "py": {
+          "description": "Alias for `python`.",
+          "$ref": "#/definitions/paths"
+        }
+      }
+    },
+    "paths": {
+      "description": "One path or a list of paths, resolved relative to this configuration file.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "A path or glob pattern, resolved relative to this configuration file."
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "A path or glob pattern, resolved relative to this configuration file."
+          }
+        }
+      ]
+    },
+    "jsonOutputs": {
+      "description": "One JSON output or a list of them. `{{language}}` in a path expands to each configured language.",
+      "oneOf": [
+        {
+          "$ref": "#/definitions/jsonOutput"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/jsonOutput"
+          }
+        }
+      ]
+    },
+    "jsonOutput": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "A path or glob pattern, resolved relative to this configuration file."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "A path or glob pattern, resolved relative to this configuration file."
+            },
+            "style": {
+              "description": "The layout of the generated JSON.",
+              "type": "string",
+              "default": "Flat",
+              "oneOf": [
+                {
+                  "const": "Flat",
+                  "description": "A flat `translations` map keyed by fully qualified translation key."
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "typescriptOutput": {
+      "type": "object",
+      "description": "Generated TypeScript declarations for the catalog.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/paths"
+        },
+        "interface": {
+          "description": "Alias for `type`.",
+          "$ref": "#/definitions/paths"
+        },
+        "dts": {
+          "description": "Alias for `type`.",
+          "$ref": "#/definitions/paths"
+        }
+      }
+    },
+    "language": {
+      "description": "An ISO 639-1 language code.",
+      "type": "string",
+      "enum": [
+        "aa",
+        "ab",
+        "af",
+        "ak",
+        "am",
+        "an",
+        "ar",
+        "as",
+        "av",
+        "ay",
+        "az",
+        "ba",
+        "be",
+        "bg",
+        "bh",
+        "bi",
+        "bm",
+        "bn",
+        "bo",
+        "br",
+        "bs",
+        "ca",
+        "ce",
+        "ch",
+        "co",
+        "cr",
+        "cs",
+        "cu",
+        "cv",
+        "cy",
+        "da",
+        "de",
+        "dv",
+        "dz",
+        "ee",
+        "el",
+        "en",
+        "eo",
+        "es",
+        "et",
+        "eu",
+        "fa",
+        "ff",
+        "fi",
+        "fj",
+        "fo",
+        "fr",
+        "fy",
+        "ga",
+        "gd",
+        "gl",
+        "gn",
+        "gu",
+        "gv",
+        "ha",
+        "he",
+        "hi",
+        "ho",
+        "hr",
+        "ht",
+        "hu",
+        "hy",
+        "hz",
+        "ia",
+        "id",
+        "ie",
+        "ig",
+        "ii",
+        "ik",
+        "io",
+        "is",
+        "it",
+        "iu",
+        "ja",
+        "jv",
+        "ka",
+        "kg",
+        "ki",
+        "kj",
+        "kk",
+        "kl",
+        "km",
+        "kn",
+        "ko",
+        "kr",
+        "ks",
+        "ku",
+        "kv",
+        "kw",
+        "ky",
+        "la",
+        "lb",
+        "lg",
+        "li",
+        "ln",
+        "lo",
+        "lt",
+        "lu",
+        "lv",
+        "mg",
+        "mh",
+        "mi",
+        "mk",
+        "ml",
+        "mn",
+        "mo",
+        "mr",
+        "ms",
+        "mt",
+        "my",
+        "na",
+        "nb",
+        "nd",
+        "ne",
+        "ng",
+        "nl",
+        "nn",
+        "no",
+        "nr",
+        "nv",
+        "ny",
+        "oc",
+        "oj",
+        "om",
+        "or",
+        "os",
+        "pa",
+        "pi",
+        "pl",
+        "ps",
+        "pt",
+        "qu",
+        "rm",
+        "rn",
+        "ro",
+        "ru",
+        "rw",
+        "sa",
+        "sc",
+        "sd",
+        "se",
+        "sg",
+        "sh",
+        "si",
+        "sk",
+        "sl",
+        "sm",
+        "sn",
+        "so",
+        "sq",
+        "sr",
+        "ss",
+        "st",
+        "su",
+        "sv",
+        "sw",
+        "ta",
+        "te",
+        "tg",
+        "th",
+        "ti",
+        "tk",
+        "tl",
+        "tn",
+        "to",
+        "tr",
+        "ts",
+        "tt",
+        "tw",
+        "ty",
+        "ug",
+        "uk",
+        "ur",
+        "uz",
+        "ve",
+        "vi",
+        "vo",
+        "wa",
+        "wo",
+        "xh",
+        "yi",
+        "yo",
+        "za",
+        "zh",
+        "zu"
+      ]
+    },
+    "allowEntry": {
+      "description": "A namespaced lint suppression. `lint:all` suppresses every lint.",
+      "type": "string",
+      "enum": [
+        "lint:all",
+        "lint:missing-language",
+        "lint:empty",
+        "lint:whitespace",
+        "lint:template",
+        "lint:placeholder",
+        "lint:undeclared-argument",
+        "lint:unused-argument",
+        "lint:dead-condition",
+        "lint:duplicate",
+        "lint:identical-languages",
+        "lint:unused-key",
+        "lint:dynamic-usage",
+        "lint:llm-drift"
+      ]
+    },
+    "templateEngine": {
+      "description": "The template engine used to parse and validate translation templates. Any other engine name is accepted and treated as unknown to the built-in checks.",
+      "type": "string",
+      "examples": [
+        "handlebars",
+        "golang",
+        "go",
+        "mustache",
+        "jinja2"
+      ]
+    }
+  }
 }

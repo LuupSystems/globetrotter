@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../globetrotter.schema.json
 version: 1
 configs:
   my-other-translations:
