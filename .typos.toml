@@ -28,6 +28,11 @@ LaBSE = "LaBSE"
 # allow ".typ" file extension
 typ = "typ"
 
+# These are ISO 639-1 codes for Bashkir, Faroese, and North Ndebele, not misspellings.
+ba = "ba"
+fo = "fo"
+nd = "nd"
+
 [type.readme]
 extend-glob = ["README.md"]
 

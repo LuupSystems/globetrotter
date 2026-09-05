@@ -2,7 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-// spellcheck:ignore-block
 /// A language identified by an ISO 639-1 two-letter code.
 #[derive(
     Clone,
@@ -785,7 +784,6 @@ impl Language {
     )]
     #[must_use]
     pub fn name(&self) -> &'static str {
-        // spellcheck:ignore-block
         match self {
             Language::Aa => "Afar",
             Language::Ab => "Abkhazian",
