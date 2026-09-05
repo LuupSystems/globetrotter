@@ -1,6 +1,7 @@
 //! Concurrent diagnostic rendering backed by a shared source-file registry.
 
 use codespan_reporting::{diagnostic::Diagnostic, files, term};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
 use tokio::sync::{Mutex, RwLock};
@@ -13,7 +14,13 @@ use tokio::sync::{Mutex, RwLock};
 pub struct Printer {
     writer: Arc<Mutex<term::StylesWriter<'static, term::termcolor::StandardStream>>>,
     diagnostic_config: term::Config,
-    files: Arc<RwLock<files::SimpleFiles<String, String>>>,
+    files: Arc<RwLock<SourceFiles>>,
+}
+
+#[derive(Default)]
+struct SourceFiles {
+    files: files::SimpleFiles<String, String>,
+    ids: HashMap<String, Vec<usize>>,
 }
 
 impl Default for Printer {
@@ -34,7 +41,7 @@ impl Printer {
         Self {
             writer: Arc::new(Mutex::new(writer)),
             diagnostic_config,
-            files: Arc::new(RwLock::new(files::SimpleFiles::new())),
+            files: Arc::new(RwLock::new(SourceFiles::default())),
         }
     }
 
@@ -42,9 +49,33 @@ impl Printer {
     ///
     /// `name` is the path diagnostics display for the file, so callers pass
     /// the form they want shown, such as a path relative to the project.
+    /// Registering the same name and contents again reuses its id, allowing
+    /// diagnostics from overlapping configs to identify the same source.
     pub async fn add_source_file(&self, name: impl AsRef<Path>, source: String) -> usize {
         let mut files = self.files.write().await;
-        files.add(name.as_ref().to_string_lossy().into_owned(), source)
+        let name = name.as_ref().to_string_lossy().into_owned();
+        if let Some(ids) = files.ids.get(&name)
+            && let Some(&id) = ids.iter().find(|&&id| {
+                files
+                    .files
+                    .get(id)
+                    .is_ok_and(|file| file.source() == &source)
+            })
+        {
+            return id;
+        }
+        let id = files.files.add(name.clone(), source);
+        files.ids.entry(name).or_default().push(id);
+        id
+    }
+
+    /// Returns the display name registered for a diagnostic source.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `file_id` is not registered.
+    pub async fn source_name(&self, file_id: usize) -> Result<String, files::Error> {
+        Ok(self.files.read().await.files.get(file_id)?.name().clone())
     }
 
     /// Renders a diagnostic to an ANSI-colored string for printing above a
@@ -60,7 +91,7 @@ impl Printer {
             term::emit_to_write_style(
                 &mut styled,
                 &self.diagnostic_config,
-                &*self.files.read().await,
+                &self.files.read().await.files,
                 diagnostic,
             )?;
         }
@@ -79,8 +110,35 @@ impl Printer {
         term::emit_to_write_style(
             &mut *writer,
             &self.diagnostic_config,
-            &*self.files.read().await,
+            &self.files.read().await.files,
             diagnostic,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Printer;
+
+    #[test_util::test]
+    async fn repeated_source_versions_reuse_their_original_ids() {
+        let printer = Printer::default();
+        let first = printer
+            .add_source_file("catalog.toml", "first".into())
+            .await;
+        let second = printer
+            .add_source_file("catalog.toml", "second".into())
+            .await;
+        assert_ne!(first, second);
+        assert_eq!(
+            printer
+                .add_source_file("catalog.toml", "first".into())
+                .await,
+            first
+        );
+        assert_ne!(
+            printer.add_source_file("other.toml", "first".into()).await,
+            first
+        );
     }
 }

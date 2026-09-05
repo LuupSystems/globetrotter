@@ -8,6 +8,8 @@
 //! Feature flags select language-specific generators: `typescript`, `rust`,
 //! `golang`, and `python`. The `llm-judge` feature adds optional semantic-drift
 //! review during linting.
+//! The optional `tree-sitter` feature adds syntax-aware source usage scanning.
+//! Without it, usage scanning uses less precise text matching.
 //!
 //! The same builder API used by the CLI is available for build scripts and
 //! other programmatic integrations:

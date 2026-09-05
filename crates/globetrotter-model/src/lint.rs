@@ -67,6 +67,8 @@ pub enum LintCode {
     IdenticalLanguages,
     /// A key is never referenced in the scanned source (see `--usages`).
     UnusedKey,
+    /// A translation call constructs its key dynamically.
+    DynamicUsage,
     /// A language of one key tells the user something different than the
     /// others, as judged by an LLM (see `--llm-judge`).
     LlmDrift,

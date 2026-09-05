@@ -63,6 +63,9 @@ duplicate detection, and the experimental LLM judge.
 Useful groups:
 
 - `--usages <DIR>` is repeatable and enables unused-key scanning.
+- `--dynamic-usages <POLICY>` overrides config policies with `allow`, `warn`, or `deny`.
+- `--no-ignore` bypasses `.ignore` files in usage scans.
+- `--no-gitignore` bypasses `.gitignore` and Git exclude files in usage scans.
 - `--no-duplicates` disables both cross-key duplicate checks and identical-language checks.
 - `--llm-judge` enables semantic drift review.
 - `--llm-base-url`, `--llm-model`, and `--llm-api-key-env` select the endpoint.

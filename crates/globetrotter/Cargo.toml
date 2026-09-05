@@ -45,6 +45,33 @@ llm-judge = ["dep:globetrotter-llm-judge", "dep:indicatif"]
 # Parallel catalog validation and sorting in the model crate.
 rayon = ["globetrotter-model/rayon"]
 
+# Source parsing is independent of the configured output languages.
+tree-sitter = [
+  "dep:html-escape",
+  "dep:tree-sitter-angular",
+  "dep:tree-sitter",
+  "dep:tree-sitter-typescript",
+  "dep:tree-sitter-javascript",
+  "dep:tree-sitter-rust",
+  "dep:tree-sitter-go",
+  "dep:tree-sitter-python",
+  "dep:tree-sitter-ruby",
+  "dep:tree-sitter-php",
+  "dep:tree-sitter-java",
+  "dep:tree-sitter-kotlin-ng",
+  "dep:tree-sitter-swift",
+  "dep:tree-sitter-dart",
+  "dep:tree-sitter-elixir",
+  "dep:tree-sitter-lua",
+  "dep:tree-sitter-zig",
+  "dep:tree-sitter-c-sharp",
+  "dep:tree-sitter-html",
+  "dep:tree-sitter-css",
+  "dep:tree-sitter-vue-next",
+  "dep:tree-sitter-svelte-next",
+  "dep:tree-sitter-astro-next",
+]
+
 [package.metadata.cargo-fc]
 # Language backends are independent alternatives in the matrix. The `default` row
 # still exercises the supported configuration with every backend enabled together.
@@ -73,9 +100,33 @@ colored = "3"
 strip-ansi-escapes = "0"
 indoc.workspace = true
 
-# multi-pattern search and gitignore-aware walking for dead-key detection
-aho-corasick = "1"
+# Ignore files let repositories control which sources belong in usage scans.
 ignore = "0.4"
+
+# Optional parsers let library consumers omit syntax-aware source scanning.
+tree-sitter = { version = "0.25", optional = true }
+tree-sitter-angular = { version = "0.9", optional = true }
+html-escape = { version = "0.2", optional = true }
+tree-sitter-typescript = { version = "0.23", optional = true }
+tree-sitter-javascript = { version = "0.25", optional = true }
+tree-sitter-rust = { version = "0.24", optional = true }
+tree-sitter-go = { version = "0.25", optional = true }
+tree-sitter-python = { version = "0.25", optional = true }
+tree-sitter-ruby = { version = "0.23", optional = true }
+tree-sitter-php = { version = "0.24", optional = true }
+tree-sitter-java = { version = "0.23", optional = true }
+tree-sitter-kotlin-ng = { version = "1", optional = true }
+tree-sitter-swift = { version = "0.7", optional = true }
+tree-sitter-dart = { version = "0.2", optional = true }
+tree-sitter-elixir = { version = "0.3", optional = true }
+tree-sitter-lua = { version = "0.5", optional = true }
+tree-sitter-zig = { version = "1", optional = true }
+tree-sitter-c-sharp = { version = "0.23", optional = true }
+tree-sitter-html = { version = "0.23", optional = true }
+tree-sitter-css = { version = "0.25", optional = true }
+tree-sitter-vue-next = { version = "0.1", optional = true }
+tree-sitter-svelte-next = { version = "0.1", optional = true }
+tree-sitter-astro-next = { version = "0.1", optional = true }
 
 # show compressed file sizes of json translation files
 flate2 = { version = "1", features = ["rust_backend"], default-features = false }

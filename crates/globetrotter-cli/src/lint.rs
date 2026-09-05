@@ -35,14 +35,17 @@ impl crate::Globetrotter {
     /// Checks for missing, empty, or whitespace-padded translations, templates
     /// that fail to compile, placeholders that are inconsistent across
     /// languages, template arguments that are used but not declared (or declared
-    /// but never used), and exact duplicate strings. With `--usages`, also reports
-    /// keys not referenced in the given source directories. With `--llm-judge`,
-    /// asks an LLM whether each key's languages all tell the user the same thing
-    /// (a review aid, emitted as notes). No files are written.
+    /// but never used), and exact duplicate strings.
+    /// Usage roots from configuration or `--usages` also enable checks for unused
+    /// keys and dynamic calls under each config's policy.
+    /// With `--llm-judge`, asks an LLM whether each key's languages all tell the
+    /// user the same thing (a review aid, emitted as notes).
+    /// No files are written.
     ///
     /// Returns [`ExitCode::FAILURE`] (with a one-line summary) if any issues
-    /// were found, otherwise [`ExitCode::SUCCESS`]. Genuine errors (missing or
-    /// unparsable files) are returned as `Err` and reported normally.
+    /// were found, otherwise [`ExitCode::SUCCESS`].
+    /// Genuine errors (missing or unparsable files) are returned as `Err` and
+    /// reported normally.
     ///
     /// # Errors
     ///
@@ -91,6 +94,9 @@ impl crate::Globetrotter {
         let params = LintParams {
             detect_duplicates: !options.no_duplicates,
             usages: options.usages.clone(),
+            dynamic_usages: options.dynamic_usages,
+            respect_ignore_files: options.no_ignore.then_some(false),
+            respect_gitignore: options.no_gitignore.then_some(false),
             llm_judge,
         };
 

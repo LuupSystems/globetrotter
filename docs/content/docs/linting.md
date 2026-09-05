@@ -41,9 +41,121 @@ references:
 globetrotter lint --usages ./src --usages ./packages
 ```
 
-The scanner follows ignore files and treats dynamic key prefixes conservatively. It is a cleanup
-tool, not a proof that every runtime-computed lookup is dead; review unused-key findings before
-deleting translations.
+For a monorepo, declare the owning sources on each config instead:
+
+```yaml
+version: 1
+configs:
+  airtype:
+    languages: [de, en, fr]
+    inputs:
+      - path: ./translations/**/*.toml
+    usages:
+      roots:
+        - ../../apps/airtype
+        - ../../packages/shared-components
+      dynamic: deny
+```
+
+Declared roots resolve relative to the YAML file. Each config checks its own keys against its own
+roots, even when another config defines the same spelling. Repeated CLI `--usages` paths replace
+the declared roots of **every selected config** and resolve relative to the current directory.
+With neither declared nor CLI roots, unused-key checking is disabled for that config.
+
+The scan respects `.ignore` and Git ignore rules by default. These are independent controls:
+`--no-ignore` bypasses `.ignore`; `--no-gitignore` bypasses `.gitignore`, Git's global excludes,
+and `.git/info/exclude`. Use both to bypass both families. The corresponding config settings are
+`usages.respect_ignore_files` and `usages.respect_gitignore`, both defaulting to `true`.
+
+Hidden source directories are included unless an ignore rule excludes them. There is no hard-coded
+list of build or dependency directory names, and nested globetrotter configs do not cut off
+discovery within a declared root. Git metadata and configured generated files remain excluded
+regardless of ignore settings. List shared packages as additional roots when needed.
+Unreadable roots or source files, syntax errors in scanned runtime code, and source files over
+4 MiB fail the scan instead of presenting incomplete results as unused-key findings.
+
+Identical unused-key findings for the same source section and resolved key are emitted once, with
+the affected config names and config files attached. A key unused by one config may still be used
+by another, possibly with a different prefix. Check all owners before deleting a shared TOML
+section.
+
+### Static and dynamic usages
+
+The default CLI uses Tree-sitter parsers. Runtime string literals count as static references;
+comments, documentation, TypeScript type positions, regular expressions, and fragments of dynamic
+translation keys do not. Static literals outside translation calls also count, to support key
+constants and data-driven interfaces. This is source-reference analysis, not whole-program
+reachability analysis: code in an uncalled function can still count.
+
+JavaScript/TypeScript, JSX/TSX (including React, Next.js, and Remix), Vue, Svelte, Astro, HTML
+templates, Rust, Go, Python, Ruby, PHP, Java, Kotlin, Swift, Dart, Elixir, Lua, Zig, and C# are
+supported. Vue/Svelte/Astro scripts and template expressions are parsed as embedded code with
+diagnostics pointing to their original source locations. Vue style `v-bind(...)` expressions and
+Astro’s `define:vars` attributes are scanned as executable code. Ordinary CSS strings, HTML
+comments, and data script blocks are excluded. Angular-style interpolations, bound attributes,
+and `translate` pipes are also recognized. Configured Rust outputs contribute their generated enum variants as static
+usage forms, including references nested inside a dynamic call under `deny`; deleting those
+variants would break compilation. Generated files themselves do not keep keys alive.
+
+Dynamic calls use the first argument of `t`, `$t`, or `translate`, including member calls such as
+`i18n.t`. Configure wrappers or other function names explicitly:
+
+```yaml
+usages:
+  roots: [./src]
+  functions: [t, i18n.lookup]
+  dynamic: warn
+```
+
+`functions` replaces the defaults. A name without a dot matches that name or the final member of
+a callee; a dotted name matches the complete callee. This is syntactic recognition, not import or
+type resolution: an unrelated function named `t` also matches unless you narrow the list.
+Unrelated dynamic templates and TypeScript template-literal types never keep a subtree alive in
+the default scanner.
+Finite literal choices, such as `t(open ? "dialog.file" : "dialog.folder")` and fallback-key
+arrays, keep those exact keys alive. Unknown alternatives still trigger the selected dynamic policy.
+
+HTML interpolation support targets Angular expressions. Server template engines such as Jinja,
+Django templates, and Blade are not supported; exclude those sources through ignore rules.
+Static HTML attribute text is not a code literal, so data-driven keys passed as plain attributes
+need a code reference to count. This scanner does not perform whole-program data-flow analysis.
+
+The bundled grammars have limits: Svelte each blocks currently need `as`, TypeScript assertions
+inside their iterable can confuse the Svelte grammar, and Angular's `*ngIf` `then` clause is not
+supported. Such syntax produces an explicit scan error rather than an incomplete unused-key
+result. Move an asserted iterable into a script variable, use the supported template form, or
+exclude the affected source through ignore rules when appropriate. Astro expression markup is
+parsed as TSX; use self-closing void elements and JSX-style comments inside those expressions.
+
+| Dynamic policy | Effect |
+|---|---|
+| `allow` (default) | A known literal prefix containing a dot keeps matching keys alive. |
+| `warn` | Accept the same prefixes and report `dynamic-usage` for review. |
+| `deny` | Report `dynamic-usage` as an error; inferred dynamic prefixes do not keep keys alive. |
+
+An expression without a known prefix, such as `t(key)`, cannot identify a subtree. `warn` and
+`deny` still report the expression. Format functions and arbitrary computations are not evaluated.
+Warnings also make lint exit non-zero, consistent with the other lint checks. `--strict` promotes
+warnings to errors. A config-wide `allow: ["lint:dynamic-usage"]` suppresses the dynamic-call
+diagnostic but does not change whether its keys count as used.
+
+Override every selected config's policy for one invocation:
+
+```bash
+globetrotter lint --dynamic-usages deny
+```
+
+### Lightweight builds
+
+The `tree-sitter` Cargo feature owns all parser dependencies. It is enabled by default in
+`globetrotter-cli` and opt-in for library consumers. A CLI built without it still checks usages
+using lightweight text matching, and prints a note identifying that mode. Config ownership,
+root precedence, and diagnostic grouping are unchanged.
+
+Text matching is less precise: exact spellings in comments and types can count as usages, and
+`${...}` prefixes are recognized without call or language context. Its dynamic policy controls
+those detected prefixes; it cannot diagnose arbitrary computed arguments such as `t(key)`.
+Use the default parser-enabled CLI for a dead-key CI gate.
 
 Disable duplicate detection for a run with `--no-duplicates`. For a deliberate exception on one
 key, prefer its local `allow` list:

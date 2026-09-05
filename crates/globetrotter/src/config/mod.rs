@@ -2,6 +2,7 @@
 
 /// Resolved settings and precedence layers.
 pub mod settings;
+pub mod usages;
 /// Version 1 of the configuration schema and its parsing routines.
 pub mod v1;
 

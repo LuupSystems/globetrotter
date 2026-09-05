@@ -33,7 +33,9 @@ default = [
   "python",
   "rayon",
   "llm-judge",
+  "tree-sitter",
 ]
+tree-sitter = ["globetrotter/tree-sitter"]
 typescript = ["globetrotter/typescript"]
 rust = ["globetrotter/rust"]
 golang = ["globetrotter/golang"]
@@ -97,3 +99,4 @@ mimalloc = "0"
 color-eyre.workspace = true
 similar-asserts.workspace = true
 test-util.workspace = true
+tempfile = "3"

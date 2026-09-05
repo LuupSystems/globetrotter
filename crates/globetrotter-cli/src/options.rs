@@ -230,9 +230,23 @@ impl LlmJudgeOptions {
 pub struct LintOptions {
     /// Report translation keys never referenced in this source directory.
     ///
-    /// Repeatable. When omitted, the unused-key check is skipped.
+    /// The supplied roots replace every selected config's declared roots.
+    /// Repeat the option to include multiple directories.
+    /// When omitted, each config uses its own `usages.roots`.
     #[clap(long = "usages", value_name = "DIR")]
     pub usages: Vec<PathBuf>,
+
+    /// Override each config's dynamic translation-call policy (allow, warn, or deny).
+    #[clap(long = "dynamic-usages", value_name = "POLICY")]
+    pub dynamic_usages: Option<globetrotter::config::usages::DynamicUsages>,
+
+    /// Bypass `.ignore` files when scanning usages.
+    #[clap(long = "no-ignore")]
+    pub no_ignore: bool,
+
+    /// Bypass `.gitignore` and Git exclude files when scanning usages.
+    #[clap(long = "no-gitignore")]
+    pub no_gitignore: bool,
 
     /// Disable duplicate-translation detection entirely.
     #[clap(long = "no-duplicates", action = clap::ArgAction::SetTrue)]

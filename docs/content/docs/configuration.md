@@ -5,6 +5,11 @@ weight: 4
 
 # Configuration
 
+Each config can declare `usages.roots`, `usages.dynamic`, and `usages.functions` for unused-key
+checking. `usages.respect_ignore_files` and `usages.respect_gitignore` independently control
+ignore-file filtering. Roots belong to that config and resolve relative to the YAML file. See
+[usage scanning]({{< relref "linting.md#find-unused-keys" >}}) for policies and CLI precedence.
+
 Globetrotter uses a versioned YAML file. By default it looks for `globetrotter.yaml` in the current
 directory; pass `--config` (`-c`) to name a file or a directory to search.
 

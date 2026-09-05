@@ -13,7 +13,7 @@ use crate::{
     model,
     progress::{Logger, relative_to},
 };
-use codespan_reporting::diagnostic::{Diagnostic, Label};
+use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 use futures::future::{Future, TryFutureExt};
 use futures::stream::{self, StreamExt, TryStreamExt};
 use globetrotter_model::{
@@ -23,7 +23,7 @@ use globetrotter_model::{
 };
 use itertools::Itertools;
 use normalize_path::NormalizePath;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -33,8 +33,15 @@ use std::sync::Arc;
 pub struct LintParams {
     /// Whether to report duplicate translations (across keys and within a key).
     pub detect_duplicates: bool,
-    /// Source directories to scan for unused keys; empty disables the check.
+    /// Nonempty roots override every config's declared roots.
+    /// An empty list preserves each config's roots.
     pub usages: Vec<PathBuf>,
+    /// A supplied policy overrides each config's dynamic-call policy.
+    pub dynamic_usages: Option<crate::config::usages::DynamicUsages>,
+    /// A supplied value overrides each config's `.ignore` filtering.
+    pub respect_ignore_files: Option<bool>,
+    /// A supplied value overrides each config's Git ignore-file filtering.
+    pub respect_gitignore: Option<bool>,
     /// LLM-judged translation-consistency review; `None` disables the check.
     ///
     /// Requires the `llm-judge` feature to be enabled in this build; otherwise
@@ -785,12 +792,83 @@ impl Executor {
         Ok((tally, translations))
     }
 
+    async fn collect_usage_diagnostics(
+        &self,
+        config_file: &config::ConfigFile<FileId>,
+        translations: &model::Translations,
+        params: &LintParams,
+        excluded: &BTreeSet<PathBuf>,
+        usage_diagnostics: &mut UsageDiagnostics,
+    ) -> Result<(), Error> {
+        let usages = effective_usages(config_file, params);
+        if !usages.roots.is_empty() {
+            let defined_keys: Vec<_> = translations
+                .0
+                .iter()
+                .map(|(key, translation)| crate::dead_keys::DefinedKey {
+                    key: key.as_ref().clone(),
+                    generated_identifiers: target_identifiers(&config_file.config, key.as_ref()),
+                    file_id: translation.file_id,
+                    span: key.span.clone(),
+                    allow: translation.allow.clone(),
+                })
+                .collect();
+            let policy = usages.dynamic;
+            let excluded = excluded.clone();
+            let scan = tokio::task::spawn_blocking(move || {
+                crate::dead_keys::scan_config(&defined_keys, &usages, &excluded)
+            })
+            .await?
+            .map_err(|source| IoError::new("<usages>", source))?;
+            let owner = match config_file.file_id {
+                Some(file_id) => format!(
+                    "{} ({})",
+                    config_file.config.name.as_ref(),
+                    self.diagnostic_printer.source_name(file_id).await?
+                ),
+                None => config_file.config.name.as_ref().clone(),
+            };
+            for key in scan.unused {
+                usage_diagnostics.insert(
+                    crate::dead_keys::unused_diagnostic(&key, self.lint_strict()),
+                    &owner,
+                );
+            }
+            let suppress_dynamic = globetrotter_model::lint::is_allowed(
+                &config_file.config.allow,
+                globetrotter_model::lint::LintCode::DynamicUsage,
+            );
+            if !suppress_dynamic {
+                for source in scan.dynamic {
+                    let file_id = self
+                        .diagnostic_printer
+                        .add_source_file(&source.path, source.content)
+                        .await;
+                    for reference in source.references {
+                        let denied = policy == crate::config::usages::DynamicUsages::Deny;
+                        let diagnostic = Diagnostic::warning_or_error(denied || self.lint_strict())
+                            .with_code(globetrotter_model::lint::LintCode::DynamicUsage)
+                            .with_message("translation key is constructed dynamically")
+                            .with_labels(vec![Label::primary(file_id, reference.span).with_message(if denied {
+                                "dynamic usages are denied; inferred prefixes do not count as usages"
+                            } else {
+                                "review this dynamic usage; a specific literal prefix keeps matching keys alive"
+                            })]);
+                        usage_diagnostics.insert(diagnostic, &owner);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Lints every configuration's translation files.
     ///
-    /// Every configuration is linted and its diagnostics emitted. When
-    /// [`LintParams::usages`] is non-empty, keys not referenced anywhere in
-    /// those directories are reported too. The call then fails if any issues
-    /// (warnings or errors) were found.
+    /// Each config's source roots and dynamic-call policy determine its unused keys.
+    /// Caller overrides replace the corresponding config settings.
+    /// Identical usage findings on shared sources are grouped with their config names.
+    /// The call fails if any warnings or errors were found.
     ///
     /// # Errors
     ///
@@ -803,15 +881,24 @@ impl Executor {
     ) -> Result<Self, Error> {
         tracing::trace!(num_configs = configs.len(), "linting");
 
-        let scan_usages = !params.usages.is_empty();
+        let scan_usages = !params.usages.is_empty()
+            || configs
+                .iter()
+                .any(|config| !config.config.usages.roots.is_empty());
         let excluded = if scan_usages {
-            output_dirs(&configs)
+            output_files(&configs)
         } else {
             BTreeSet::new()
         };
 
         let mut tally = Tally::default();
-        let mut defined_keys: Vec<crate::dead_keys::DefinedKey> = Vec::new();
+        let mut usage_diagnostics = UsageDiagnostics::default();
+        #[cfg(not(feature = "tree-sitter"))]
+        if scan_usages {
+            self.diagnostic_printer.emit(&Diagnostic::note().with_message(
+                "usage scanning uses text matching because this build lacks the `tree-sitter` feature"
+            ).with_notes(vec!["comments, types, and unrelated templates may count as usages; enable `tree-sitter` for syntax-aware scanning".into()])).await?;
+        }
 
         // Create the judge once up front (cheap: no request is made until keys
         // are judged), reusing its HTTP client and verdict cache across configs.
@@ -833,17 +920,14 @@ impl Executor {
                 self.lint_config(Arc::clone(&config_file), params).await?;
             tally += config_tally;
 
-            if scan_usages {
-                for (key, translation) in &translations.0 {
-                    defined_keys.push(crate::dead_keys::DefinedKey {
-                        key: key.as_ref().clone(),
-                        forms: key_forms(&config_file.config, key.as_ref()),
-                        file_id: translation.file_id,
-                        span: key.span.clone(),
-                        allow: translation.allow.clone(),
-                    });
-                }
-            }
+            self.collect_usage_diagnostics(
+                &config_file,
+                &translations,
+                params,
+                &excluded,
+                &mut usage_diagnostics,
+            )
+            .await?;
 
             // Judge findings are emitted as notes and deliberately not tallied:
             // they are a review aid, not a pass/fail signal. They are streamed
@@ -854,16 +938,7 @@ impl Executor {
             }
         }
 
-        if scan_usages {
-            let strict = self.lint_strict();
-            let usages = params.usages.clone();
-            let dead_diagnostics = tokio::task::spawn_blocking(move || {
-                crate::dead_keys::find_unused_keys(&defined_keys, &usages, &excluded, strict)
-            })
-            .await?
-            .map_err(|source| IoError::new("<usages>", source))?;
-            tally += self.emit_all(&dead_diagnostics).await?;
-        }
+        tally += self.emit_all(&usage_diagnostics.finish()).await?;
 
         if tally.has_issues() {
             return Err(FailedWithErrors(tally).into());
@@ -873,13 +948,91 @@ impl Executor {
     }
 }
 
-/// All canonical forms a usage of `key` may take across a config's enabled
-/// output targets: the dotted key (used by JSON/TypeScript) plus each target's
-/// generated identifier (e.g. the Rust enum variant `TranslationGreeting`).
-fn key_forms(config: &config::Config, key: &str) -> Vec<String> {
-    let mut forms = vec![key.to_string()];
-    forms.extend(target_identifiers(config, key));
-    forms
+fn effective_usages(
+    config: &config::ConfigFile<FileId>,
+    params: &LintParams,
+) -> crate::config::usages::UsageConfig {
+    let mut usages = config.config.usages.clone();
+    usages.roots = if params.usages.is_empty() {
+        usages
+            .roots
+            .iter()
+            .map(|path| resolve_path(config.config_dir.as_deref(), path))
+            .collect()
+    } else {
+        params.usages.clone()
+    };
+    if let Some(policy) = params.dynamic_usages {
+        usages.dynamic = policy;
+    }
+    if let Some(respect_ignore_files) = params.respect_ignore_files {
+        usages.respect_ignore_files = respect_ignore_files;
+    }
+    if let Some(respect_gitignore) = params.respect_gitignore {
+        usages.respect_gitignore = respect_gitignore;
+    }
+    usages
+}
+
+#[derive(Default)]
+struct UsageDiagnostics {
+    findings: BTreeMap<UsageDiagnosticIdentity, OwnedUsageDiagnostic>,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct UsageDiagnosticIdentity {
+    file_id: FileId,
+    start: usize,
+    end: usize,
+    code: Option<String>,
+    severity: Severity,
+    message: String,
+    label_message: String,
+}
+
+struct OwnedUsageDiagnostic {
+    diagnostic: Diagnostic<FileId>,
+    owners: BTreeSet<String>,
+}
+
+impl UsageDiagnostics {
+    fn insert(&mut self, diagnostic: Diagnostic<FileId>, owner: &str) {
+        let Some(label) = diagnostic.labels.first() else {
+            return;
+        };
+        // Code, severity, and message distinguish different policies and resolved
+        // keys even when their source file and span coincide.
+        let identity = UsageDiagnosticIdentity {
+            file_id: label.file_id,
+            start: label.range.start,
+            end: label.range.end,
+            code: diagnostic.code.clone(),
+            severity: diagnostic.severity,
+            message: diagnostic.message.clone(),
+            label_message: label.message.clone(),
+        };
+        self.findings
+            .entry(identity)
+            .or_insert_with(|| OwnedUsageDiagnostic {
+                diagnostic,
+                owners: BTreeSet::new(),
+            })
+            .owners
+            .insert(owner.to_owned());
+    }
+
+    fn finish(self) -> Vec<Diagnostic<FileId>> {
+        self.findings
+            .into_values()
+            .map(|mut finding| {
+                finding.diagnostic.notes.push(format!(
+                    "configs: {}",
+                    finding.owners.into_iter().collect::<Vec<_>>().join(", ")
+                ));
+                finding.diagnostic
+            })
+            .collect()
+    }
 }
 
 /// The generated identifiers for `key` across the config's typed output targets.
@@ -897,50 +1050,47 @@ fn target_identifiers(_config: &config::Config, _key: &str) -> Vec<String> {
     Vec::new()
 }
 
-fn insert_output_dir(dirs: &mut BTreeSet<PathBuf>, base: Option<&Path>, path: &Path) {
-    let path = resolve_path(base, path);
-    if let Some(parent) = path.parent()
-        && let Ok(canonical) = parent.canonicalize()
-    {
-        dirs.insert(canonical);
+fn insert_output_file(files: &mut BTreeSet<PathBuf>, base: Option<&Path>, path: &Path) {
+    if let Ok(canonical) = resolve_path(base, path).canonicalize() {
+        files.insert(canonical);
     }
 }
 
-/// Canonicalized directories holding generated output, excluded from the
-/// dead-key scan so generated files do not mark every key as used.
-fn output_dirs(configs: &config::Configs<FileId>) -> BTreeSet<PathBuf> {
+/// Generated files are excluded without hiding handwritten consumers that share
+/// their directory, including explicitly configured usage roots.
+fn output_files(configs: &config::Configs<FileId>) -> BTreeSet<PathBuf> {
     let mut dirs = BTreeSet::new();
     for config_file in configs {
         let base = config_file.config_dir.as_deref();
         for output in &config_file.config.outputs.json {
-            insert_output_dir(&mut dirs, base, output.path.as_ref());
+            insert_output_file(&mut dirs, base, output.path.as_ref());
         }
 
         #[cfg(feature = "typescript")]
         if let Some(output) = &config_file.config.outputs.typescript {
             for interface in &output.interface_type {
-                insert_output_dir(&mut dirs, base, &interface.path);
+                insert_output_file(&mut dirs, base, &interface.path);
             }
         }
 
         #[cfg(feature = "rust")]
         if let Some(output) = &config_file.config.outputs.rust {
             for path in &output.output_paths {
-                insert_output_dir(&mut dirs, base, path);
+                insert_output_file(&mut dirs, base, path);
             }
         }
 
         #[cfg(feature = "golang")]
         if let Some(output) = &config_file.config.outputs.golang {
             for path in &output.output_paths {
-                insert_output_dir(&mut dirs, base, path);
+                insert_output_file(&mut dirs, base, path);
             }
         }
 
         #[cfg(feature = "python")]
         if let Some(output) = &config_file.config.outputs.python {
             for path in &output.output_paths {
-                insert_output_dir(&mut dirs, base, path);
+                insert_output_file(&mut dirs, base, path);
             }
         }
     }
@@ -1196,18 +1346,20 @@ mod tests {
         Ok(())
     }
 
-    /// Every enabled output backend contributes its parent to scan exclusions.
+    /// Every enabled backend excludes its generated file without excluding siblings.
     #[test_util::test]
-    fn output_dirs_include_all_generated_output_parents() -> eyre::Result<()> {
+    fn output_files_include_all_generated_files() -> eyre::Result<()> {
         let base = temp_dir("output-dirs")?;
 
         let json_dir = base.join("generated/json");
         std::fs::create_dir_all(&json_dir)?;
+        std::fs::write(json_dir.join("en.json"), "{}")?;
 
         #[cfg(feature = "typescript")]
         let ts_dir = {
             let dir = base.join("generated/ts");
             std::fs::create_dir_all(&dir)?;
+            std::fs::write(dir.join("translations.d.ts"), "")?;
             dir
         };
 
@@ -1215,6 +1367,7 @@ mod tests {
         let rust_dir = {
             let dir = base.join("generated/rust");
             std::fs::create_dir_all(&dir)?;
+            std::fs::write(dir.join("translations.rs"), "")?;
             dir
         };
 
@@ -1222,6 +1375,7 @@ mod tests {
         let go_dir = {
             let dir = base.join("generated/go");
             std::fs::create_dir_all(&dir)?;
+            std::fs::write(dir.join("translations.go"), "")?;
             dir
         };
 
@@ -1229,6 +1383,7 @@ mod tests {
         let py_dir = {
             let dir = base.join("generated/python");
             std::fs::create_dir_all(&dir)?;
+            std::fs::write(dir.join("translations.py"), "")?;
             dir
         };
 
@@ -1265,21 +1420,23 @@ mod tests {
                 .with_outputs(outputs),
         }];
 
-        let dirs = output_dirs(&configs);
+        let dirs = output_files(&configs);
 
-        assert!(dirs.contains(&json_dir.canonicalize()?));
+        assert!(dirs.contains(&json_dir.join("en.json").canonicalize()?));
 
         #[cfg(feature = "typescript")]
-        assert!(dirs.contains(&ts_dir.canonicalize()?));
+        assert!(dirs.contains(&ts_dir.join("translations.d.ts").canonicalize()?));
 
         #[cfg(feature = "rust")]
-        assert!(dirs.contains(&rust_dir.canonicalize()?));
+        assert!(dirs.contains(&rust_dir.join("translations.rs").canonicalize()?));
+        #[cfg(feature = "rust")]
+        assert!(!dirs.contains(&rust_dir.canonicalize()?));
 
         #[cfg(feature = "golang")]
-        assert!(dirs.contains(&go_dir.canonicalize()?));
+        assert!(dirs.contains(&go_dir.join("translations.go").canonicalize()?));
 
         #[cfg(feature = "python")]
-        assert!(dirs.contains(&py_dir.canonicalize()?));
+        assert!(dirs.contains(&py_dir.join("translations.py").canonicalize()?));
 
         std::fs::remove_dir_all(base)?;
         Ok(())

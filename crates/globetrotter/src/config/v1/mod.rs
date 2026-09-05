@@ -575,6 +575,9 @@ pub fn parse_config<F: Copy + PartialEq>(
     let strict = strict_override.unwrap_or(false);
     let languages = parse_languages(value, file_id, strict, diagnostics)?;
     let allow = parse_allow(value)?;
+    let usages = parse_optional::<super::usages::UsageConfig>(value.get("usages"))?
+        .map(Spanned::into_inner)
+        .unwrap_or_default();
     let template_engine = parse_optional::<model::TemplateEngine>(
         value.get("engine").or_else(|| value.get("template_engine")),
     )?;
@@ -596,6 +599,7 @@ pub fn parse_config<F: Copy + PartialEq>(
         name,
         languages,
         allow,
+        usages,
         settings: SettingsLayer {
             strict: strict_config,
             check_templates,
@@ -969,6 +973,8 @@ pub struct Config {
     pub languages: Vec<Spanned<model::Language>>,
     /// Lints suppressed for every key this configuration lints.
     pub allow: BTreeSet<model::lint::AllowEntry>,
+    /// Usage roots and policy scope this catalog's checks to its owning application.
+    pub usages: super::usages::UsageConfig,
     /// This config's settings layer.
     ///
     /// These are raw, unresolved values: caller overrides and built-in
@@ -991,6 +997,7 @@ impl Config {
             name: Spanned::dummy(name.into()),
             languages: vec![],
             allow: BTreeSet::new(),
+            usages: super::usages::UsageConfig::default(),
             settings: SettingsLayer::default(),
             inputs: vec![],
             outputs: Outputs::default(),
