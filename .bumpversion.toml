@@ -1,5 +1,5 @@
 [tool.bumpversion]
-current_version = "0.0.13"
+current_version = "0.0.14"
 commit = true
 tag = true
 pre_commit_hooks = [
@@ -8,7 +8,7 @@ pre_commit_hooks = [
 ]
 additional_files = [
   "Cargo.lock",
-  "docs/examples/*/generated"
+  "docs/examples/*/generated/**"
 ]
 
 [[tool.bumpversion.files]]
