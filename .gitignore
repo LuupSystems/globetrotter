@@ -3,6 +3,7 @@
 /.task/
 deprecated/
 output/
+plan/
 .cooldown.lock
 
 # goreleaser
