@@ -88,7 +88,10 @@ pub fn find_unused_keys(
 pub(crate) fn unused_diagnostic(key: &DefinedKey, strict: bool) -> Diagnostic<FileId> {
     Diagnostic::warning_or_error(strict)
         .with_code(LintCode::UnusedKey)
-        .with_message(format!("translation key `{}` is never used", key.key))
+        .with_message(format!(
+            "translation key `{}` is potentially unused",
+            key.key
+        ))
         .with_labels(vec![
             Label::primary(key.file_id, key.span.clone())
                 .with_message("defined here but not referenced in this config's source roots"),
@@ -173,18 +176,8 @@ pub(crate) fn scan_config(
             )));
         }
         let content = std::fs::read_to_string(&path)?;
-        let mut references = source::scan(&path, &content, &usages.functions)
+        let references = source::scan(&path, &content, &usages.functions)
             .map_err(|err| std::io::Error::new(err.kind(), format!("{}: {err}", path.display())))?;
-        for argument in references.rust_arguments {
-            if generated.contains(argument.identifier.as_str()) {
-                references.identifiers.insert(argument.identifier);
-            } else {
-                references.dynamic.push(source::DynamicReference {
-                    prefix: None,
-                    span: argument.span,
-                });
-            }
-        }
         literals.extend(
             references
                 .literals

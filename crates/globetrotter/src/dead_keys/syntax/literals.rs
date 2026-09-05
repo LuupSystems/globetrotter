@@ -12,6 +12,7 @@ fn is_string(node: Node<'_>) -> bool {
     matches!(
         node.kind(),
         "string"
+            | "concatenated_string"
             | "template_string"
             | "string_literal"
             | "raw_string_literal"
@@ -212,6 +213,74 @@ fn decode_escapes(body: &str) -> String {
     decoded
 }
 
+/// Recognizes string construction without resolving identifiers or function results.
+pub(super) fn constructs_string(
+    node: Node<'_>,
+    source: &str,
+    dialect: Dialect,
+) -> io::Result<bool> {
+    let node = unwrap_expression(node);
+    if is_string(node) {
+        return Ok(interpolation_start(node, source, dialect)?.is_some());
+    }
+    let Some(operator) = concatenation_operator(node, source, dialect)? else {
+        return Ok(false);
+    };
+    if matches!(operator, "." | ".." | "<>") {
+        return Ok(true);
+    }
+    // Overloaded addition needs a visible string operand; arithmetic alone is opaque.
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        // Angular stores trailing pipes on the right operand's expression wrapper.
+        let child = if dialect == Dialect::AngularExpression
+            && child.kind() == "expression"
+            && child.child_by_field_name("pipes").is_some()
+        {
+            child.named_child(0).unwrap_or(child)
+        } else {
+            child
+        };
+        if literal(child, source, dialect)?.is_some() || constructs_string(child, source, dialect)?
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn concatenation_operator<'source>(
+    node: Node<'_>,
+    source: &'source str,
+    dialect: Dialect,
+) -> io::Result<Option<&'source str>> {
+    if dialect == Dialect::AngularExpression && node.kind() == "concatenation_expression" {
+        return Ok(Some("+"));
+    }
+    if !matches!(
+        node.kind(),
+        "binary_expression" | "additive_expression" | "binary_operator" | "binary"
+    ) {
+        return Ok(None);
+    }
+    let mut cursor = node.walk();
+    let operator = node
+        .child_by_field_name("operator")
+        .or_else(|| node.children(&mut cursor).find(|child| !child.is_named()));
+    let Some(operator) = operator else {
+        return Ok(None);
+    };
+    let operator = text(operator, source)?;
+    Ok((match dialect {
+        Dialect::Php => operator == ".",
+        Dialect::Lua => operator == "..",
+        Dialect::Elixir => operator == "<>",
+        Dialect::Zig => operator == "++",
+        _ => operator == "+",
+    })
+    .then_some(operator))
+}
+
 pub(super) fn literal_prefix(
     node: Node<'_>,
     source: &str,
@@ -220,6 +289,24 @@ pub(super) fn literal_prefix(
     let node = unwrap_expression(node);
     if let Some(value) = literal(node, source, dialect)? {
         return Ok(Some(value));
+    }
+    if dialect == Dialect::Python && node.kind() == "concatenated_string" {
+        let mut prefix = String::new();
+        let mut cursor = node.walk();
+        for part in node
+            .named_children(&mut cursor)
+            .filter(|part| !part.kind().contains("comment"))
+        {
+            if let Some(value) = literal(part, source, dialect)? {
+                prefix.push_str(&value);
+            } else {
+                if let Some(value) = literal_prefix(part, source, dialect)? {
+                    prefix.push_str(&value);
+                }
+                break;
+            }
+        }
+        return Ok(Some(prefix));
     }
     if is_string(node)
         && let Some(first) = interpolation_start(node, source, dialect)?
@@ -251,26 +338,7 @@ pub(super) fn literal_prefix(
             decode_escapes(prefix)
         }));
     }
-    if dialect == Dialect::AngularExpression && node.kind() == "concatenation_expression" {
-        return match node.named_child(0) {
-            Some(first) => literal_prefix(first, source, dialect),
-            None => Ok(None),
-        };
-    }
-    if matches!(
-        node.kind(),
-        "binary_expression" | "additive_expression" | "binary_operator"
-    ) && node
-        .child_by_field_name("operator")
-        .is_some_and(|operator| {
-            text(operator, source).is_ok_and(|operator| match dialect {
-                Dialect::Php => operator == ".",
-                Dialect::Lua => operator == "..",
-                Dialect::Elixir => operator == "<>",
-                _ => operator == "+",
-            })
-        })
-    {
+    if concatenation_operator(node, source, dialect)?.is_some() {
         return match node
             .child_by_field_name("left")
             .or_else(|| node.named_child(0))

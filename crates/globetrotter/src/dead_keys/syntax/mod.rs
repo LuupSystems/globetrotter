@@ -1,12 +1,13 @@
 //! Syntax-aware scanning includes scripts and expressions embedded in web templates.
 
-use super::source::{Dialect, DynamicReference, References, RustArgument};
-use literals::{first_interpolation, literal, literal_prefix};
+use super::source::{Dialect, DynamicReference, References};
+use literals::{constructs_string, first_interpolation, literal, literal_prefix};
 use web::visit_template;
 
-mod alternatives;
 mod angular;
 mod css;
+#[cfg(test)]
+mod lexical_tests;
 mod literals;
 #[cfg(test)]
 mod tests;
@@ -106,14 +107,7 @@ fn parse_region(
         .ok_or_else(|| io::Error::other("source parsing was cancelled"))?;
     // Included ranges keep every candidate's offsets in the original file,
     // including calls inside script blocks and template attributes.
-    visit(
-        tree.root_node(),
-        source,
-        dialect,
-        functions,
-        references,
-        None,
-    )
+    visit(tree.root_node(), source, dialect, functions, references)
 }
 
 fn text<'a>(node: Node<'_>, source: &'a str) -> io::Result<&'a str> {
@@ -194,7 +188,6 @@ fn visit(
     dialect: Dialect,
     functions: &[String],
     references: &mut References,
-    mut dynamic_argument: Option<std::ops::Range<usize>>,
 ) -> io::Result<()> {
     if is_non_runtime(node, source, dialect) {
         return Ok(());
@@ -206,41 +199,21 @@ fn visit(
         return visit_template(node, source, dialect, functions, references);
     }
 
-    if dialect == Dialect::AngularExpression
-        && let Some(span) = angular::classify_pipes(node, source, functions, references)?
-    {
-        dynamic_argument = Some(span);
+    if dialect == Dialect::AngularExpression {
+        angular::classify_pipes(node, source, functions, references)?;
     }
-
     if let Some(argument) = translation_argument(node, source, dialect, functions)?
-        && !alternatives::collect(argument, source, dialect, references)?
+        && constructs_string(argument, source, dialect)?
     {
-        dynamic_argument = Some(argument.byte_range());
-        if dialect == Dialect::Rust
-            && let Some(identifier) = rust_identifier(argument, source)?
-        {
-            references.rust_arguments.push(RustArgument {
-                identifier,
-                span: argument.byte_range(),
-            });
-        } else {
-            references.dynamic.push(DynamicReference {
-                prefix: literal_prefix(argument, source, dialect)?.filter(|prefix| {
-                    prefix.contains('.') && prefix.chars().all(super::is_key_char)
-                }),
-                span: argument.byte_range(),
-            });
-        }
+        references.dynamic.push(DynamicReference {
+            prefix: literal_prefix(argument, source, dialect)?
+                .filter(|prefix| prefix.contains('.') && prefix.chars().all(super::is_key_char)),
+            span: argument.byte_range(),
+        });
     }
+    // Literal evidence stands on its own, including inside opaque call arguments.
     if let Some(value) = literal(node, source, dialect)? {
-        // A fragment of a computed key is not an independent literal usage.
-        // Nested literal translation calls are recorded at their own call node.
-        if !dynamic_argument
-            .as_ref()
-            .is_some_and(|span| span.start <= node.start_byte() && node.end_byte() <= span.end)
-        {
-            references.literals.insert(value);
-        }
+        references.literals.insert(value);
         return Ok(());
     }
     if dialect == Dialect::Rust
@@ -251,14 +224,7 @@ fn visit(
     }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        visit(
-            child,
-            source,
-            dialect,
-            functions,
-            references,
-            dynamic_argument.clone(),
-        )?;
+        visit(child, source, dialect, functions, references)?;
     }
     Ok(())
 }

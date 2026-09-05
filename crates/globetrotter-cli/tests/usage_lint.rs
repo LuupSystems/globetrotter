@@ -61,7 +61,7 @@ fn roots_are_owned_by_configs_and_shared_findings_are_grouped() {
     assert_eq!(stderr.matches("warning[unused-key]").count(), 2, "{stderr}");
     assert_eq!(
         stderr
-            .matches("translation key `dialog.folder` is never used")
+            .matches("translation key `dialog.folder` is potentially unused")
             .count(),
         1,
         "{stderr}"
@@ -121,7 +121,7 @@ fn multiple_roots_include_shared_packages_and_preserve_resolved_keys() {
     let stderr = String::from_utf8(output.stderr)?;
     assert_eq!(stderr.matches("warning[unused-key]").count(), 1, "{stderr}");
     assert!(
-        stderr.contains("translation key `beta.file` is never used"),
+        stderr.contains("translation key `beta.file` is potentially unused"),
         "{stderr}"
     );
     assert!(stderr.contains("configs: beta ("), "{stderr}");
@@ -297,11 +297,11 @@ fn ignore_files_are_default_and_both_opt_outs_include_ignored_sources() {
     let stderr = String::from_utf8(output.stderr)?;
     assert_eq!(stderr.matches("warning[unused-key]").count(), 2, "{stderr}");
     assert!(
-        !stderr.contains("translation key `plain` is never used"),
+        !stderr.contains("translation key `plain` is potentially unused"),
         "{stderr}"
     );
     assert!(
-        !stderr.contains("translation key `nested` is never used"),
+        !stderr.contains("translation key `nested` is potentially unused"),
         "{stderr}"
     );
     for flag in ["--no-ignore", "--no-gitignore"] {
@@ -318,7 +318,9 @@ fn ignore_files_are_default_and_both_opt_outs_include_ignored_sources() {
             "local"
         };
         assert!(
-            stderr.contains(&format!("translation key `{expected}` is never used")),
+            stderr.contains(&format!(
+                "translation key `{expected}` is potentially unused"
+            )),
             "{stderr}"
         );
     }
@@ -446,7 +448,7 @@ fn generated_rust_variants_are_static_and_generated_files_do_not_hide_siblings()
             "{source}: {stderr}"
         );
         assert!(
-            stderr.contains("translation key `dialog.folder` is never used"),
+            stderr.contains("translation key `dialog.folder` is potentially unused"),
             "{stderr}"
         );
         assert!(!stderr.contains("dynamic-usage"), "{stderr}");
@@ -461,14 +463,10 @@ fn generated_rust_variants_are_static_and_generated_files_do_not_hide_siblings()
     let stderr = String::from_utf8(output.stderr)?;
     assert_eq!(stderr.matches("warning[unused-key]").count(), 1, "{stderr}");
     assert!(
-        stderr.contains("translation key `dialog.folder` is never used"),
+        stderr.contains("translation key `dialog.folder` is potentially unused"),
         "{stderr}"
     );
-    assert_eq!(
-        stderr.matches("error[dynamic-usage]").count(),
-        1,
-        "{stderr}"
-    );
+    assert!(!stderr.contains("dynamic-usage"), "{stderr}");
     write(
         dir,
         "src/main.rs",
@@ -476,12 +474,8 @@ fn generated_rust_variants_are_static_and_generated_files_do_not_hide_siblings()
     )?;
     let output = lint(dir, &config, &[])?;
     let stderr = String::from_utf8(output.stderr)?;
-    assert_eq!(stderr.matches("warning[unused-key]").count(), 2, "{stderr}");
-    assert_eq!(
-        stderr.matches("error[dynamic-usage]").count(),
-        1,
-        "{stderr}"
-    );
+    assert_eq!(stderr.matches("warning[unused-key]").count(), 1, "{stderr}");
+    assert!(!stderr.contains("dynamic-usage"), "{stderr}");
 }
 
 #[cfg(not(feature = "tree-sitter"))]
@@ -515,4 +509,111 @@ fn lightweight_builds_report_the_text_matching_limitation() {
     assert!(
         String::from_utf8(output.stderr)?.contains("this build lacks the `tree-sitter` feature")
     );
+}
+
+#[cfg(feature = "tree-sitter")]
+#[test_util::test]
+fn opaque_calls_preserve_lexical_evidence_without_hiding_unused_keys() {
+    let temp = tempfile::tempdir()?;
+    let dir = temp.path();
+    write(
+        dir,
+        "catalog.toml",
+        indoc::indoc! {r#"
+        [title]
+        en = "Title"
+        [unused]
+        en = "Unused"
+    "#},
+    )?;
+    write(
+        dir,
+        "src/app.ts",
+        indoc::indoc! {r#"
+        const key: TranslationKey = "account.title";
+        t(key);
+        t?.(key);
+        object.t(key);
+        t(keys[kind]);
+        props.t(getKey(value));
+        const constructed = `account.${section}`;
+        t(constructed);
+    "#},
+    )?;
+    write(
+        dir,
+        "globetrotter.yaml",
+        indoc::indoc! {"
+        version: 1
+        config:
+          languages: [en]
+          inputs: [{path: catalog.toml, prefix: account}]
+          usages: {roots: [src]}
+    "},
+    )?;
+    for policy in ["allow", "warn", "deny"] {
+        let output = lint(
+            dir,
+            &dir.join("globetrotter.yaml"),
+            &["--dynamic-usages", policy],
+        )?;
+        let stderr = String::from_utf8(output.stderr)?;
+        assert_eq!(
+            stderr.matches("warning[unused-key]").count(),
+            1,
+            "{policy}: {stderr}"
+        );
+        assert!(
+            stderr.contains("translation key `account.unused` is potentially unused"),
+            "{stderr}"
+        );
+        assert!(!stderr.contains("dynamic-usage"), "{policy}: {stderr}");
+    }
+}
+
+#[cfg(feature = "tree-sitter")]
+#[test_util::test]
+fn unknown_dynamic_prefixes_never_mark_the_whole_catalog_used() {
+    let temp = tempfile::tempdir()?;
+    let dir = temp.path();
+    write(
+        dir,
+        "catalog.toml",
+        indoc::indoc! {r#"
+        [title]
+        en = "Title"
+        [other]
+        en = "Other"
+    "#},
+    )?;
+    write(dir, "src/app.ts", "t(`${kind}`);")?;
+    write(
+        dir,
+        "globetrotter.yaml",
+        indoc::indoc! {"
+        version: 1
+        config:
+          languages: [en]
+          inputs: [{path: catalog.toml, prefix: account}]
+          usages: {roots: [src]}
+    "},
+    )?;
+    for policy in ["allow", "warn", "deny"] {
+        let output = lint(
+            dir,
+            &dir.join("globetrotter.yaml"),
+            &["--dynamic-usages", policy],
+        )?;
+        let stderr = String::from_utf8(output.stderr)?;
+        assert_eq!(
+            stderr.matches("warning[unused-key]").count(),
+            2,
+            "{policy}: {stderr}"
+        );
+        assert_eq!(
+            stderr.matches("[dynamic-usage]").count(),
+            usize::from(policy != "allow"),
+            "{policy}: {stderr}"
+        );
+    }
 }

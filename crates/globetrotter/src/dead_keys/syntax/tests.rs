@@ -66,7 +66,7 @@ fn documentation_and_exports_do_not_hide_live_expression_children() {
 fn named_dynamic_arguments_cover_the_entire_computation() {
     let source = "fun main() { t(key = \"app.live\" + suffix) }";
     let references = scan(Path::new("app.kt"), source, &["t".into()])?;
-    assert!(references.literals.is_empty());
+    assert!(references.literals.contains("app.live"));
     assert_eq!(references.dynamic.len(), 1);
     assert_eq!(
         source.get(references.dynamic[0].span.clone()),
@@ -81,9 +81,11 @@ fn concatenation_operators_follow_the_source_language() {
         ("<?php t(\"app.\" <> $key);", None),
     ] {
         let references = scan(Path::new("app.php"), source, &["t".into()])?;
-        assert!(references.literals.is_empty());
-        assert_eq!(references.dynamic.len(), 1);
-        assert_eq!(references.dynamic[0].prefix.as_deref(), prefix);
+        assert!(references.literals.contains("app."));
+        assert_eq!(references.dynamic.len(), usize::from(prefix.is_some()));
+        if let Some(reference) = references.dynamic.first() {
+            assert_eq!(reference.prefix.as_deref(), prefix);
+        }
     }
 }
 
@@ -127,7 +129,7 @@ fn framework_expressions_decode_entities_and_use_their_own_grammar() {
 }
 
 #[test_util::test]
-fn computed_key_fragments_do_not_become_literal_usages() {
+fn exact_literals_count_independently_of_visible_string_construction() {
     let source = indoc::indoc! {r#"
         t("app.fragment" + suffix);
         t(`app.${kind}`);
@@ -143,6 +145,8 @@ fn computed_key_fragments_do_not_become_literal_usages() {
     assert_eq!(
         references.literals,
         [
+            "app.fragment",
+            "app.outer",
             "app.nested",
             "app.literal",
             "app.optional",
@@ -412,14 +416,7 @@ fn source_fixtures_keep_runtime_references_and_exclude_comments() {
             );
             let dynamic_source = source.replace("t(\"app.live\")", "t(key)");
             let dynamic = scan(Path::new(name), &dynamic_source, &["t".into()])?;
-            let arguments: Vec<_> = dynamic
-                .dynamic
-                .iter()
-                .map(|argument| &argument.span)
-                .chain(dynamic.rust_arguments.iter().map(|argument| &argument.span))
-                .map(|span| dynamic_source.get(span.clone()))
-                .collect();
-            assert_eq!(arguments, [Some("key")], "{name}");
+            assert!(dynamic.dynamic.is_empty(), "{name}");
         }
         if name == "app.rs" {
             assert!(references.identifiers.contains("AppVariant"));
@@ -437,14 +434,15 @@ fn angular_pipes_classify_the_complete_input() {
     ] {
         let source = format!("<p>{{{{ {input} | translate }}}}</p>");
         let references = scan(Path::new("app.html"), &source, &["translate".into()])?;
-        assert!(
-            references.literals.is_empty(),
-            "{input}: {:?}",
-            references.literals
+        assert_eq!(
+            references.dynamic.len(),
+            usize::from(prefix.is_some()),
+            "{input}"
         );
-        assert_eq!(references.dynamic.len(), 1, "{input}");
-        assert_eq!(references.dynamic[0].prefix.as_deref(), prefix, "{input}");
-        assert_eq!(source.get(references.dynamic[0].span.clone()), Some(input));
+        if let Some(reference) = references.dynamic.first() {
+            assert_eq!(reference.prefix.as_deref(), prefix, "{input}");
+            assert_eq!(source.get(reference.span.clone()), Some(input));
+        }
     }
 }
 
@@ -536,7 +534,7 @@ fn complete_key_alternatives_remain_static() {
         (
             "app.ts",
             "t(key ?? 'app.live'); t(key || 'app.other');",
-            true,
+            false,
         ),
         (
             "app.rs",
@@ -683,11 +681,7 @@ fn angular_pipes_and_member_calls_share_the_usage_policy() {
             ["app.live".into(), "app.other".into()].into(),
             "{source}"
         );
-        assert_eq!(
-            references.dynamic.len(),
-            usize::from(source.contains("??")),
-            "{source}"
-        );
+        assert!(references.dynamic.is_empty(), "{source}");
     }
     let source = r#"<p [title]="translate.instant('app.' + kind)">{{ translate.instant('app.' + kind) }}</p>"#;
     let references = scan(Path::new("app.html"), source, &["translate.instant".into()])?;

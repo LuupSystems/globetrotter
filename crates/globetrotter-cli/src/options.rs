@@ -228,7 +228,7 @@ impl LlmJudgeOptions {
 /// Options for the `lint` subcommand.
 #[derive(Parser, Debug)]
 pub struct LintOptions {
-    /// Report translation keys never referenced in this source directory.
+    /// Report potentially unused translation keys using this source directory.
     ///
     /// The supplied roots replace every selected config's declared roots.
     /// Repeat the option to include multiple directories.

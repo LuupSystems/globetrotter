@@ -11,9 +11,9 @@ Lints translation files and reports any issues
           [env: LOG_LEVEL=]
 &nbsp;
       <span class="term-fg1">--usages</span> &lt;DIR&gt;
-          Report translation keys never referenced in this source directory.
+          Report potentially unused translation keys using this source directory.
 &nbsp;
-          Repeatable; replaces the declared usage roots of every selected config. When omitted, each config uses its own `usages.roots`.
+          The supplied roots replace every selected config&#39;s declared roots. Repeat the option to include multiple directories. When omitted, each config uses its own `usages.roots`.
 &nbsp;
       <span class="term-fg1">--dynamic-usages</span> &lt;POLICY&gt;
           Override each config&#39;s dynamic translation-call policy (allow, warn, or deny)
@@ -94,6 +94,7 @@ Lints translation files and reports any issues
           Sampling temperature. The default `0` keeps verdicts reproducible (and cacheable) across runs
 &nbsp;
           [default: 0]
+&nbsp;
       <span class="term-fg1">--max-keys</span> &lt;N&gt;
           Process only the first `N` translation keys of each config.
 &nbsp;

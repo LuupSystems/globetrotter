@@ -81,11 +81,18 @@ section.
 
 ### Static and dynamic usages
 
-The default CLI uses Tree-sitter parsers. Runtime string literals count as static references;
-comments, documentation, TypeScript type positions, regular expressions, and fragments of dynamic
-translation keys do not. Static literals outside translation calls also count, to support key
-constants and data-driven interfaces. This is source-reference analysis, not whole-program
-reachability analysis: code in an uncalled function can still count.
+Usage detection is an improved string matcher, with Tree-sitter identifying real runtime string
+literals and excluding comments, documentation, types, and regular expressions. Every exact key
+literal counts independently, including constants, lookup tables, and conditional branches.
+Keys without matching evidence in their config's source roots are reported as **potentially
+unused**; the scan does not prove whole-program reachability.
+
+Opaque arguments such as `t(key)`, `t?.(CONSTANT)`, `t(keys[kind])`, and `t(getKey(value))` add no
+usages and produce no dynamic diagnostic. Their declarations can still provide literal evidence.
+Argument type safety belongs to the host compiler or type checker; the scanner performs no
+symbol resolution, constant propagation, or data-flow analysis. For example, a template assigned
+to a variable and later passed to `t(key)` produces no dynamic diagnostic; keys with no other
+matching evidence are still reported as potentially unused.
 
 JavaScript/TypeScript, JSX/TSX (including React, Next.js, and Remix), Vue, Svelte, Astro, HTML
 templates, Rust, Go, Python, Ruby, PHP, Java, Kotlin, Swift, Dart, Elixir, Lua, Zig, and C# are
@@ -94,7 +101,7 @@ diagnostics pointing to their original source locations. Vue style `v-bind(...)`
 Astro’s `define:vars` attributes are scanned as executable code. Ordinary CSS strings, HTML
 comments, and data script blocks are excluded. Angular-style interpolations, bound attributes,
 and `translate` pipes are also recognized. Configured Rust outputs contribute their generated enum variants as static
-usage forms, including references nested inside a dynamic call under `deny`; deleting those
+usage forms, including references nested inside opaque arguments; deleting those
 variants would break compilation. Generated files themselves do not keep keys alive.
 
 Dynamic calls use the first argument of `t`, `$t`, or `translate`, including member calls such as
@@ -112,8 +119,10 @@ a callee; a dotted name matches the complete callee. This is syntactic recogniti
 type resolution: an unrelated function named `t` also matches unless you narrow the list.
 Unrelated dynamic templates and TypeScript template-literal types never keep a subtree alive in
 the default scanner.
-Finite literal choices, such as `t(open ? "dialog.file" : "dialog.folder")` and fallback-key
-arrays, keep those exact keys alive. Unknown alternatives still trigger the selected dynamic policy.
+Only visibly constructed key arguments, such as ``t(`dialog.${kind}`)`` or `t("dialog." + kind)`,
+trigger dynamic policy. Prefix resemblance outside a recognized call never contributes matches.
+Branches and arrays need no special evaluation: their string literals
+already count, and opaque alternatives add no diagnostic.
 
 HTML interpolation support targets Angular expressions. Server template engines such as Jinja,
 Django templates, and Blade are not supported; exclude those sources through ignore rules.
@@ -133,8 +142,10 @@ parsed as TSX; use self-closing void elements and JSX-style comments inside thos
 | `warn` | Accept the same prefixes and report `dynamic-usage` for review. |
 | `deny` | Report `dynamic-usage` as an error; inferred dynamic prefixes do not keep keys alive. |
 
-An expression without a known prefix, such as `t(key)`, cannot identify a subtree. `warn` and
-`deny` still report the expression. Format functions and arbitrary computations are not evaluated.
+A visible interpolation without a known prefix, such as ``t(`${kind}.title`)``, is still
+reported under `warn` or `deny`, but cannot identify a subtree. An empty or unknown prefix
+never marks the whole catalog as used. Opaque function results and
+arbitrary computations are not evaluated or classified as string construction.
 Warnings also make lint exit non-zero, consistent with the other lint checks. `--strict` promotes
 warnings to errors. A config-wide `allow: ["lint:dynamic-usage"]` suppresses the dynamic-call
 diagnostic but does not change whether its keys count as used.
@@ -154,8 +165,8 @@ root precedence, and diagnostic grouping are unchanged.
 
 Text matching is less precise: exact spellings in comments and types can count as usages, and
 `${...}` prefixes are recognized without call or language context. Its dynamic policy controls
-those detected prefixes; it cannot diagnose arbitrary computed arguments such as `t(key)`.
-Use the default parser-enabled CLI for a dead-key CI gate.
+those detected prefixes; it does not enforce the direct-translation-call boundary.
+Use the default parser-enabled CLI for precise lexical usage checks.
 
 Disable duplicate detection for a run with `--no-duplicates`. For a deliberate exception on one
 key, prefer its local `allow` list:

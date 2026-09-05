@@ -15,7 +15,7 @@ pub(super) fn visit_template(
         let mut cursor = node.walk();
         for child in node.named_children(&mut cursor) {
             if child.kind() == "start_tag" {
-                visit(child, source, dialect, functions, references, None)?;
+                visit(child, source, dialect, functions, references)?;
             } else if child.kind() == "raw_text" && dialect == Dialect::Vue {
                 super::css::visit_bindings(child, source, functions, references)?;
             }
@@ -89,7 +89,7 @@ pub(super) fn visit_template(
     }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        visit(child, source, dialect, functions, references, None)?;
+        visit(child, source, dialect, functions, references)?;
     }
     Ok(())
 }
@@ -556,7 +556,6 @@ fn visit_mustaches(
             Dialect::AngularExpression,
             functions,
             references,
-            None,
         )?;
         remaining = source
             .get(block.end_byte()..node.end_byte())

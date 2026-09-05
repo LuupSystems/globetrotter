@@ -65,12 +65,6 @@ pub(super) struct References {
     pub literals: BTreeSet<String>,
     pub identifiers: BTreeSet<String>,
     pub dynamic: Vec<DynamicReference>,
-    pub rust_arguments: Vec<RustArgument>,
-}
-
-pub(super) struct RustArgument {
-    pub identifier: String,
-    pub span: Span,
 }
 
 pub(crate) struct DynamicReference {
@@ -112,7 +106,6 @@ fn scan_text(content: &str) -> References {
         identifiers: literals.clone(),
         literals,
         dynamic: Vec::new(),
-        rust_arguments: Vec::new(),
     };
     for (pos, _) in content.match_indices("${") {
         let Some(before) = content.get(..pos) else {

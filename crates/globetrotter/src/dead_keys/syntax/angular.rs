@@ -1,8 +1,7 @@
 //! Angular pipe inputs are classified before their constituent literals are visited.
 
-use super::{Dialect, DynamicReference, References, literal_prefix, text};
+use super::{Dialect, DynamicReference, References, constructs_string, literal_prefix, text};
 use std::io;
-use std::ops::Range;
 use tree_sitter::Node;
 
 pub(super) fn classify_pipes(
@@ -10,21 +9,20 @@ pub(super) fn classify_pipes(
     source: &str,
     functions: &[String],
     references: &mut References,
-) -> io::Result<Option<Range<usize>>> {
+) -> io::Result<()> {
     let Some(expression) = pipe_expression(node) else {
-        return Ok(None);
+        return Ok(());
     };
     if node
         .parent()
         .is_some_and(|parent| is_calculation(parent) && parent.end_byte() == node.end_byte())
     {
-        return Ok(None);
+        return Ok(());
     }
     let Some(sequence) = expression.child_by_field_name("pipes") else {
-        return Ok(None);
+        return Ok(());
     };
     let mut cursor = sequence.walk();
-    let mut suppressed = None;
     for (index, pipe) in sequence
         .named_children(&mut cursor)
         .filter(|child| child.kind() == "pipe_call")
@@ -44,22 +42,15 @@ pub(super) fn classify_pipes(
         } else {
             node
         };
-        if index == 0
-            && super::alternatives::collect(input, source, Dialect::AngularExpression, references)?
-        {
+        if index != 0 || !constructs_string(input, source, Dialect::AngularExpression)? {
             continue;
         }
 
         // The grammar attaches a pipe to the right operand of a calculation.
-        // Angular applies it to the complete calculation; earlier pipes also
-        // transform the value, so later translation pipes have no known prefix.
-        let prefix = if index == 0 {
-            literal_prefix(input, source, Dialect::AngularExpression)?.filter(|prefix| {
-                prefix.contains('.') && prefix.chars().all(super::super::is_key_char)
-            })
-        } else {
-            None
-        };
+        // Angular applies it to the complete calculation.
+        // Results of earlier pipes are opaque, just like function results.
+        let prefix = literal_prefix(input, source, Dialect::AngularExpression)?
+            .filter(|prefix| prefix.contains('.') && prefix.chars().all(super::super::is_key_char));
         let end = pipe
             .prev_named_sibling()
             .map_or(sequence.start_byte(), |operator| operator.start_byte());
@@ -67,10 +58,9 @@ pub(super) fn classify_pipes(
             .get(node.start_byte()..end)
             .ok_or_else(|| io::Error::other("invalid Angular pipe input span"))?;
         let span = node.start_byte()..node.start_byte() + raw.trim_end().len();
-        suppressed = Some(span.clone());
         references.dynamic.push(DynamicReference { prefix, span });
     }
-    Ok(suppressed)
+    Ok(())
 }
 
 fn is_calculation(node: Node<'_>) -> bool {
