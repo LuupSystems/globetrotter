@@ -1,6 +1,6 @@
 <span class="term-fg32 term-fg1">$</span> globetrotter format --help
 &nbsp;
-Format translation files in place
+Formats translation files in place
 &nbsp;
 <span class="term-fg1 term-fg4">Usage:</span> <span class="term-fg1">globetrotter format</span> [OPTIONS]
 &nbsp;
@@ -25,7 +25,7 @@ Format translation files in place
           Exits with a non-zero status if any file would be reformatted.
 &nbsp;
       <span class="term-fg1">--log-format</span> &lt;LOG_FORMAT&gt;
-          log format (json or pretty)
+          log format (json, pretty, or pretty-compact)
 &nbsp;
           [env: LOG_FORMAT=]
 &nbsp;
@@ -59,7 +59,7 @@ Format translation files in place
           [possible values: true, false]
 &nbsp;
       <span class="term-fg1">--max-keys</span> &lt;N&gt;
-          Process only the first N translation keys of each config.
+          Process only the first `N` translation keys of each config.
 &nbsp;
           A debugging aid for large corpora: try a change — or the LLM judge — against a small subset of real translations before paying for a full run. Applies to linting and generation alike; the truncation is warned about, never silent.
 &nbsp;

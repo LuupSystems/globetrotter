@@ -5,8 +5,8 @@ Polyglot, type-safe internationalization
 <span class="term-fg1 term-fg4">Usage:</span> <span class="term-fg1">globetrotter</span> [OPTIONS] [COMMAND]
 &nbsp;
 <span class="term-fg1 term-fg4">Commands:</span>
-  <span class="term-fg1">format</span>  Format translation files in place
-  <span class="term-fg1">lint</span>    Lint translation files and report any issues
+  <span class="term-fg1">format</span>  Formats translation files in place
+  <span class="term-fg1">lint</span>    Lints translation files and reports any issues
   <span class="term-fg1">help</span>    Print this message or the help of the given subcommand(s)
 &nbsp;
 <span class="term-fg1 term-fg4">Options:</span>
@@ -16,7 +16,7 @@ Polyglot, type-safe internationalization
           [env: LOG_LEVEL=]
 &nbsp;
       <span class="term-fg1">--log-format</span> &lt;LOG_FORMAT&gt;
-          log format (json or pretty)
+          log format (json, pretty, or pretty-compact)
 &nbsp;
           [env: LOG_FORMAT=]
 &nbsp;
@@ -40,7 +40,7 @@ Polyglot, type-safe internationalization
           [possible values: true, false]
 &nbsp;
       <span class="term-fg1">--check</span>[=&lt;CHECK_TEMPLATES&gt;]
-          Validate that all templates render successfully
+          Whether to validate that all templates render successfully
 &nbsp;
           [possible values: true, false]
 &nbsp;
@@ -55,7 +55,7 @@ Polyglot, type-safe internationalization
           [possible values: true, false]
 &nbsp;
       <span class="term-fg1">--max-keys</span> &lt;N&gt;
-          Process only the first N translation keys of each config.
+          Process only the first `N` translation keys of each config.
 &nbsp;
           A debugging aid for large corpora: try a change — or the LLM judge — against a small subset of real translations before paying for a full run. Applies to linting and generation alike; the truncation is warned about, never silent.
 &nbsp;
