@@ -1145,6 +1145,7 @@ dependencies = [
  "test-util",
  "tokio",
  "toml_edit",
+ "toml_parser",
  "tracing",
  "tracing-subscriber",
 ]

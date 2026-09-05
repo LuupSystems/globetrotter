@@ -43,6 +43,9 @@ globetrotter format [OPTIONS]
 
 The formatter sorts translation keys while preserving comments. It defaults to ascending order.
 `--check` exits non-zero when a file would change and is suitable for CI.
+Ordinary `#` comments move with their keys; `#!` comments stay at the top of the file.
+See [file-level comments]({{< relref "translations.md#file-level-comments" >}}) for examples and
+migration guidance.
 
 {{< terminal "format-help" >}}
 

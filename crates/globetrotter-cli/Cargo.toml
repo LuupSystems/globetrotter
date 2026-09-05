@@ -87,6 +87,7 @@ dirs = "6"
 
 # format: sort translation files while preserving comments
 toml_edit = "0"
+toml_parser = "1"
 
 [target.'cfg(target_env = "musl")'.dependencies]
 mimalloc = "0"

@@ -99,8 +99,50 @@ formatting without modifying files:
 globetrotter format --check
 ```
 
-The formatter preserves comments, so explanations for translators can stay beside the relevant
-key.
+Ordinary `#` comments above a key or table move with it when sorting. A blank line after a
+comment does not make it belong to the file.
+
+### File-level comments
+
+Use `#!` for explanations that belong to the whole catalog:
+
+```toml
+#! Advisor-facing names of the coarse credit document groups.
+#! Keep them filesystem-friendly (no path separators).
+#!
+#! These names appear in the document picker.
+
+[applicant]
+en = "Applicant Documents"
+
+# Shown when uploading property records.
+[property]
+en = "Property Documents"
+```
+
+The formatter collects every `#!` comment at the top of the file in its original source order,
+followed by exactly one blank line. This holds even when a comment was written between tables,
+inside an array, after a value or header, or at the end of the file. The header also stays in
+place when new keys are added or the sort order changes.
+
+Comment text is preserved verbatim, including spaces after `#!` and empty `#!` lines used for
+paragraph breaks. Standalone comments retain their indentation; inline comments move to their own
+lines starting with `#!`. Line endings are normalized to LF. `#!` inside a quoted key or a
+translation string is ordinary text and is left untouched.
+
+To migrate an existing file header, change each of its comment markers from `#` to `#!`, using
+an empty `#!` line between paragraphs. There is no automatic migration or heuristic lint warning:
+only the author can reliably distinguish a file header from a comment about the first key.
+The syntax is valid TOML, so other parsers accept it. Older globetrotter versions treat it as an
+ordinary comment and may move it during formatting.
+
+### Section banners
+
+An ordinary comment above a group stays with the following key, so sorting can move it into the
+middle of that group. `#!` always belongs to the whole file; it does not anchor a section.
+For groups that need a persistent banner, split them into separate translation files with a `#!`
+header in each. The config's [input globs]({{< relref "configuration.md" >}}) can include all of
+those files.
 
 ## Local lint exceptions
 

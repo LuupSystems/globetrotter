@@ -1,17 +1,20 @@
 //! In-place TOML formatting that preserves comment ownership.
 
 use crate::options::{FormatOptions, SortOrder};
-use color_eyre::eyre::{self, WrapErr};
+use color_eyre::eyre::{self, ContextCompat, WrapErr};
 use std::cmp::Ordering;
 use std::path::PathBuf;
 use toml_edit::{ArrayOfTables, Decor, Item, KeyMut, Table};
+use toml_parser::{Source, lexer::TokenKind};
 
 impl crate::Globetrotter {
     /// Formats translation files in place by sorting their keys.
     ///
     /// Translation files are discovered from the loaded configurations and from
-    /// any paths passed via `--translation`. Comments and formatting are
-    /// preserved; only the order of keys changes.
+    /// any paths passed via `--translation`.
+    /// Ordinary comments move with their keys; `#!` comments are collected at
+    /// the top of the file in source order, followed by one blank line.
+    /// Values are preserved and spacing between keys and sections is normalized.
     ///
     /// # Errors
     ///
@@ -86,22 +89,95 @@ impl crate::Globetrotter {
 /// Sort the keys of a TOML document, preserving comments and formatting.
 ///
 /// Header tables (translation-key sections) and the language keys inside them
-/// are reordered; inline values such as `arguments = { .. }` are left untouched.
-/// A comment stays attached to the section or language key it sits above and
-/// moves with it (stacked comments included). Blank lines between language keys
-/// are removed and sections are separated by exactly one blank line, but a
-/// single blank line between two comment paragraphs is preserved, so the result
-/// is clean and idempotent.
+/// are reordered; inline values such as `arguments = { .. }` are not reordered.
+/// A `#!` comment belongs to the file and is emitted before all keys and headers.
+/// An ordinary comment stays attached to the section or language key it sits above
+/// and moves with it (stacked comments included).
+/// Blank lines between language keys are removed and sections are separated by
+/// exactly one blank line, but a single blank line between two comment paragraphs
+/// is preserved, so the result is clean and idempotent.
 fn format_str(input: &str, order: SortOrder) -> eyre::Result<String> {
+    // Validate the original source before extracting comments so invalid input
+    // still reports errors at its original locations.
     let mut doc: toml_edit::DocumentMut = input.parse()?;
+    let (file_comments, body) = extract_file_comments(input)?;
+    if !file_comments.is_empty() {
+        doc = body.parse()?;
+    }
     let mut state = SortState {
-        input,
+        input: if file_comments.is_empty() {
+            input
+        } else {
+            &body
+        },
         order,
         position: 0,
         first_header: true,
     };
     sort_table(doc.as_table_mut(), &mut state);
-    Ok(doc.to_string())
+    let formatted = doc.to_string();
+    if file_comments.is_empty() {
+        Ok(formatted)
+    } else {
+        // Document trailing decor can contain blank lines even without keys.
+        // The file header owns the spacing before the rest of the document.
+        Ok(format!(
+            "{file_comments}\n{}",
+            formatted.trim_start_matches([' ', '\t', '\r', '\n'])
+        ))
+    }
+}
+
+/// Separates file comments from the source without inspecting string contents.
+///
+/// The lexer visits comments in source order, including those inside arrays and
+/// after values or headers, which a traversal of sorted tables cannot guarantee.
+/// Standalone lines retain their indentation; inline comments start at `#!`.
+/// Comment text is copied verbatim and line endings are normalized to LF.
+fn extract_file_comments(input: &str) -> eyre::Result<(String, String)> {
+    let mut comments = String::new();
+    let mut body = String::new();
+    let mut remaining = input;
+    for token in Source::new(input).lex() {
+        if token.kind() != TokenKind::Comment {
+            continue;
+        }
+        let offset = token.span().start() - (input.len() - remaining.len());
+        let (before, tail) = remaining
+            .split_at_checked(offset)
+            .wrap_err("TOML comment starts outside the remaining source")?;
+        let (comment, after) = tail
+            .split_at_checked(token.span().len())
+            .wrap_err("TOML comment ends outside the remaining source")?;
+        if !comment.starts_with("#!") {
+            continue;
+        }
+
+        let before_content = before.trim_end_matches([' ', '\t']);
+        let standalone = before_content.is_empty() || before_content.ends_with('\n');
+        if standalone {
+            let indentation = before
+                .get(before_content.len()..)
+                .wrap_err("TOML comment indentation is outside the source")?;
+            comments.push_str(indentation);
+        }
+        comments.push_str(comment);
+        comments.push('\n');
+        body.push_str(before_content);
+
+        remaining = if standalone {
+            after
+                .strip_prefix("\r\n")
+                .or_else(|| after.strip_prefix('\n'))
+                .unwrap_or(after)
+        } else {
+            after
+        };
+    }
+    if !comments.is_empty() {
+        body.push_str(remaining);
+    }
+    Ok((comments, body))
 }
 
 struct SortState<'a> {
@@ -251,6 +327,196 @@ mod tests {
     use super::{SortOrder, format_str};
     use indoc::indoc;
     use similar_asserts::assert_eq as sim_assert_eq;
+
+    #[test_util::test]
+    fn file_header_stays_above_sorted_tables() {
+        let input = indoc! {r#"
+            #! Advisor-facing document groups.
+            #! Keep them filesystem-friendly.
+
+            [property]
+            en = "Property Documents"
+
+            [applicant]
+            en = "Applicant Documents"
+        "#};
+        let want = indoc! {r#"
+            #! Advisor-facing document groups.
+            #! Keep them filesystem-friendly.
+
+            [applicant]
+            en = "Applicant Documents"
+
+            [property]
+            en = "Property Documents"
+        "#};
+
+        let have = format_str(input, SortOrder::Ascending)?;
+        sim_assert_eq!(have: have, want: want);
+        sim_assert_eq!(have: format_str(&have, SortOrder::Ascending)?, want: want);
+
+        // Adding an earlier key must not take ownership of the file header.
+        let extended = format!("{have}\n[account]\nen = \"Account\"\n");
+        for order in [SortOrder::Ascending, SortOrder::Descending] {
+            let formatted = format_str(&extended, order)?;
+            assert!(formatted.starts_with(
+                "#! Advisor-facing document groups.\n#! Keep them filesystem-friendly.\n\n["
+            ));
+            sim_assert_eq!(have: format_str(&formatted, order)?, want: formatted);
+        }
+    }
+
+    #[test_util::test]
+    fn collects_file_comments_in_source_order_from_every_position() {
+        // Physical header order differs from tree order, and comments can live
+        // in value decor, container trailing decor, or document trailing decor.
+        let input = indoc! {r#"
+            #! First.
+            [z.last] #! Header suffix.
+            en = "Z" #! Value suffix.
+            #! Before a language.
+            de = "Z (de)"
+            arguments = [
+                #! Inside an array.
+                "name", #! After an array element.
+                #! Array trailing comment.
+            ]
+
+            [a]
+            en = "A"
+
+            #! Before an array of tables.
+            [[items]]
+            en = "Item"
+
+            #! Last.
+        "#};
+        let header = indoc! {"
+            #! First.
+            #! Header suffix.
+            #! Value suffix.
+            #! Before a language.
+                #! Inside an array.
+            #! After an array element.
+                #! Array trailing comment.
+            #! Before an array of tables.
+            #! Last.
+
+        "};
+
+        for order in [SortOrder::Ascending, SortOrder::Descending] {
+            let have = format_str(input, order)?;
+            assert!(have.starts_with(header), "{have}");
+            assert!(
+                !have
+                    .strip_prefix(header)
+                    .ok_or_else(|| color_eyre::eyre::eyre!("missing file header"))?
+                    .contains("#!")
+            );
+            sim_assert_eq!(have: format_str(&have, order)?, want: have);
+        }
+    }
+
+    #[test_util::test]
+    fn file_comments_leave_ordinary_comments_with_their_keys() {
+        let input = indoc! {r#"
+            # About b.
+            #! File header.
+            # More about b.
+            [b]
+            # About English.
+            #! Another file paragraph.
+            en = "B" # Inline note.
+            de = "B (de)"
+
+            # About a.
+            [a]
+            en = "A"
+            # Ordinary footer.
+        "#};
+        let want = indoc! {r#"
+            #! File header.
+            #! Another file paragraph.
+
+            # About a.
+            [a]
+            en = "A"
+
+            # About b.
+            # More about b.
+            [b]
+            de = "B (de)"
+            # About English.
+            en = "B" # Inline note.
+            # Ordinary footer.
+        "#};
+
+        let have = format_str(input, SortOrder::Ascending)?;
+        sim_assert_eq!(have: have, want: want);
+        sim_assert_eq!(have: format_str(&have, SortOrder::Ascending)?, want: want);
+    }
+
+    #[test_util::test]
+    fn file_comment_text_and_paragraph_breaks_are_verbatim() {
+        // Explicit escapes keep significant spaces, tabs, and CRLF visible.
+        let input = "[a]\r\nen = \"A\"\r\n  #!  Grüße!  \t\r\n#!\r\n\t#!\tSecond paragraph.  ";
+        let want = "  #!  Grüße!  \t\n#!\n\t#!\tSecond paragraph.  \n\n[a]\nen = \"A\"\n";
+        let have = format_str(input, SortOrder::Ascending)?;
+        sim_assert_eq!(have: have, want: want);
+        sim_assert_eq!(have: format_str(&have, SortOrder::Ascending)?, want: want);
+    }
+
+    #[test_util::test]
+    fn file_comments_work_without_table_headers() {
+        for (input, want) in [
+            ("#! Header.", "#! Header.\n\n"),
+            ("\n#!\n\n\n", "#!\n\n"),
+            (
+                "#! Header.\n# Ordinary footer.\n",
+                "#! Header.\n\n# Ordinary footer.\n",
+            ),
+            ("z = 1\n#! Header.\na = 2\n", "#! Header.\n\na = 2\nz = 1\n"),
+        ] {
+            let have = format_str(input, SortOrder::Ascending)?;
+            sim_assert_eq!(have: have, want: want);
+            sim_assert_eq!(have: format_str(&have, SortOrder::Ascending)?, want: want);
+        }
+    }
+
+    #[test_util::test]
+    fn file_comment_markers_in_strings_are_untouched() {
+        let input = indoc! {r##"
+            #! Actual file header.
+
+            ["#! key"]
+            basic = "Escaped quote: \" #! still a string"
+            inline = { "#! key" = "#! value" }
+            literal = '#! literal string'
+            multiline_basic = """
+            #! Translation text.
+            Escaped delimiter: \"""
+            #! Still translation text.
+            """
+            multiline_literal = '''
+            #! Literal translation text.
+            '''
+            # #! Ordinary comment.
+            ordinary = "Value" # #! Ordinary inline comment.
+        "##};
+        let have = format_str(input, SortOrder::Ascending)?;
+        sim_assert_eq!(have: have, want: input);
+    }
+
+    #[test_util::test]
+    fn file_comments_do_not_hide_invalid_toml() {
+        for input in [
+            "#! Header.\n[a\nen = \"A\"\n",
+            "#! Invalid control character: \u{0001}\n[a]\nen = \"A\"\n",
+            "[a]\nen = \"\"\"\n#! Unterminated translation.\n",
+        ] {
+            assert!(format_str(input, SortOrder::Ascending).is_err());
+        }
+    }
 
     #[test_util::test]
     fn sorts_keys_and_preserves_comments() {
