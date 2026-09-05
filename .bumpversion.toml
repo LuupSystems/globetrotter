@@ -4,7 +4,9 @@ commit = true
 tag = true
 pre_commit_hooks = [
   # Refresh workspace package versions without updating dependencies.
-  "cargo metadata --offline --format-version 1 >/dev/null"
+  "cargo metadata --offline --format-version 1 >/dev/null",
+  # Rebuild the generator so quickstart headers contain the bumped version.
+  "cargo run --offline --locked -p globetrotter-cli -- -c docs/examples/quickstart/globetrotter.yaml"
 ]
 additional_files = [
   "Cargo.lock",
