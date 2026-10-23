@@ -1104,6 +1104,7 @@ dependencies = [
  "globetrotter-python",
  "globetrotter-rust",
  "globetrotter-typescript",
+ "globetrotter-typst",
  "handlebars",
  "html-escape",
  "human_bytes",
@@ -1328,6 +1329,19 @@ dependencies = [
  "swc_core",
  "test-util",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "globetrotter-typst"
+version = "0.0.15"
+dependencies = [
+ "color-eyre",
+ "globetrotter-model",
+ "serde",
+ "serde_json",
+ "similar-asserts",
+ "tempfile",
+ "test-util",
 ]
 
 [[package]]

@@ -34,11 +34,13 @@ default = [
   "rust",
   "golang",
   "python",
+  "typst",
 ]
 typescript = ["dep:globetrotter-typescript"]
 rust = ["dep:globetrotter-rust"]
 golang = ["dep:globetrotter-golang"]
 python = ["dep:globetrotter-python"]
+typst = ["dep:globetrotter-typst"]
 # LLM-judged translation-consistency review during linting. Pulls in an HTTP
 # client stack (async-openai/reqwest); disable for a lighter build.
 llm-judge = ["dep:globetrotter-llm-judge", "dep:indicatif"]
@@ -80,6 +82,7 @@ mutually_exclusive_features = [[
   "rust",
   "golang",
   "python",
+  "typst",
 ]]
 
 [package.metadata.docs.rs]
@@ -154,6 +157,7 @@ globetrotter-typescript = { workspace = true, optional = true }
 globetrotter-rust = { workspace = true, optional = true }
 globetrotter-golang = { workspace = true, optional = true }
 globetrotter-python = { workspace = true, optional = true }
+globetrotter-typst = { workspace = true, optional = true }
 
 # optional: LLM-judged translation-consistency review
 globetrotter-llm-judge = { workspace = true, optional = true }

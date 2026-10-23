@@ -1,0 +1,70 @@
+# Runtime fixture catalog: one key per supported construct.
+
+[literal]
+en = "Plain {{text}} stays verbatim"
+de = "Schlicht {{text}} bleibt wörtlich"
+
+[greeting]
+en = "Hello {{name}}!"
+de = "Hallo {{ name }}!"
+arguments = { name = "string" }
+
+[triple]
+en = "{{{name}}} & {{name}}"
+de = "{{{name}}} & {{name}}"
+arguments = { name = "string" }
+
+[segment]
+en = "{{[arg-name]}} = {{arg-name}}"
+de = "{{[arg-name]}} = {{arg-name}}"
+arguments = { arg-name = "string" }
+
+[choice]
+en = "{{#if enabled}}on{{else}}off{{/if}}"
+de = "{{#if enabled}}an{{else}}aus{{/if}}"
+arguments = { enabled = "boolean" }
+
+[unless]
+en = "{{#unless enabled}}disabled{{/unless}}"
+de = "{{#unless enabled}}deaktiviert{{/unless}}"
+arguments = { enabled = "boolean" }
+
+[nested]
+en = "{{#if outer}}{{#unless inner}}A{{else}}B{{/unless}}{{else}}C{{/if}}"
+de = "{{#if outer}}{{#unless inner}}A{{else}}B{{/unless}}{{else}}C{{/if}}"
+arguments = { outer = "boolean", inner = "boolean" }
+
+[truthy]
+en = "{{#if value}}yes{{else}}no{{/if}}"
+de = "{{#if value}}ja{{else}}nein{{/if}}"
+arguments = { value = "any" }
+
+[comment]
+en = "a{{! a note }}b{{!-- {{name}} }} --}}c {{name}}"
+de = "a{{! eine Notiz }}b{{!-- {{name}} }} --}}c {{name}}"
+arguments = { name = "string" }
+
+[cart.items]
+en = "{{count}} {{pluralize \"item\" count}}"
+de = "{{count}} Artikel"
+arguments = { count = "integer" }
+
+[helper-literals]
+en = "{{join 'a b' 1 -2.5 name}}"
+de = "{{join 'a b' 1 -2.5 name}}"
+arguments = { name = "string" }
+
+[helper-bare]
+en = "{{today}} for {{name}}"
+de = "{{today}} für {{name}}"
+arguments = { name = "string" }
+
+[field]
+en = "{{user.name}} ({{user.[home town]}})"
+de = "{{user.name}} ({{user.[home town]}})"
+arguments = { user = "any" }
+
+[scalars]
+en = "{{count}} / {{total}} / {{price}} / {{flag}} / {{date}} / {{value}}"
+de = "{{count}} / {{total}} / {{price}} / {{flag}} / {{date}} / {{value}}"
+arguments = { count = "number", total = "integer", price = "float", flag = "boolean", date = "isodatetime", value = "any" }

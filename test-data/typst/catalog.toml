@@ -1,0 +1,33 @@
+[plain]
+en = 'Hello "world" \\ café 😀'
+de = 'Hallo Welt'
+
+[greeting]
+en = "Hello {{name}}!"
+de = "Hallo {{name}}!"
+arguments = { name = "string" }
+
+[cart.items]
+en = "{{count}} items"
+de = "{{count}} Artikel"
+arguments = { count = "number" }
+
+[choice]
+en = "{{#if enabled}}Ready{{else}}Waiting{{/if}}"
+de = "{{#if enabled}}Bereit{{else}}Warten{{/if}}"
+arguments = { enabled = "boolean" }
+
+[scalars]
+en = '{{total}} / {{price}} / {{flag}} / {{date}} / {{value}}'
+de = '{{total}} / {{price}} / {{flag}} / {{date}} / {{value}}'
+arguments = { total = "integer", price = "float", flag = "boolean", date = "isodatetime", value = "any" }
+
+[escaped]
+en = "line one\n\"quotes\" \\ tab\tcontrol\u0001 {{{name}}}"
+de = "Zeile eins\n\"Anführungen\" \\ Tab\tSteuerzeichen\u0001 {{name}}"
+arguments = { name = "string" }
+
+["dash-key"]
+en = '{{[arg-name]}}'
+de = '{{[arg-name]}}'
+arguments = { arg-name = "string" }

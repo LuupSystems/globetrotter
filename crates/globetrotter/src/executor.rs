@@ -693,6 +693,11 @@ impl Executor {
                 self.generate_typescript_outputs(&config_file, &translations, &settings)
                     .map_err(OutputError::from),
             ),
+            #[cfg(feature = "typst")]
+            Box::pin(
+                self.generate_typst_outputs(&config_file, &translations, &settings)
+                    .map_err(OutputError::from),
+            ),
             #[cfg(feature = "rust")]
             Box::pin(
                 self.generate_rust_outputs(&config_file, &translations, &settings)
@@ -1073,6 +1078,13 @@ fn output_files(configs: &config::Configs<FileId>) -> BTreeSet<PathBuf> {
             }
         }
 
+        #[cfg(feature = "typst")]
+        if let Some(output) = &config_file.config.outputs.typst {
+            for path in &output.output_paths {
+                insert_output_file(&mut dirs, base, path);
+            }
+        }
+
         #[cfg(feature = "rust")]
         if let Some(output) = &config_file.config.outputs.rust {
             for path in &output.output_paths {
@@ -1387,6 +1399,14 @@ mod tests {
             dir
         };
 
+        #[cfg(feature = "typst")]
+        let typst_file = {
+            let path = base.join("generated/typst/translations.typ");
+            std::fs::create_dir_all(base.join("generated/typst"))?;
+            std::fs::write(&path, "")?;
+            path
+        };
+
         let outputs = config::Outputs::new()
             .with_json([config::JsonOutputConfig::new("generated/json/en.json")]);
 
@@ -1411,6 +1431,11 @@ mod tests {
         let outputs = outputs.with_python(globetrotter_python::OutputConfig {
             output_paths: vec![PathBuf::from("generated/python/translations.py")],
         });
+
+        #[cfg(feature = "typst")]
+        let outputs = outputs.with_typst(globetrotter_typst::OutputConfig::new([PathBuf::from(
+            "generated/typst/translations.typ",
+        )]));
 
         let configs = vec![config::ConfigFile {
             file_id: None,
@@ -1437,6 +1462,9 @@ mod tests {
 
         #[cfg(feature = "python")]
         assert!(dirs.contains(&py_dir.join("translations.py").canonicalize()?));
+
+        #[cfg(feature = "typst")]
+        assert!(dirs.contains(&typst_file.canonicalize()?));
 
         std::fs::remove_dir_all(base)?;
         Ok(())

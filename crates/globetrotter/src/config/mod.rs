@@ -345,6 +345,7 @@ mod tests {
                 rust: ./out/translations.rs
                 golang: [./out/a.go, ./out/b.go]
                 python: ./out/translations.py
+                typst: [./out/a.typ, ./out/b.typ]
         "};
         let mut diagnostics = vec![];
         let configs = super::from_str(raw, std::path::Path::new("."), (), None, &mut diagnostics)?;
@@ -367,6 +368,14 @@ mod tests {
         sim_assert_eq!(
             have: outputs.python.as_ref().map(|python| python.output_paths.clone()),
             want: Some(vec![std::path::PathBuf::from("./out/translations.py")])
+        );
+        #[cfg(feature = "typst")]
+        sim_assert_eq!(
+            have: outputs.typst.as_ref().map(|typst| typst.output_paths.clone()),
+            want: Some(vec![
+                std::path::PathBuf::from("./out/a.typ"),
+                std::path::PathBuf::from("./out/b.typ"),
+            ])
         );
         assert!(!outputs.is_empty());
         Ok(())

@@ -4,14 +4,15 @@
     feature = "rust",
     feature = "typescript",
     feature = "golang",
-    feature = "python"
+    feature = "python",
+    feature = "typst"
 ))]
 use crate::config::v1::{self as config};
-#[cfg(any(feature = "rust", feature = "typescript"))]
+#[cfg(any(feature = "rust", feature = "typescript", feature = "typst"))]
 use crate::{config::settings::Settings, error::IoError, executor, model};
-#[cfg(any(feature = "rust", feature = "typescript"))]
+#[cfg(any(feature = "rust", feature = "typescript", feature = "typst"))]
 use std::path::PathBuf;
-#[cfg(any(feature = "rust", feature = "typescript"))]
+#[cfg(any(feature = "rust", feature = "typescript", feature = "typst"))]
 use std::sync::Arc;
 
 /// A code generation target language.
@@ -34,6 +35,8 @@ pub enum Target {
     Typescript,
     /// Rust output.
     Rust,
+    /// Typst output.
+    Typst,
     /// Go output.
     Golang,
     /// Python output.
@@ -42,10 +45,26 @@ pub enum Target {
 
 impl Target {
     /// Iterates over all target variants.
-    #[must_use]
     pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
         <Self as strum::IntoEnumIterator>::iter()
     }
+}
+
+/// An error produced while generating Typst output.
+#[cfg(feature = "typst")]
+#[derive(thiserror::Error, Debug)]
+pub enum TypstOutputError {
+    /// Writing the generated code to disk failed.
+    #[error(transparent)]
+    Io(#[from] IoError),
+
+    /// Building the Typst module failed, such as on a missing strict translation.
+    #[error(transparent)]
+    Codegen(#[from] globetrotter_typst::Error),
+
+    /// A spawned task failed to join.
+    #[error(transparent)]
+    Task(#[from] tokio::task::JoinError),
 }
 
 /// An error produced while generating Rust output.
@@ -84,7 +103,7 @@ pub enum TypescriptOutputError {
 
 impl crate::executor::Executor {
     /// Writes one generated file to every configured path of a target.
-    #[cfg(any(feature = "rust", feature = "typescript"))]
+    #[cfg(any(feature = "rust", feature = "typescript", feature = "typst"))]
     async fn write_target_outputs<F>(
         &self,
         config_file: &config::ConfigFile<F>,
@@ -138,6 +157,55 @@ impl crate::executor::Executor {
                 "Python output is configured, but there is no Python code generator yet; nothing is written"
             );
         }
+    }
+
+    #[cfg(feature = "typst")]
+    pub(crate) async fn generate_typst_outputs<F>(
+        &self,
+        config_file: &config::ConfigFile<F>,
+        translations: &Arc<model::Translations>,
+        settings: &Settings,
+    ) -> Result<(), TypstOutputError> {
+        let Some(typst_config) = &config_file.config.outputs.typst else {
+            return Ok(());
+        };
+        if typst_config.is_empty() {
+            return Ok(());
+        }
+
+        // Generate once, then write the same module to every configured path.
+        let engine = settings
+            .template_engine
+            .as_ref()
+            .map(|engine| engine.as_ref().clone());
+        let languages = config_file
+            .config
+            .languages
+            .iter()
+            .map(|language| *language.as_ref())
+            .collect::<Vec<_>>();
+        let strict = settings.strict;
+        let code = tokio::task::spawn_blocking({
+            let translations = Arc::clone(translations);
+            move || {
+                globetrotter_typst::generate_module(
+                    &translations,
+                    engine.as_ref(),
+                    &languages,
+                    strict,
+                )
+            }
+        })
+        .await??;
+        self.write_target_outputs(
+            config_file,
+            Target::Typst,
+            &typst_config.output_paths,
+            &code,
+            settings,
+        )
+        .await?;
+        Ok(())
     }
 
     #[cfg(feature = "rust")]

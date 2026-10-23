@@ -248,6 +248,10 @@
           "description": "Alias for `typescript`.",
           "$ref": "#/definitions/typescriptOutput"
         },
+        "typst": {
+          "description": "Typst modules with the translations and their argument types, for a Typst rendering runtime.",
+          "$ref": "#/definitions/paths"
+        },
         "rust": {
           "$ref": "#/definitions/paths"
         },

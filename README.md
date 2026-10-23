@@ -86,6 +86,10 @@ configs:
       rust:
         - ./src/generated/translations.rs
       
+      # Typst data module, rendered by the globetrotter Typst package
+      typst:
+        - ./generated/translations.typ
+
       # Additional language support
       golang:
         - ./generated/translations.go
@@ -259,19 +263,44 @@ const message = renderTemplate(greeting, { name: 'Alice' });
 // renderTemplate(greeting, { name: 123 }); // ❌ Type error
 ```
 
+### Usage in Typst
+
+Configure `outputs.typst: ./generated/translations.typ` to generate a Typst module with the same
+data as the JSON files plus each key's argument types. The module only carries data; the small
+Typst runtime package in [`runtime/typst/globetrotter`](runtime/typst/globetrotter) checks each call against the
+declared arguments and renders a Handlebars subset:
+
+```typst
+#import "@local/globetrotter:0.1.0": translator
+#import "generated/translations.typ" as catalog
+
+#let t = translator(catalog, "en")
+#t("common.greeting", name: "Ada") // "Hello Ada"
+#t("common.greeting", name: 1)     // compile error: argument "name" must be string
+```
+
+`globetrotter lint` scans `.typ` documents for `t("key")` calls like any other source, and with
+`usages.calls: deny` rejects undefined keys and mismatched named arguments even in branches
+that never render. See the
+[Typst output documentation](https://luupsystems.github.io/globetrotter/docs/outputs/#typst) for
+the module format, the supported template subset, and Rust build-script integration, and
+[`examples/example-typst`](examples/example-typst) for a complete document.
+
 ### Supported languages
 
 Globetrotter currently generates type-safe bindings for:
 
 - **Rust** - Full enum-based type safety with serde integration
 - **TypeScript** - Type definitions with template argument validation
+- **Typst** - Translation data and argument types as a Typst module, rendered by a Typst runtime package
 
 **Waiting for contributions:**
 - **Go, Python, C++, C#, Dart, Elixir, Java, Kotlin, Lua, PHP, Ruby, Swift, Zig**
 
 Globetrotter's modular architecture makes it straightforward to add support for new languages. Each language generator is an independent crate that implements a simple interface. See the [library documentation](https://docs.rs/globetrotter) to contribute a generator for your language.
 
-All languages share the same JSON format at runtime, ensuring consistency across your stack.
+Rust and TypeScript bindings share the JSON format at runtime. The Typst module embeds the same
+translations in a `.typ` file for the Typst runtime package.
 
 ### Template engines
 

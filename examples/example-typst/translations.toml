@@ -1,0 +1,26 @@
+[invoice.title]
+en = "Invoice"
+de = "Rechnung"
+
+[invoice.greeting]
+en = "Dear {{name}},"
+de = "Hallo {{name}},"
+arguments = { name = "string" }
+
+[invoice.items]
+en = "You ordered {{count}} {{pluralize \"item\" count}}."
+de = "Bestellt: {{count}} Artikel."
+arguments = { count = "integer" }
+
+[invoice.total]
+en = "Total: {{amount}} EUR{{#if paid}} (paid){{/if}}"
+de = "Summe: {{amount}} EUR{{#if paid}} (bezahlt){{/if}}"
+arguments = { amount = "float", paid = "boolean" }
+
+[invoice.status.open]
+en = "Payment is due within 14 days."
+de = "Zahlbar innerhalb von 14 Tagen."
+
+[invoice.status.paid]
+en = "Thank you for your payment."
+de = "Vielen Dank für Ihre Zahlung."

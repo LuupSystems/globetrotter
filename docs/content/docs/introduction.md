@@ -10,7 +10,9 @@ frameworks. It reads TOML catalogs, validates the translations as one set, and w
 
 - one JSON file for each spoken language, intended for runtime loading;
 - TypeScript definitions for the translation structure;
-- Rust types for translation keys and their declared arguments.
+- Rust types for translation keys and their declared arguments;
+- Typst modules with the translations and their declared arguments, rendered in documents by a
+  small Typst runtime package.
 
 The translation text and the type information come from the same source files. A key cannot change
 in one output without changing in all of them.

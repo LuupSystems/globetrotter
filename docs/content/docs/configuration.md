@@ -151,6 +151,15 @@ outputs:
     - ./generated/translations.rs
 ```
 
+Typst accepts one path or a list:
+
+```yaml
+outputs:
+  typst: ./generated/translations.typ
+```
+
+See [Typst outputs]({{< relref "outputs.md#typst" >}}) for the module format.
+
 Output directories are created as needed. The files are generated artifacts; keep their paths
 stable and regenerate them rather than editing them manually.
 

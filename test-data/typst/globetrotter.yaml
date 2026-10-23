@@ -1,0 +1,8 @@
+# yaml-language-server: $schema=../../globetrotter.schema.json
+version: 1
+config:
+  languages: [en, de]
+  engine: handlebars
+  inputs: [catalog.toml]
+  outputs:
+    typst: translations.typ
