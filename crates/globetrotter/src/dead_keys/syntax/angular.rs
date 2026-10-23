@@ -1,6 +1,9 @@
 //! Angular pipe inputs are classified before their constituent literals are visited.
 
-use super::{Dialect, DynamicReference, References, constructs_string, literal_prefix, text};
+use super::{
+    CallReference, Dialect, DynamicReference, References, constructs_string, literal,
+    literal_prefix, text,
+};
 use std::io;
 use tree_sitter::Node;
 
@@ -42,7 +45,18 @@ pub(super) fn classify_pipes(
         } else {
             node
         };
-        if index != 0 || !constructs_string(input, source, Dialect::AngularExpression)? {
+        if index != 0 {
+            continue;
+        }
+        // A literal pipe input is a static key; pipe parameters stay opaque.
+        if !constructs_string(input, source, Dialect::AngularExpression)? {
+            if let Some(key) = literal(input, source, Dialect::AngularExpression)? {
+                references.calls.push(CallReference {
+                    key,
+                    span: input.byte_range(),
+                    arguments: None,
+                });
+            }
             continue;
         }
 

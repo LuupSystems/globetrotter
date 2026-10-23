@@ -326,6 +326,13 @@ fn merge_expression(
         dynamic.span = attribute.original_span(dynamic.span)?;
         references.dynamic.push(dynamic);
     }
+    for mut call in parsed.calls {
+        call.span = attribute.original_span(call.span)?;
+        for argument in call.arguments.iter_mut().flatten() {
+            argument.span = attribute.original_span(argument.span.clone())?;
+        }
+        references.calls.push(call);
+    }
     Ok(())
 }
 

@@ -69,6 +69,10 @@ pub enum LintCode {
     UnusedKey,
     /// A translation call constructs its key dynamically.
     DynamicUsage,
+    /// A translation call names a key that no catalog scanning its source defines.
+    UndefinedKey,
+    /// A translation call passes arguments that contradict the key's declared arguments.
+    ArgumentMismatch,
     /// A language of one key tells the user something different than the
     /// others, as judged by an LLM (see `--llm-judge`).
     LlmDrift,

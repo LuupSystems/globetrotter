@@ -4,7 +4,6 @@ use super::{Dialect, text, unwrap_expression};
 use std::io;
 use tree_sitter::Node;
 
-
 fn is_string(node: Node<'_>) -> bool {
     matches!(
         node.kind(),
@@ -254,10 +253,14 @@ fn concatenation_operator<'source>(
     if dialect == Dialect::AngularExpression && node.kind() == "concatenation_expression" {
         return Ok(Some("+"));
     }
-    if !matches!(
-        node.kind(),
-        "binary_expression" | "additive_expression" | "binary_operator" | "binary"
-    ) {
+    let binary = match dialect {
+        Dialect::Typst => node.kind() == "add",
+        _ => matches!(
+            node.kind(),
+            "binary_expression" | "additive_expression" | "binary_operator" | "binary"
+        ),
+    };
+    if !binary {
         return Ok(None);
     }
     let mut cursor = node.walk();

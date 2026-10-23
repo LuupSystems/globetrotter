@@ -2,9 +2,12 @@
 //!
 //! Each scan belongs to one config: source references are matched against that
 //! catalog and its dynamic-call policy before diagnostics are combined.
+//! Static calls are checked across all configs by [`call_checks`], because a call
+//! may belong to any catalog that recognizes it.
 //! The `tree-sitter` feature excludes comments and type-only references; without
-//! it, a text scan provides conservative, less precise matches.
+//! it, a text scan provides conservative, less precise matches and checks no calls.
 
+pub(crate) mod call_checks;
 mod source;
 #[cfg(feature = "tree-sitter")]
 mod syntax;
@@ -12,6 +15,7 @@ mod syntax;
 use crate::config::usages::{DynamicUsages, UsageConfig};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use globetrotter_model::{
+    Arguments,
     diagnostics::{DiagnosticExt, FileId, Span},
     lint::{AllowEntry, LintCode, is_allowed},
 };
@@ -36,6 +40,8 @@ pub struct DefinedKey {
     pub span: Span,
     /// Lint codes suppressed for this key.
     pub allow: BTreeSet<AllowEntry>,
+    /// The key's declared template arguments, which static calls must match.
+    pub arguments: Arguments,
 }
 
 fn is_key_char(c: char) -> bool {
@@ -51,6 +57,8 @@ fn is_source_file(path: &Path) -> bool {
 pub(crate) struct UsageScan {
     pub unused: Vec<DefinedKey>,
     pub dynamic: Vec<DynamicSource>,
+    /// Static and prefixed dynamic calls, checked across configs by [`call_checks`].
+    pub calls: Vec<call_checks::CallSource>,
 }
 
 pub(crate) struct DynamicSource {
@@ -158,6 +166,7 @@ pub(crate) fn scan_config(
     let mut identifiers = BTreeSet::new();
     let mut prefixes = BTreeSet::new();
     let mut dynamic = Vec::new();
+    let mut calls = Vec::new();
     let mut scanned = BTreeSet::new();
     for entry in files {
         let entry = entry.map_err(std::io::Error::other)?;
@@ -198,6 +207,26 @@ pub(crate) fn scan_config(
                     .filter_map(|usage| usage.prefix.clone()),
             );
         }
+        // Text scans infer prefixes without call context, so only prefixes from recognized
+        // calls are checked against the catalog.
+        let prefixes: Vec<_> = if cfg!(feature = "tree-sitter") {
+            references
+                .dynamic
+                .iter()
+                .filter(|usage| usage.prefix.is_some())
+                .cloned()
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if !references.calls.is_empty() || !prefixes.is_empty() {
+            calls.push(call_checks::CallSource {
+                path: path.clone(),
+                content: content.clone(),
+                calls: references.calls,
+                prefixes,
+            });
+        }
         if usages.dynamic != DynamicUsages::Allow && !references.dynamic.is_empty() {
             dynamic.push(DynamicSource {
                 path,
@@ -219,12 +248,18 @@ pub(crate) fn scan_config(
         })
         .cloned()
         .collect();
-    Ok(UsageScan { unused, dynamic })
+    Ok(UsageScan {
+        unused,
+        dynamic,
+        calls,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::{DefinedKey, find_unused_keys};
+    #[cfg(feature = "tree-sitter")]
+    use crate::config::usages::{DynamicUsages, UsageConfig};
     use color_eyre::eyre;
     use std::collections::BTreeSet;
     use std::path::PathBuf;
@@ -281,11 +316,77 @@ mod tests {
             file_id: 0,
             span: 0..0,
             allow: BTreeSet::new(),
+            arguments: globetrotter_model::Arguments::default(),
         };
 
         let diagnostics =
             find_unused_keys(&[key], std::slice::from_ref(&dir), &BTreeSet::new(), false)?;
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
+
+        std::fs::remove_dir_all(dir)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "tree-sitter")]
+    fn defined_key(key: &str) -> DefinedKey {
+        DefinedKey {
+            key: key.to_string(),
+            generated_identifiers: Vec::new(),
+            file_id: 0,
+            span: 0..0,
+            allow: BTreeSet::new(),
+            arguments: globetrotter_model::Arguments::default(),
+        }
+    }
+
+    /// Typst documents are discovered by extension and follow the configured dynamic policy.
+    #[cfg(feature = "tree-sitter")]
+    #[test_util::test]
+    fn typst_documents_follow_the_dynamic_usage_policy() -> eyre::Result<()> {
+        let dir = temp_dir("typst")?;
+        std::fs::write(
+            dir.join("report.typ"),
+            indoc::indoc! {r#"
+                #import "translations.typ": translator
+                #let t = translator("en")
+                = #t("report.title")
+                // #t("report.commented")
+                #for kind in kinds [#t("report.status." + kind)]
+            "#},
+        )?;
+        let keys = ["report.title", "report.commented", "report.status.open"].map(defined_key);
+        let unused_under = |dynamic| -> eyre::Result<_> {
+            let usages = UsageConfig {
+                roots: vec![dir.clone()],
+                dynamic,
+                ..UsageConfig::default()
+            };
+            let scan = super::scan_config(&keys, &usages, &BTreeSet::new())?;
+            let unused: Vec<String> = scan.unused.into_iter().map(|key| key.key).collect();
+            let dynamic: usize = scan.dynamic.iter().map(|file| file.references.len()).sum();
+            Ok((unused, dynamic))
+        };
+
+        // The literal call counts, the commented call does not, and the prefix keeps the
+        // status subtree alive unless the policy denies dynamic usages.
+        assert_eq!(
+            unused_under(DynamicUsages::Allow)?,
+            (vec!["report.commented".to_owned()], 0)
+        );
+        assert_eq!(
+            unused_under(DynamicUsages::Warn)?,
+            (vec!["report.commented".to_owned()], 1)
+        );
+        assert_eq!(
+            unused_under(DynamicUsages::Deny)?,
+            (
+                vec![
+                    "report.commented".to_owned(),
+                    "report.status.open".to_owned()
+                ],
+                1
+            )
+        );
 
         std::fs::remove_dir_all(dir)?;
         Ok(())

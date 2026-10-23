@@ -142,7 +142,11 @@ globetrotter --dry-run
 `globetrotter lint` checks translation files for missing, empty, or
 whitespace-padded translations, templates that fail to compile, inconsistent
 placeholders, undeclared or unused arguments, duplicate strings, and (with
-`--usages <DIR>`) keys never referenced in your sources.
+`--usages <DIR>` or `usages.roots`) keys never referenced in your sources. It also
+checks every translation call with a literal key in those sources, including calls
+in code that never runs: the key must exist, and arguments passed as Typst named
+arguments, a JavaScript object literal, or Python keyword arguments must match the
+declared ones (`usages.calls: allow | warn | deny`, default `warn`).
 
 With `--llm-judge`, an LLM additionally reviews each key for cross-language
 drift: it sees all of a key's languages in one prompt and flags any language

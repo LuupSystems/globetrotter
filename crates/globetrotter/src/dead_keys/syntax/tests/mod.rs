@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod calls;
 mod lexical;
 mod literals;
 
@@ -321,6 +322,10 @@ const SOURCE_FIXTURES: &[(&str, &str)] = &[
         include_str!("../../../../../../test-data/usages/App.cs"),
     ),
     (
+        "app.typ",
+        include_str!("../../../../../../test-data/usages/app.typ"),
+    ),
+    (
         "component.vue",
         include_str!("../../../../../../test-data/usages/component.vue"),
     ),
@@ -412,6 +417,7 @@ fn source_fixtures_keep_runtime_references_and_exclude_comments() {
                 | "app.lua"
                 | "app.zig"
                 | "App.cs"
+                | "app.typ"
         ) {
             assert!(
                 references.dynamic.is_empty(),
@@ -709,4 +715,165 @@ fn astro_comment_only_and_empty_expressions_are_not_usages() {
     let references = scan(Path::new("component.astro"), source, &["t".into()])?;
     assert_eq!(references.literals, ["app.live".into()].into());
     assert!(references.dynamic.is_empty());
+}
+
+/// Typst calls count in markup and code mode, inside nested expressions and blocks.
+#[test_util::test]
+fn typst_calls_in_markup_and_code_are_static() {
+    let source = indoc::indoc! {r#"
+        = Title #t("app.heading")
+        #t("app.markup") and #t("app.trailing")[body]
+        #let label = t("app.let")
+        #{
+          let inner = t("app.block")
+          if open { t("app.branch") } else { [#t("app.content")] }
+        }
+        #box(t("app.nested"))
+        #t("app.arguments", name: user, count: 2)
+        #t("app.outer", body: t("app.inner"))
+        #t(count: 2, "app.named-first")
+        #t(/* A note about the call. */ "app.commented")
+        #i18n.t("app.member")
+        #(t)("app.parenthesized")
+        #t(("app.grouped"))
+        #context t("app.context")
+        #show heading: it => t("app.show")
+        $ x = #t("app.math") $
+        #t("app.\u{65}scaped")
+    "#};
+    let references = scan(Path::new("doc.typ"), source, &["t".into()])?;
+    assert!(references.dynamic.is_empty(), "{:?}", references.literals);
+    assert_eq!(
+        references.literals,
+        [
+            "app.heading",
+            "app.markup",
+            "app.trailing",
+            "app.let",
+            "app.block",
+            "app.branch",
+            "app.content",
+            "app.nested",
+            "app.arguments",
+            "app.outer",
+            "app.inner",
+            "app.named-first",
+            "app.commented",
+            "app.member",
+            "app.parenthesized",
+            "app.grouped",
+            "app.context",
+            "app.show",
+            "app.math",
+            "app.escaped",
+        ]
+        .map(str::to_owned)
+        .into()
+    );
+}
+
+/// Markup prose, comments, raw text, math text, and module paths are not Typst code literals.
+#[test_util::test]
+fn typst_text_comments_raw_and_paths_produce_no_references() {
+    let source = indoc::indoc! {r#"
+        #import "app.module": t
+        #include "app.chapter"
+        // #t("app.comment")
+        /* #t("app.comment") */
+        Prose quotes "app.markup" and mentions t("app.markup") without a hash.
+        Inline raw `#t("app.raw")` stays verbatim.
+        ```typ
+        #t("app.raw")
+        ```
+        $ "app.math" $
+        See @app.reference and <app.label>.
+    "#};
+    let references = scan(Path::new("doc.typ"), source, &["t".into()])?;
+    assert!(references.literals.is_empty(), "{:?}", references.literals);
+    assert!(references.dynamic.is_empty());
+}
+
+/// Visibly concatenated Typst keys trigger dynamic policy; opaque arguments do not.
+#[test_util::test]
+fn typst_concatenated_keys_are_dynamic_and_opaque_arguments_are_not() {
+    let source = indoc::indoc! {r#"
+        #t("app." + kind)
+        #t(("app." + kind))
+        #t(name: user, "app." + kind)
+        #i18n.t("app." + kind, count: 1)
+        #let tr(kind) = t("app." + kind)
+        #t(prefix + ".title")
+        #t(key)
+        #t(keys.at(kind))
+        #t(..args)
+        #t[app.content]
+        #other("app." + kind)
+    "#};
+    let references = scan(Path::new("doc.typ"), source, &["t".into()])?;
+
+    // Five calls construct a key with a known prefix, and one has no literal prefix.
+    let spans: Vec<_> = references
+        .dynamic
+        .iter()
+        .map(|reference| {
+            (
+                source.get(reference.span.clone()),
+                reference.prefix.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        spans,
+        [
+            (Some("\"app.\" + kind"), Some("app.")),
+            (Some("\"app.\" + kind"), Some("app.")),
+            (Some("\"app.\" + kind"), Some("app.")),
+            (Some("\"app.\" + kind"), Some("app.")),
+            (Some("\"app.\" + kind"), Some("app.")),
+            (Some("prefix + \".title\""), None),
+        ]
+    );
+
+    // Fragments still count as literal evidence, as in every other language.
+    assert_eq!(references.literals, ["app.".into(), ".title".into()].into());
+}
+
+/// Dotted Typst function names match the complete member callee.
+#[test_util::test]
+fn typst_configured_callees_control_dynamic_recognition() {
+    let source = r#"#i18n.lookup("app." + kind) #other.lookup("app." + kind)"#;
+    let references = scan(Path::new("doc.typ"), source, &["i18n.lookup".into()])?;
+    assert_eq!(references.dynamic.len(), 1);
+    assert_eq!(references.dynamic[0].prefix.as_deref(), Some("app."));
+}
+
+#[test_util::test]
+fn malformed_typst_code_fails_instead_of_claiming_keys_are_unused() {
+    assert!(scan(Path::new("doc.typ"), "#t(\"app.file\"", &["t".into()]).is_err());
+}
+
+/// Template literals passed to unrelated calls or stored in objects are not translation calls.
+#[test_util::test]
+fn unrelated_templates_in_objects_and_calls_are_not_dynamic_usages() {
+    let source = indoc::indoc! {r#"
+        function sourceBase(field: Field, value: string) {
+          return safeCreate(CreditContactSourceBaseSchema, {
+            field,
+            seenBase: safeCreate(CreditSeenSourceBaseSchema, {
+              bindingId: `hypofy.contact.${CreditContactSourceBaseField[field].toLowerCase()}`,
+              baseToken: `token-${value}`,
+            }),
+          });
+        }
+        function echoed(column: "name" | "email", token: string) {
+          return { bindingId: `fincrm.contact.${column}`, baseToken: token };
+        }
+        const exists = ["jpg", "svg"].some(extension =>
+          existsSync(`${PUBLIC_DIR}/images/document-examples/${name}.${extension}`)
+        );
+        card(`submissions.new-modal.step2.purpose.${choice.purpose}`).click();
+    "#};
+    let references = scan(Path::new("app.vitest.tsx"), source, &["t".into()])?;
+    assert!(references.dynamic.is_empty());
+    assert_eq!(references.calls, Vec::new());
 }

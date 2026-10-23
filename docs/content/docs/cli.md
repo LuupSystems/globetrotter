@@ -64,6 +64,7 @@ Useful groups:
 
 - `--usages <DIR>` is repeatable and enables unused-key scanning.
 - `--dynamic-usages <POLICY>` overrides config policies with `allow`, `warn`, or `deny`.
+- `--call-usages <POLICY>` overrides the undefined-key and argument checks the same way.
 - `--no-ignore` bypasses `.ignore` files in usage scans.
 - `--no-gitignore` bypasses `.gitignore` and Git exclude files in usage scans.
 - `--no-duplicates` disables both cross-key duplicate checks and identical-language checks.

@@ -1,10 +1,11 @@
 //! Syntax-aware scanning includes scripts and expressions embedded in web templates.
 
-use super::source::{Dialect, DynamicReference, References};
+use super::source::{CallReference, Dialect, DynamicReference, References};
 use literals::{constructs_string, first_interpolation, literal, literal_prefix};
 use web::visit_template;
 
 mod angular;
+mod calls;
 mod css;
 mod literals;
 #[cfg(test)]
@@ -34,6 +35,7 @@ impl Dialect {
             Self::Lua => tree_sitter_lua::LANGUAGE.into(),
             Self::Zig => tree_sitter_zig::LANGUAGE.into(),
             Self::CSharp => tree_sitter_c_sharp::LANGUAGE.into(),
+            Self::Typst => arborium_typst::language().into(),
             Self::Html => tree_sitter_html::LANGUAGE.into(),
             Self::Vue => tree_sitter_vue_next::LANGUAGE.into(),
             Self::Svelte => tree_sitter_svelte_next::LANGUAGE.into(),
@@ -121,6 +123,15 @@ fn is_non_runtime(node: Node<'_>, source: &str, dialect: Dialect) -> bool {
     {
         return true;
     }
+    // Typst module paths and math-mode text are not code literals.
+    if dialect == Dialect::Typst
+        && node.kind() == "string"
+        && node
+            .parent()
+            .is_some_and(|parent| matches!(parent.kind(), "import" | "include" | "formula"))
+    {
+        return true;
+    }
     if dialect == Dialect::Rust
         && matches!(node.kind(), "attribute_item" | "inner_attribute_item")
         && node
@@ -200,14 +211,21 @@ fn visit(
     if dialect == Dialect::AngularExpression {
         angular::classify_pipes(node, source, functions, references)?;
     }
-    if let Some(argument) = translation_argument(node, source, dialect, functions)?
-        && constructs_string(argument, source, dialect)?
-    {
-        references.dynamic.push(DynamicReference {
-            prefix: literal_prefix(argument, source, dialect)?
-                .filter(|prefix| prefix.contains('.') && prefix.chars().all(super::is_key_char)),
-            span: argument.byte_range(),
-        });
+    if let Some(argument) = translation_argument(node, source, dialect, functions)? {
+        if constructs_string(argument, source, dialect)? {
+            references.dynamic.push(DynamicReference {
+                prefix: literal_prefix(argument, source, dialect)?.filter(|prefix| {
+                    prefix.contains('.') && prefix.chars().all(super::is_key_char)
+                }),
+                span: argument.byte_range(),
+            });
+        } else if let Some(key) = literal(argument, source, dialect)? {
+            references.calls.push(CallReference {
+                key,
+                span: argument.byte_range(),
+                arguments: calls::arguments(node, argument, source, dialect)?,
+            });
+        }
     }
     // Literal evidence stands on its own, including inside opaque call arguments.
     if let Some(value) = literal(node, source, dialect)? {
@@ -290,6 +308,9 @@ fn translation_argument<'a>(
     }) {
         return Ok(None);
     }
+    if dialect == Dialect::Typst {
+        return Ok(typst_argument(node));
+    }
     let mut cursor = node.walk();
     let arguments = node.child_by_field_name("arguments").or_else(|| {
         node.named_children(&mut cursor).find(|child| {
@@ -320,6 +341,40 @@ fn translation_argument<'a>(
         .map(unwrap_expression))
 }
 
+/// Returns a Typst call's first positional argument.
+///
+/// Typst parses both the callee and the argument list as `group` nodes in `(t)("key")`.
+/// Named arguments may precede the first positional one, and a call with only trailing
+/// content blocks, such as `t[text]`, has no key argument.
+fn typst_argument(call: Node<'_>) -> Option<Node<'_>> {
+    let callee = call.child_by_field_name("item");
+    let mut cursor = call.walk();
+    let arguments = call
+        .named_children(&mut cursor)
+        .find(|child| Some(*child) != callee && child.kind() == "group")?;
+    let mut cursor = arguments.walk();
+    arguments
+        .named_children(&mut cursor)
+        .find(|child| !matches!(child.kind(), "comment" | "tagged"))
+        .map(unwrap_expression)
+}
+
+/// Returns the single expression inside a parenthesized group.
+///
+/// Typst also uses `group` for argument lists and arrays, which stay intact.
+fn parenthesized(node: Node<'_>) -> Option<Node<'_>> {
+    let mut cursor = node.walk();
+    if node.children(&mut cursor).any(|child| child.kind() == ",") {
+        return None;
+    }
+    let mut cursor = node.walk();
+    let mut children = node
+        .named_children(&mut cursor)
+        .filter(|child| !child.kind().contains("comment"));
+    let inner = children.next()?;
+    children.next().is_none().then_some(inner)
+}
+
 fn unwrap_expression(mut node: Node<'_>) -> Node<'_> {
     loop {
         let inner = match node.kind() {
@@ -342,8 +397,8 @@ fn unwrap_expression(mut node: Node<'_>) -> Node<'_> {
             | "as_expression"
             | "satisfies_expression"
             | "non_null_expression"
-            | "value_arguments"
-            | "group" => node.named_child(0),
+            | "value_arguments" => node.named_child(0),
+            "group" => parenthesized(node),
             "expression" if node.child_by_field_name("pipes").is_none() => node.named_child(0),
             _ => None,
         };
