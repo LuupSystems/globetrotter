@@ -1,6 +1,6 @@
 //! Literal references do not depend on resolving their surrounding expressions.
 
-use super::scan;
+use super::super::scan;
 use std::path::Path;
 
 #[test_util::test]

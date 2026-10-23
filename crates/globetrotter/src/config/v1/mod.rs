@@ -295,7 +295,12 @@ pub fn expect_mapping(value: &yaml_spanned::Spanned<Value>) -> Result<&Mapping, 
 ///
 /// Returns an error if the section is neither a string nor a sequence of
 /// strings.
-#[cfg(any(feature = "rust", feature = "golang", feature = "python"))]
+#[cfg(any(
+    feature = "rust",
+    feature = "golang",
+    feature = "python",
+    feature = "typst"
+))]
 fn parse_output_paths(value: &Mapping, keys: &[&str]) -> Result<Option<Vec<PathBuf>>, ConfigError> {
     let Some(outputs) = keys.iter().find_map(|key| value.get(key)) else {
         return Ok(None);
@@ -340,6 +345,18 @@ pub fn parse_rust_outputs(
 ) -> Result<Option<globetrotter_rust::OutputConfig>, ConfigError> {
     Ok(parse_output_paths(value, &["rust", "rs"])?
         .map(|output_paths| globetrotter_rust::OutputConfig { output_paths }))
+}
+
+/// Parses the Typst output configuration.
+///
+/// # Errors
+///
+/// Returns an error if `typst` is neither a path nor a sequence of paths.
+#[cfg(feature = "typst")]
+pub fn parse_typst_outputs(
+    value: &Mapping,
+) -> Result<Option<globetrotter_typst::OutputConfig>, ConfigError> {
+    Ok(parse_output_paths(value, &["typst"])?.map(globetrotter_typst::OutputConfig::new))
 }
 
 /// Parses the Go output configuration.
@@ -545,6 +562,8 @@ pub fn parse_outputs<F: Copy + PartialEq>(
 
     Ok(Outputs {
         json: parse_json_outputs(outputs)?,
+        #[cfg(feature = "typst")]
+        typst: parse_typst_outputs(outputs)?,
         #[cfg(feature = "typescript")]
         typescript: parse_typescript_outputs(outputs)?,
         #[cfg(feature = "rust")]
@@ -848,6 +867,10 @@ pub struct Outputs {
     /// JSON translation outputs.
     pub json: Vec<JsonOutputConfig>,
 
+    /// Self-contained Typst module output configuration.
+    #[cfg(feature = "typst")]
+    pub typst: Option<globetrotter_typst::OutputConfig>,
+
     /// TypeScript output configuration.
     #[cfg(feature = "typescript")]
     pub typescript: Option<globetrotter_typescript::OutputConfig>,
@@ -898,6 +921,14 @@ impl Outputs {
         self
     }
 
+    /// Sets the Typst module output configuration.
+    #[cfg(feature = "typst")]
+    #[must_use]
+    pub fn with_typst(mut self, typst: impl Into<globetrotter_typst::OutputConfig>) -> Self {
+        self.typst = Some(typst.into());
+        self
+    }
+
     /// Sets the Go output configuration.
     #[cfg(feature = "golang")]
     #[must_use]
@@ -919,6 +950,8 @@ impl std::fmt::Display for Outputs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = f.debug_struct("Outputs");
         s.field("json", &self.json);
+        #[cfg(feature = "typst")]
+        s.field("typst", &self.typst);
         #[cfg(feature = "typescript")]
         s.field("typescript", &self.typescript);
         #[cfg(feature = "rust")]
@@ -957,6 +990,11 @@ impl Outputs {
 
         #[cfg(feature = "python")]
         if self.python.as_ref().is_some_and(|c| !c.is_empty()) {
+            return false;
+        }
+
+        #[cfg(feature = "typst")]
+        if self.typst.as_ref().is_some_and(|config| !config.is_empty()) {
             return false;
         }
 

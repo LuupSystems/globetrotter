@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../../globetrotter.schema.json
+version: 1
+config:
+  languages: [en, de]
+  engine: handlebars
+  strict: true
+  check_templates: true
+  inputs: [translations.toml]
+  outputs:
+    typst: generated/translations.typ
+  # Lets `globetrotter lint` report keys that the document never uses, and reject calls to
+  # undefined keys or with mismatched arguments, even in branches that never render.
+  usages:
+    roots: [.]
+    calls: deny

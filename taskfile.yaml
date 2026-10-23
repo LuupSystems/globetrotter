@@ -164,6 +164,21 @@ tasks:
     cmds:
       - cargo nextest run -P default --workspace --all-targets --no-tests warn {{.CLI_ARGS}}
 
+  test:typst:
+    desc: "compile the generated module, the Typst runtime tests, and the Typst example (requires typst)"
+    cmds:
+      - cargo nextest run -P default -p globetrotter-typst --run-ignored all {{.CLI_ARGS}}
+      - task: example:typst
+
+  example:typst:
+    desc: "generate, lint, and compile the Typst example (requires typst)"
+    dir: examples/example-typst
+    cmds:
+      - cargo run -q -p globetrotter-cli -- --config globetrotter.yaml --color never
+      - cargo run -q -p globetrotter-cli -- lint --config globetrotter.yaml --color never
+      - typst compile --root ../.. invoice.typ generated/invoice.pdf
+      - typst compile --root ../.. --input lang=de invoice.typ generated/invoice-de.pdf
+
   test:fc:
     desc: "test cargo workspace for all combinations of features"
     cmds:

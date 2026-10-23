@@ -110,6 +110,11 @@ pub enum OutputError {
     #[error("failed to generate typescript output")]
     Typescript(#[from] crate::target::TypescriptOutputError),
 
+    /// Generating Typst output failed.
+    #[cfg(feature = "typst")]
+    #[error("failed to generate typst output")]
+    Typst(#[from] crate::target::TypstOutputError),
+
     /// Generating Rust output failed.
     #[cfg(feature = "rust")]
     #[error("failed to generate rust output")]

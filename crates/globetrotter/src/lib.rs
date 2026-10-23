@@ -6,7 +6,7 @@
 //! configuration targets without emitters.
 //!
 //! Feature flags select language-specific generators: `typescript`, `rust`,
-//! `golang`, and `python`. The `llm-judge` feature adds optional semantic-drift
+//! `golang`, `python`, and `typst`. The `llm-judge` feature adds optional semantic-drift
 //! review during linting.
 //! The optional `tree-sitter` feature adds syntax-aware source usage scanning.
 //! Without it, usage scanning uses less precise text matching.
@@ -68,6 +68,9 @@ pub use globetrotter_typescript as typescript;
 
 #[cfg(feature = "rust")]
 pub use globetrotter_rust as rust;
+
+#[cfg(feature = "typst")]
+pub use globetrotter_typst as typst;
 
 #[cfg(feature = "golang")]
 pub use globetrotter_golang as golang;

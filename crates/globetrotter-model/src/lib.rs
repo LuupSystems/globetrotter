@@ -65,56 +65,6 @@ pub enum TemplateEngine {
     Other(String),
 }
 
-#[cfg(test)]
-mod template_engine_tests {
-    use super::TemplateEngine;
-
-    /// Known names, aliases, and custom engine names parse, and every engine
-    /// displays as the name it parses from.
-    #[test_util::test]
-    fn parses_engine_names() {
-        assert_eq!("handlebars".parse(), Ok(TemplateEngine::Handlebars));
-        assert_eq!("golang".parse(), Ok(TemplateEngine::Golang));
-        assert_eq!("go".parse(), Ok(TemplateEngine::Golang));
-        assert_eq!("mustache".parse(), Ok(TemplateEngine::Mustache));
-        assert_eq!("jinja2".parse(), Ok(TemplateEngine::Jinja2));
-        assert_eq!(
-            "tera".parse(),
-            Ok(TemplateEngine::Other("tera".to_string()))
-        );
-        for engine in [
-            TemplateEngine::Handlebars,
-            TemplateEngine::Golang,
-            TemplateEngine::Other("tera".to_string()),
-        ] {
-            assert_eq!(engine.to_string().parse(), Ok(engine));
-        }
-    }
-
-    /// Config files and JSON output use the same plain names as the command
-    /// line, including for engines globetrotter does not know.
-    #[test_util::test]
-    fn serde_uses_the_plain_name() -> serde_json::Result<()> {
-        for (engine, name) in [
-            (TemplateEngine::Handlebars, "handlebars"),
-            (TemplateEngine::Golang, "golang"),
-            (TemplateEngine::Other("tera".to_string()), "tera"),
-        ] {
-            assert_eq!(engine.to_string(), name);
-            assert_eq!(serde_json::to_value(&engine)?, serde_json::json!(name));
-            assert_eq!(
-                serde_json::from_value::<TemplateEngine>(serde_json::json!(name))?,
-                engine
-            );
-        }
-        assert_eq!(
-            serde_json::from_value::<TemplateEngine>(serde_json::json!("go"))?,
-            TemplateEngine::Golang
-        );
-        Ok(())
-    }
-}
-
 /// The declared type of a template argument.
 #[derive(
     Copy,
@@ -171,42 +121,6 @@ impl ArgumentType {
     #[must_use]
     pub fn display(&self) -> DisplayRepr<'_, Self> {
         DisplayRepr(self)
-    }
-}
-
-#[cfg(test)]
-mod argument_type_tests {
-    use super::ArgumentType;
-    use strum::IntoEnumIterator;
-
-    /// The name shown to users is the name accepted in translation files,
-    /// both through `FromStr` and through serde.
-    #[test_util::test]
-    fn type_names_round_trip() {
-        for typ in ArgumentType::iter() {
-            let name = typ.to_string();
-            assert_eq!(name.parse::<ArgumentType>(), Ok(typ), "{name}");
-
-            let json = serde_json::Value::String(name.clone());
-            assert_eq!(serde_json::to_value(typ).ok(), Some(json.clone()), "{name}");
-            assert_eq!(
-                serde_json::from_value::<ArgumentType>(json).ok(),
-                Some(typ),
-                "{name}"
-            );
-        }
-    }
-
-    /// Primitive types use the plain names users expect next to `string`
-    /// and `number`.
-    #[test_util::test]
-    fn primitive_type_names() {
-        assert_eq!("boolean".parse(), Ok(ArgumentType::Boolean));
-        assert_eq!("integer".parse(), Ok(ArgumentType::Integer));
-        assert_eq!("float".parse(), Ok(ArgumentType::Float));
-        assert_eq!(ArgumentType::Boolean.to_string(), "boolean");
-        assert_eq!(ArgumentType::Integer.to_string(), "integer");
-        assert_eq!(ArgumentType::Float.to_string(), "float");
     }
 }
 
@@ -339,5 +253,86 @@ impl IntoIterator for Translations {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ArgumentType, TemplateEngine};
+    use strum::IntoEnumIterator;
+
+    /// Known names, aliases, and custom engine names parse, and every engine
+    /// displays as the name it parses from.
+    #[test_util::test]
+    fn parses_engine_names() {
+        assert_eq!("handlebars".parse(), Ok(TemplateEngine::Handlebars));
+        assert_eq!("golang".parse(), Ok(TemplateEngine::Golang));
+        assert_eq!("go".parse(), Ok(TemplateEngine::Golang));
+        assert_eq!("mustache".parse(), Ok(TemplateEngine::Mustache));
+        assert_eq!("jinja2".parse(), Ok(TemplateEngine::Jinja2));
+        assert_eq!(
+            "tera".parse(),
+            Ok(TemplateEngine::Other("tera".to_string()))
+        );
+        for engine in [
+            TemplateEngine::Handlebars,
+            TemplateEngine::Golang,
+            TemplateEngine::Other("tera".to_string()),
+        ] {
+            assert_eq!(engine.to_string().parse(), Ok(engine));
+        }
+    }
+
+    /// Config files and JSON output use the same plain names as the command
+    /// line, including for engines globetrotter does not know.
+    #[test_util::test]
+    fn serde_uses_the_plain_name() -> serde_json::Result<()> {
+        for (engine, name) in [
+            (TemplateEngine::Handlebars, "handlebars"),
+            (TemplateEngine::Golang, "golang"),
+            (TemplateEngine::Other("tera".to_string()), "tera"),
+        ] {
+            assert_eq!(engine.to_string(), name);
+            assert_eq!(serde_json::to_value(&engine)?, serde_json::json!(name));
+            assert_eq!(
+                serde_json::from_value::<TemplateEngine>(serde_json::json!(name))?,
+                engine
+            );
+        }
+        assert_eq!(
+            serde_json::from_value::<TemplateEngine>(serde_json::json!("go"))?,
+            TemplateEngine::Golang
+        );
+        Ok(())
+    }
+
+    /// The name shown to users is the name accepted in translation files,
+    /// both through `FromStr` and through serde.
+    #[test_util::test]
+    fn type_names_round_trip() {
+        for typ in ArgumentType::iter() {
+            let name = typ.to_string();
+            assert_eq!(name.parse::<ArgumentType>(), Ok(typ), "{name}");
+
+            let json = serde_json::Value::String(name.clone());
+            assert_eq!(serde_json::to_value(typ).ok(), Some(json.clone()), "{name}");
+            assert_eq!(
+                serde_json::from_value::<ArgumentType>(json).ok(),
+                Some(typ),
+                "{name}"
+            );
+        }
+    }
+
+    /// Primitive types use the plain names users expect next to `string`
+    /// and `number`.
+    #[test_util::test]
+    fn primitive_type_names() {
+        assert_eq!("boolean".parse(), Ok(ArgumentType::Boolean));
+        assert_eq!("integer".parse(), Ok(ArgumentType::Integer));
+        assert_eq!("float".parse(), Ok(ArgumentType::Float));
+        assert_eq!(ArgumentType::Boolean.to_string(), "boolean");
+        assert_eq!(ArgumentType::Integer.to_string(), "integer");
+        assert_eq!(ArgumentType::Float.to_string(), "float");
     }
 }

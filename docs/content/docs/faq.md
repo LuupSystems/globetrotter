@@ -9,6 +9,8 @@ weight: 10
 
 No. It generates JSON data and language bindings. Your application loads the appropriate JSON file
 and renders templates with its own Handlebars-compatible runtime or another integration.
+For Typst documents, the [Typst output]({{< relref "outputs.md#typst" >}}) embeds the same data in a
+module, and the repository's small Typst runtime package renders it with a Handlebars subset.
 
 ## Why are languages fields in the same TOML table?
 

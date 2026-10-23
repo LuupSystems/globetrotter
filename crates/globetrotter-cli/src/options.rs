@@ -240,6 +240,12 @@ pub struct LintOptions {
     #[clap(long = "dynamic-usages", value_name = "POLICY")]
     pub dynamic_usages: Option<globetrotter::config::usages::DynamicUsages>,
 
+    /// Override each config's static translation-call policy (allow, warn, or deny).
+    ///
+    /// The policy governs undefined keys and mismatched arguments in calls with a literal key.
+    #[clap(long = "call-usages", value_name = "POLICY")]
+    pub call_usages: Option<globetrotter::config::usages::CallUsages>,
+
     /// Bypass `.ignore` files when scanning usages.
     #[clap(long = "no-ignore")]
     pub no_ignore: bool,

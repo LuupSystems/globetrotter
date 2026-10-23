@@ -81,5 +81,5 @@ Globetrotter discovers `globetrotter.yaml` in the current directory. Start with
 - [Introduction]({{< relref "/docs/introduction.md" >}}) — the runtime-data and generated-types model.
 - [Configuration]({{< relref "/docs/configuration.md" >}}) — inputs, languages, settings, and outputs.
 - [Translation files]({{< relref "/docs/translations.md" >}}) — keys, languages, arguments, and namespacing.
-- [Generated outputs]({{< relref "/docs/outputs.md" >}}) — JSON, TypeScript, and Rust.
+- [Generated outputs]({{< relref "/docs/outputs.md" >}}) — JSON, TypeScript, Rust, and Typst.
 - [Linting]({{< relref "/docs/linting.md" >}}) — deterministic checks and the optional LLM review.

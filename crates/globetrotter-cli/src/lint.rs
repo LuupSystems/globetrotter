@@ -95,6 +95,7 @@ impl crate::Globetrotter {
             detect_duplicates: !options.no_duplicates,
             usages: options.usages.clone(),
             dynamic_usages: options.dynamic_usages,
+            call_usages: options.call_usages,
             respect_ignore_files: options.no_ignore.then_some(false),
             respect_gitignore: options.no_gitignore.then_some(false),
             llm_judge,

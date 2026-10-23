@@ -19,7 +19,9 @@ The deterministic checks report:
 - a condition whose branches are identical, so it has no effect;
 - placeholders that are undeclared, or arguments that are never used;
 - identical translations within one key;
-- duplicate text shared by different keys.
+- duplicate text shared by different keys;
+- with usage roots, keys that sources never reference, calls to undefined keys, and calls whose
+  arguments contradict the key's declaration.
 
 The template checks use the configured `engine` (or `--engine`) and are never run with a guessed
 one: without an engine, or with one that has no template analysis yet, they are skipped and a note
@@ -95,8 +97,8 @@ to a variable and later passed to `t(key)` produces no dynamic diagnostic; keys 
 matching evidence are still reported as potentially unused.
 
 JavaScript/TypeScript, JSX/TSX (including React, Next.js, and Remix), Vue, Svelte, Astro, HTML
-templates, Rust, Go, Python, Ruby, PHP, Java, Kotlin, Swift, Dart, Elixir, Lua, Zig, and C# are
-supported. Vue/Svelte/Astro scripts and template expressions are parsed as embedded code with
+templates, Rust, Go, Python, Ruby, PHP, Java, Kotlin, Swift, Dart, Elixir, Lua, Zig, C#, and Typst
+are supported. Vue/Svelte/Astro scripts and template expressions are parsed as embedded code with
 diagnostics pointing to their original source locations. Vue style `v-bind(...)` expressions and
 Astro’s `define:vars` attributes are scanned as executable code. Ordinary CSS strings, HTML
 comments, and data script blocks are excluded. Angular-style interpolations, bound attributes,
@@ -123,6 +125,17 @@ Only visibly constructed key arguments, such as ``t(`dialog.${kind}`)`` or `t("d
 trigger dynamic policy. Prefix resemblance outside a recognized call never contributes matches.
 Branches and arrays need no special evaluation: their string literals
 already count, and opaque alternatives add no diagnostic.
+
+Typst documents (`.typ`) are parsed with the tree-sitter-typst grammar. Translation calls count in
+markup (`#t("invoice.title")`) and in code: `#let` bindings, `#{ … }` blocks, function arguments,
+`context` expressions, show rules, and `#` code embedded in math. Member and parenthesized callees
+such as `i18n.t("key")` and `(t)("key")` follow the same `functions` matching as other languages.
+The key is the first positional argument, so named arguments may appear before or after it, as in
+`t("cart.items", count: n)`. Visible concatenation such as `t("status." + kind)` triggers the dynamic
+policy with the prefix `status.`, while `t(key)`, `t(keys.at(kind))`, and `t(..args)` are opaque.
+Markup prose (including quoted text), comments, raw text and raw blocks, math-mode strings, labels,
+references, and `#import`/`#include` paths never count. Code the grammar cannot parse, such as a
+non-breaking space used as code whitespace, produces an explicit scan error.
 
 HTML interpolation support targets Angular expressions. Server template engines such as Jinja,
 Django templates, and Blade are not supported; exclude those sources through ignore rules.
@@ -156,6 +169,84 @@ Override every selected config's policy for one invocation:
 globetrotter lint --dynamic-usages deny
 ```
 
+### Check translation calls
+
+Every recognized call with a literal key is checked against the catalog:
+
+- `undefined-key`: no catalog defines the key. For a dynamic key with a literal prefix, such as
+  `t("status." + kind)`, no defined key starts with that prefix.
+- `argument-mismatch`: a declared argument is missing, a passed argument is not declared, or a
+  literal value contradicts the declared type. String literals fit `string` and `isodatetime`,
+  number literals fit `number`, `integer`, and `float`, and boolean literals fit `boolean`. `any`
+  accepts every value, and the types of variables and other expressions are not inferred.
+
+The scanner reads the source instead of running it, so calls in branches that never execute are
+checked too. A Typst compile only checks the calls it evaluates, and `#if false [#t("headline")]`
+compiles without an error, while `globetrotter lint` reports it.
+
+Template arguments are checked where the call shape exposes them:
+
+| Language | Arguments | Only the key is checked when |
+|---|---|---|
+| Typst | Named arguments: `t("key", name: value)`. | The call spreads `..arguments`, passes a positional value, or has a trailing content block. |
+| JavaScript and TypeScript, including JSX/TSX and Vue, Svelte, Astro, and HTML expressions | An object literal after the key: `t("key", { name })`. A call without one passes no arguments. | The object spreads or computes a property name, or the second argument is not an object literal. |
+| Python | Keyword arguments: `t("key", name=value)`. | The call passes `*args`, `**kwargs`, or another positional value. |
+| Angular pipes and other languages | Not read. | Always. |
+
+Other languages are checked for undefined keys only, because their translation APIs pass
+arguments positionally or mix them with library options, such as Rails' `default:` and `scope:`.
+In JavaScript, the object after the key must hold only template arguments; wrap a library `t`
+that takes options in the same object, or allow the lint on the affected keys.
+
+Several configs can scan the same file with different `functions`. A config recognizes a call when
+its roots contain the file and its `functions` match the callee. A call is reported as undefined
+only when no config that recognizes it defines its key, and its arguments only when every
+recognizing config that defines the key rejects them. A config that does not recognize a call
+neither vouches for it nor reports it. Each finding lists the configs that report it.
+
+| Call policy | Effect |
+|---|---|
+| `allow` | Report nothing. |
+| `warn` (default) | Report findings as warnings, or as errors with `--strict`. |
+| `deny` | Report findings as errors. |
+
+The default is `warn` because the findings are almost always real mistakes and usage scanning is
+already opt-in through usage roots. Like unused-key warnings, they make lint exit non-zero; set
+`calls: allow` to keep a project's previous results while it fixes them. A config-wide
+`allow: ["lint:undefined-key"]` or `allow: ["lint:argument-mismatch"]` suppresses that code for
+the config, and `allow = ["lint:argument-mismatch"]` on a key accepts any arguments for it.
+
+```yaml
+usages:
+  roots: [./document]
+  calls: deny
+```
+
+Override every selected config's policy for one invocation:
+
+```bash
+globetrotter lint --call-usages deny
+```
+
+Some arguments are supplied by the host rather than by each call. For example, a wrapper bound to
+`t` may pass a formality flag from the current user's settings:
+
+```ts
+const t = (key, values) => translate(key, { is_formal: isFormal(), ...values });
+t("greeting", { name });
+```
+
+List such arguments in `usages.implied_arguments`. A call may then omit them, while a value it
+passes explicitly is still type-checked. The list belongs to its config: each config decides
+whether it accepts a call with its own implied arguments. A name that no key of the config's
+catalog declares is reported as a likely typo.
+
+```yaml
+usages:
+  roots: [./src]
+  implied_arguments: [is_formal]
+```
+
 ### Lightweight builds
 
 The `tree-sitter` Cargo feature owns all parser dependencies. It is enabled by default in
@@ -163,6 +254,7 @@ The `tree-sitter` Cargo feature owns all parser dependencies. It is enabled by d
 using lightweight text matching, and prints a note identifying that mode. Config ownership,
 root precedence, and diagnostic grouping are unchanged.
 
+Text matching does not resolve calls, so undefined keys and argument mismatches are not checked.
 Text matching is less precise: exact spellings in comments and types can count as usages, and
 `${...}` prefixes are recognized without call or language context. Its dynamic policy controls
 those detected prefixes; it does not enforce the direct-translation-call boundary.

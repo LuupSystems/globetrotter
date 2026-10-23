@@ -38,6 +38,8 @@ pub struct LintParams {
     pub usages: Vec<PathBuf>,
     /// A supplied policy overrides each config's dynamic-call policy.
     pub dynamic_usages: Option<crate::config::usages::DynamicUsages>,
+    /// A supplied policy overrides each config's static-call policy.
+    pub call_usages: Option<crate::config::usages::CallUsages>,
     /// A supplied value overrides each config's `.ignore` filtering.
     pub respect_ignore_files: Option<bool>,
     /// A supplied value overrides each config's Git ignore-file filtering.
@@ -693,6 +695,11 @@ impl Executor {
                 self.generate_typescript_outputs(&config_file, &translations, &settings)
                     .map_err(OutputError::from),
             ),
+            #[cfg(feature = "typst")]
+            Box::pin(
+                self.generate_typst_outputs(&config_file, &translations, &settings)
+                    .map_err(OutputError::from),
+            ),
             #[cfg(feature = "rust")]
             Box::pin(
                 self.generate_rust_outputs(&config_file, &translations, &settings)
@@ -788,8 +795,60 @@ impl Executor {
         })
         .await?;
         tally += self.emit_all(&lint_diagnostics).await?;
+        tally += self
+            .emit_all(
+                &self
+                    .undeclared_implied_arguments(&config_file, &translations, settings.strict)
+                    .await?,
+            )
+            .await?;
 
         Ok((tally, translations))
+    }
+
+    /// Warns about implied arguments that no key declares, which are most likely misspelled.
+    async fn undeclared_implied_arguments(
+        &self,
+        config_file: &config::ConfigFile<FileId>,
+        translations: &model::Translations,
+        strict: bool,
+    ) -> Result<Vec<Diagnostic<FileId>>, Error> {
+        let undeclared: Vec<&String> = config_file
+            .config
+            .usages
+            .implied_arguments
+            .iter()
+            .filter(|name| {
+                !translations
+                    .0
+                    .values()
+                    .any(|translation| translation.arguments.contains_key(name.as_str()))
+            })
+            .collect();
+        if undeclared.is_empty() {
+            return Ok(Vec::new());
+        }
+        let owner = match config_file.file_id {
+            Some(file_id) => format!(
+                "{} ({})",
+                config_file.config.name.as_ref(),
+                self.diagnostic_printer.source_name(file_id).await?
+            ),
+            None => config_file.config.name.as_ref().clone(),
+        };
+        Ok(undeclared
+            .into_iter()
+            .map(|name| {
+                Diagnostic::warning_or_error(strict)
+                    .with_message(format!(
+                        "implied argument `{name}` is not declared by any key"
+                    ))
+                    .with_notes(vec![
+                        format!("config: {owner}"),
+                        "`usages.implied_arguments` names arguments that calls may omit; check the spelling or remove it".to_owned(),
+                    ])
+            })
+            .collect())
     }
 
     async fn collect_usage_diagnostics(
@@ -799,6 +858,7 @@ impl Executor {
         params: &LintParams,
         excluded: &BTreeSet<PathBuf>,
         usage_diagnostics: &mut UsageDiagnostics,
+        call_checks: &mut crate::dead_keys::call_checks::CallChecks,
     ) -> Result<(), Error> {
         let usages = effective_usages(config_file, params);
         if !usages.roots.is_empty() {
@@ -811,12 +871,16 @@ impl Executor {
                     file_id: translation.file_id,
                     span: key.span.clone(),
                     allow: translation.allow.clone(),
+                    arguments: translation.arguments.clone(),
                 })
                 .collect();
             let policy = usages.dynamic;
+            let call_policy = usages.calls;
+            let implied: BTreeSet<String> = usages.implied_arguments.iter().cloned().collect();
             let excluded = excluded.clone();
-            let scan = tokio::task::spawn_blocking(move || {
+            let (scan, defined_keys) = tokio::task::spawn_blocking(move || {
                 crate::dead_keys::scan_config(&defined_keys, &usages, &excluded)
+                    .map(|scan| (scan, defined_keys))
             })
             .await?
             .map_err(|source| IoError::new("<usages>", source))?;
@@ -834,6 +898,16 @@ impl Executor {
                     &owner,
                 );
             }
+            call_checks.add(
+                &Arc::new(crate::dead_keys::call_checks::CallOwner {
+                    name: owner.clone(),
+                    policy: call_policy,
+                    allow: config_file.config.allow.clone(),
+                    implied,
+                }),
+                &defined_keys,
+                scan.calls,
+            );
             let suppress_dynamic = globetrotter_model::lint::is_allowed(
                 &config_file.config.allow,
                 globetrotter_model::lint::LintCode::DynamicUsage,
@@ -863,9 +937,42 @@ impl Executor {
         Ok(())
     }
 
+    /// Converts the call findings of all configs into usage diagnostics.
+    async fn collect_call_diagnostics(
+        &self,
+        call_checks: crate::dead_keys::call_checks::CallChecks,
+        usage_diagnostics: &mut UsageDiagnostics,
+    ) {
+        for file in call_checks.finish() {
+            let file_id = self
+                .diagnostic_printer
+                .add_source_file(&file.path, file.content)
+                .await;
+            for finding in file.findings {
+                let mut labels =
+                    vec![Label::primary(file_id, finding.span).with_message(finding.label)];
+                if let Some((definition_file, definition_span)) = finding.definition {
+                    labels.push(
+                        Label::secondary(definition_file, definition_span)
+                            .with_message("key declared here"),
+                    );
+                }
+                let diagnostic = Diagnostic::warning_or_error(finding.deny || self.lint_strict())
+                    .with_code(finding.code)
+                    .with_message(finding.message)
+                    .with_labels(labels);
+                for owner in &finding.owners {
+                    usage_diagnostics.insert(diagnostic.clone(), owner);
+                }
+            }
+        }
+    }
+
     /// Lints every configuration's translation files.
     ///
     /// Each config's source roots and dynamic-call policy determine its unused keys.
+    /// Static calls are checked against every config that recognizes them, under each
+    /// config's call policy.
     /// Caller overrides replace the corresponding config settings.
     /// Identical usage findings on shared sources are grouped with their config names.
     /// The call fails if any warnings or errors were found.
@@ -893,6 +1000,7 @@ impl Executor {
 
         let mut tally = Tally::default();
         let mut usage_diagnostics = UsageDiagnostics::default();
+        let mut call_checks = crate::dead_keys::call_checks::CallChecks::default();
         #[cfg(not(feature = "tree-sitter"))]
         if scan_usages {
             self.diagnostic_printer.emit(&Diagnostic::note().with_message(
@@ -926,6 +1034,7 @@ impl Executor {
                 params,
                 &excluded,
                 &mut usage_diagnostics,
+                &mut call_checks,
             )
             .await?;
 
@@ -938,6 +1047,8 @@ impl Executor {
             }
         }
 
+        self.collect_call_diagnostics(call_checks, &mut usage_diagnostics)
+            .await;
         tally += self.emit_all(&usage_diagnostics.finish()).await?;
 
         if tally.has_issues() {
@@ -964,6 +1075,9 @@ fn effective_usages(
     };
     if let Some(policy) = params.dynamic_usages {
         usages.dynamic = policy;
+    }
+    if let Some(policy) = params.call_usages {
+        usages.calls = policy;
     }
     if let Some(respect_ignore_files) = params.respect_ignore_files {
         usages.respect_ignore_files = respect_ignore_files;
@@ -1070,6 +1184,13 @@ fn output_files(configs: &config::Configs<FileId>) -> BTreeSet<PathBuf> {
         if let Some(output) = &config_file.config.outputs.typescript {
             for interface in &output.interface_type {
                 insert_output_file(&mut dirs, base, &interface.path);
+            }
+        }
+
+        #[cfg(feature = "typst")]
+        if let Some(output) = &config_file.config.outputs.typst {
+            for path in &output.output_paths {
+                insert_output_file(&mut dirs, base, path);
             }
         }
 
@@ -1387,6 +1508,14 @@ mod tests {
             dir
         };
 
+        #[cfg(feature = "typst")]
+        let typst_file = {
+            let path = base.join("generated/typst/translations.typ");
+            std::fs::create_dir_all(base.join("generated/typst"))?;
+            std::fs::write(&path, "")?;
+            path
+        };
+
         let outputs = config::Outputs::new()
             .with_json([config::JsonOutputConfig::new("generated/json/en.json")]);
 
@@ -1411,6 +1540,11 @@ mod tests {
         let outputs = outputs.with_python(globetrotter_python::OutputConfig {
             output_paths: vec![PathBuf::from("generated/python/translations.py")],
         });
+
+        #[cfg(feature = "typst")]
+        let outputs = outputs.with_typst(globetrotter_typst::OutputConfig::new([PathBuf::from(
+            "generated/typst/translations.typ",
+        )]));
 
         let configs = vec![config::ConfigFile {
             file_id: None,
@@ -1437,6 +1571,9 @@ mod tests {
 
         #[cfg(feature = "python")]
         assert!(dirs.contains(&py_dir.join("translations.py").canonicalize()?));
+
+        #[cfg(feature = "typst")]
+        assert!(dirs.contains(&typst_file.canonicalize()?));
 
         std::fs::remove_dir_all(base)?;
         Ok(())

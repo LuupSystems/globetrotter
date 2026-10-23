@@ -39,6 +39,26 @@ jobs:
       - name: Doc-tests
         run: task test:doc
 
+  typst:
+    name: typst runtime and example
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.7.16
+          install: false
+          cache: true
+          env: false
+      - run: mise install task aqua:nextest-rs/nextest/cargo-nextest aqua:typst/typst
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Typst tests and example
+        run: task test:typst
+
   publish:
     name: publish (dry-run)
     runs-on: ubuntu-24.04

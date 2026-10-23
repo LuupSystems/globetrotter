@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=../../../../globetrotter.schema.json
+# Regenerates the runtime test module: globetrotter --config runtime/typst/globetrotter/tests/globetrotter.yaml
+version: 1
+config:
+  languages: [en, de]
+  engine: handlebars
+  strict: true
+  inputs: [catalog.toml]
+  outputs:
+    typst: translations.typ

@@ -113,3 +113,4 @@ globetrotter-php = { path = "./crates/globetrotter-php/" }
 globetrotter-python = { path = "./crates/globetrotter-python/" }
 globetrotter-typescript = { path = "./crates/globetrotter-typescript/" }
 globetrotter-golang = { path = "./crates/globetrotter-golang/" }
+globetrotter-typst = { path = "./crates/globetrotter-typst/" }

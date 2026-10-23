@@ -114,7 +114,7 @@
     },
     "usages": {
       "type": "object",
-      "description": "The application sources this catalog belongs to, and how its keys may be referenced. Drives the `unused-key` and `dynamic-usage` lints.",
+      "description": "The application sources this catalog belongs to, and how its keys may be referenced. Drives the `unused-key`, `dynamic-usage`, `undefined-key`, and `argument-mismatch` lints.",
       "additionalProperties": false,
       "properties": {
         "roots": {
@@ -144,6 +144,25 @@
             }
           ]
         },
+        "calls": {
+          "description": "How calls with a literal key are checked: an undefined key reports `undefined-key`, and arguments that contradict the key's declaration report `argument-mismatch`. `--call-usages` overrides this.",
+          "type": "string",
+          "default": "warn",
+          "oneOf": [
+            {
+              "const": "allow",
+              "description": "Do not report undefined keys or mismatched arguments."
+            },
+            {
+              "const": "warn",
+              "description": "Report undefined keys and mismatched arguments as warnings."
+            },
+            {
+              "const": "deny",
+              "description": "Report undefined keys and mismatched arguments as errors."
+            }
+          ]
+        },
         "functions": {
           "type": "array",
           "description": "Callees whose first argument is a translation key. Replaces the defaults rather than extending them. A name without a dot also matches the final member of a callee, so `t` matches `i18n.t`; a dotted name must match the whole callee.",
@@ -152,6 +171,14 @@
             "$t",
             "translate"
           ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "implied_arguments": {
+          "type": "array",
+          "description": "Argument names that calls may omit because the host supplies them, such as a wrapper that passes a formality flag. A passed value is still type-checked, and a name that no key declares is reported as a likely typo.",
+          "default": [],
           "items": {
             "type": "string"
           }
@@ -247,6 +274,10 @@
         "ts": {
           "description": "Alias for `typescript`.",
           "$ref": "#/definitions/typescriptOutput"
+        },
+        "typst": {
+          "description": "Typst modules with the translations and their argument types, for a Typst rendering runtime.",
+          "$ref": "#/definitions/paths"
         },
         "rust": {
           "$ref": "#/definitions/paths"
@@ -559,6 +590,8 @@
         "lint:identical-languages",
         "lint:unused-key",
         "lint:dynamic-usage",
+        "lint:undefined-key",
+        "lint:argument-mismatch",
         "lint:llm-drift"
       ]
     },

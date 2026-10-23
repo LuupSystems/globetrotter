@@ -10,6 +10,8 @@ actionlint = "latest"
 "github:romnn/cooldown" = { version = "latest", minimum_release_age = "0" }
 "github:romnn/bumpversion" = { version = "latest", matching = "bumpversion", minimum_release_age = "0" }
 "aqua:charmbracelet/freeze" = "latest"
+# Compiles the Typst runtime tests and example.
+"aqua:typst/typst" = "latest"
 
 # Documentation site (docs/, Hugo Book theme, and live terminal snippets).
 go = "latest"

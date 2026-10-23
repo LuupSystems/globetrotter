@@ -85,6 +85,26 @@ checksum = "sha256:0a7316540862c13d954f648917ceacca593747baed6eec180fafa590be271
 url = "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-pc-windows-msvc-v0.22.2.zip"
 url_api = "https://api.github.com/repos/rustsec/rustsec/releases/assets/439294720"
 
+[[tools."aqua:typst/typst"]]
+version = "0.15.1"
+backend = "aqua:typst/typst"
+specifiers = ["latest"]
+
+[tools."aqua:typst/typst"."platforms.linux-x64"]
+checksum = "sha256:a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c"
+url = "https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-unknown-linux-musl.tar.xz"
+url_api = "https://api.github.com/repos/typst/typst/releases/assets/480300761"
+
+[tools."aqua:typst/typst"."platforms.macos-arm64"]
+checksum = "sha256:48f62ed034aa3a7978309579ac6ca00045e2ef0da73114e8af27cfd8e74dc05a"
+url = "https://github.com/typst/typst/releases/download/v0.15.1/typst-aarch64-apple-darwin.tar.xz"
+url_api = "https://api.github.com/repos/typst/typst/releases/assets/480299147"
+
+[tools."aqua:typst/typst"."platforms.windows-x64"]
+checksum = "sha256:19ce3551153c2fe7ee9fa2f95208310c8f4d3209fedb699e0333faf8913f6736"
+url = "https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/typst/typst/releases/assets/480303335"
+
 [[tools."asdf:NeoHsu/asdf-hugo"]]
 version = "extended-0.163.3"
 backend = "asdf:NeoHsu/asdf-hugo"

@@ -112,6 +112,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "arborium-sysroot"
+version = "2.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddd9d120dd5df8b918cd96676a88f1233a66f10687d415b69f70b3396acddddf"
+dependencies = [
+ "cc",
+ "dlmalloc",
+]
+
+[[package]]
+name = "arborium-typst"
+version = "2.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaadc6968bd31560dbd303a00b8644502a9e35835a6daf6bfb34f8f4992ee06f"
+dependencies = [
+ "arborium-sysroot",
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -775,6 +796,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dlmalloc"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad5208a115eaba24916f7456929832e310a81518c641f93fee4f89aa93aa3675"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "dragonbox_ecma"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1092,6 +1124,7 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 name = "globetrotter"
 version = "0.0.15"
 dependencies = [
+ "arborium-typst",
  "codespan-reporting",
  "color-eyre",
  "colored",
@@ -1104,6 +1137,7 @@ dependencies = [
  "globetrotter-python",
  "globetrotter-rust",
  "globetrotter-typescript",
+ "globetrotter-typst",
  "handlebars",
  "html-escape",
  "human_bytes",
@@ -1328,6 +1362,19 @@ dependencies = [
  "swc_core",
  "test-util",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "globetrotter-typst"
+version = "0.0.15"
+dependencies = [
+ "color-eyre",
+ "globetrotter-model",
+ "serde",
+ "serde_json",
+ "similar-asserts",
+ "tempfile",
+ "test-util",
 ]
 
 [[package]]

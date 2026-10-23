@@ -617,3 +617,46 @@ fn unknown_dynamic_prefixes_never_mark_the_whole_catalog_used() {
         );
     }
 }
+
+/// Text matching infers `${` prefixes without call context, so they never feed the call checks.
+#[cfg(not(feature = "tree-sitter"))]
+#[test_util::test]
+fn lightweight_builds_do_not_check_inferred_prefixes_against_the_catalog() {
+    let temp = tempfile::tempdir()?;
+    let dir = temp.path();
+    write(
+        dir,
+        "catalog.toml",
+        indoc::indoc! {r#"
+        [file]
+        en = "File"
+        "#},
+    )?;
+    write(
+        dir,
+        "src/app.ts",
+        indoc::indoc! {"
+        t('file');
+        existsSync(`${PUBLIC_DIR}/images/${name}.${extension}`);
+        safeCreate(Schema, { bindingId: `hypofy.contact.${field}` });
+        "},
+    )?;
+    let output = Command::new(env!("CARGO_BIN_EXE_globetrotter"))
+        .current_dir(dir)
+        .args([
+            "lint",
+            "--no-duplicates",
+            "--color",
+            "never",
+            "--translation",
+            "catalog.toml",
+            "--usages",
+            "src",
+            "--call-usages",
+            "deny",
+        ])
+        .output()?;
+    let stderr = String::from_utf8(output.stderr)?;
+    assert!(output.status.success(), "{stderr}");
+    assert!(!stderr.contains("undefined-key"), "{stderr}");
+}
