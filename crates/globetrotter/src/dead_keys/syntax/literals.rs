@@ -4,9 +4,6 @@ use super::{Dialect, text, unwrap_expression};
 use std::io;
 use tree_sitter::Node;
 
-#[cfg(test)]
-#[path = "literal_tests.rs"]
-mod tests;
 
 fn is_string(node: Node<'_>) -> bool {
     matches!(

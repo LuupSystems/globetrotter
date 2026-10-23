@@ -586,7 +586,7 @@ fn is_expression_attribute(node: Node<'_>, source: &str) -> io::Result<bool> {
 }
 
 #[cfg(test)]
-mod svelte_tests {
+mod tests {
     use super::super::scan;
     use std::path::Path;
 

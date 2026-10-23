@@ -6,8 +6,6 @@ use web::visit_template;
 
 mod angular;
 mod css;
-#[cfg(test)]
-mod lexical_tests;
 mod literals;
 #[cfg(test)]
 mod tests;

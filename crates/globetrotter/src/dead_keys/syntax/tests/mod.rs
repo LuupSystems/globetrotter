@@ -2,6 +2,9 @@
 
 use super::*;
 
+mod lexical;
+mod literals;
+
 #[test_util::test]
 fn argument_wrappers_and_alternate_literals_are_static() {
     for (name, source) in [
@@ -255,87 +258,87 @@ fn malformed_runtime_source_fails_instead_of_claiming_keys_are_unused() {
 const SOURCE_FIXTURES: &[(&str, &str)] = &[
     (
         "app.ts",
-        include_str!("../../../../../test-data/usages/app.ts"),
+        include_str!("../../../../../../test-data/usages/app.ts"),
     ),
     (
         "react.tsx",
-        include_str!("../../../../../test-data/usages/react.tsx"),
+        include_str!("../../../../../../test-data/usages/react.tsx"),
     ),
     (
         "app.js",
-        include_str!("../../../../../test-data/usages/app.js"),
+        include_str!("../../../../../../test-data/usages/app.js"),
     ),
     (
         "app.rs",
-        include_str!("../../../../../test-data/usages/app.rs"),
+        include_str!("../../../../../../test-data/usages/app.rs"),
     ),
     (
         "app.go",
-        include_str!("../../../../../test-data/usages/app.go"),
+        include_str!("../../../../../../test-data/usages/app.go"),
     ),
     (
         "app.py",
-        include_str!("../../../../../test-data/usages/app.py"),
+        include_str!("../../../../../../test-data/usages/app.py"),
     ),
     (
         "app.rb",
-        include_str!("../../../../../test-data/usages/app.rb"),
+        include_str!("../../../../../../test-data/usages/app.rb"),
     ),
     (
         "app.php",
-        include_str!("../../../../../test-data/usages/app.php"),
+        include_str!("../../../../../../test-data/usages/app.php"),
     ),
     (
         "App.java",
-        include_str!("../../../../../test-data/usages/App.java"),
+        include_str!("../../../../../../test-data/usages/App.java"),
     ),
     (
         "app.kt",
-        include_str!("../../../../../test-data/usages/app.kt"),
+        include_str!("../../../../../../test-data/usages/app.kt"),
     ),
     (
         "app.swift",
-        include_str!("../../../../../test-data/usages/app.swift"),
+        include_str!("../../../../../../test-data/usages/app.swift"),
     ),
     (
         "app.dart",
-        include_str!("../../../../../test-data/usages/app.dart"),
+        include_str!("../../../../../../test-data/usages/app.dart"),
     ),
     (
         "app.ex",
-        include_str!("../../../../../test-data/usages/app.ex"),
+        include_str!("../../../../../../test-data/usages/app.ex"),
     ),
     (
         "app.lua",
-        include_str!("../../../../../test-data/usages/app.lua"),
+        include_str!("../../../../../../test-data/usages/app.lua"),
     ),
     (
         "app.zig",
-        include_str!("../../../../../test-data/usages/app.zig"),
+        include_str!("../../../../../../test-data/usages/app.zig"),
     ),
     (
         "App.cs",
-        include_str!("../../../../../test-data/usages/App.cs"),
+        include_str!("../../../../../../test-data/usages/App.cs"),
     ),
     (
         "component.vue",
-        include_str!("../../../../../test-data/usages/component.vue"),
+        include_str!("../../../../../../test-data/usages/component.vue"),
     ),
     (
         "component.svelte",
-        include_str!("../../../../../test-data/usages/component.svelte"),
+        include_str!("../../../../../../test-data/usages/component.svelte"),
     ),
     (
         "component.astro",
-        include_str!("../../../../../test-data/usages/component.astro"),
+        include_str!("../../../../../../test-data/usages/component.astro"),
     ),
     (
         "angular.html",
-        include_str!("../../../../../test-data/usages/angular.html"),
+        include_str!("../../../../../../test-data/usages/angular.html"),
     ),
     (
         "page.html",
-        include_str!("../../../../../test-data/usages/page.html"),
+        include_str!("../../../../../../test-data/usages/page.html"),
     ),
 ];
 
