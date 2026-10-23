@@ -264,21 +264,18 @@ mod tests {
             have: handlebars("{{#each items}}{{#if flag}}{{/if}}{{/each}}")?.dead_conditions,
             want: vec!["{{#if flag}}".to_string()]
         );
-        assert!(
-            handlebars("{{#if a}}yes{{else}}no{{/if}}")?
-                .dead_conditions
-                .is_empty()
+        assert_eq!(
+            handlebars("{{#if a}}yes{{else}}no{{/if}}")?.dead_conditions,
+            Vec::<String>::new()
         );
-        assert!(
-            handlebars("{{#if a}}yes{{/if}}")?
-                .dead_conditions
-                .is_empty()
+        assert_eq!(
+            handlebars("{{#if a}}yes{{/if}}")?.dead_conditions,
+            Vec::<String>::new()
         );
         // An empty loop body is not a condition and is left alone.
-        assert!(
-            handlebars("{{#each items}}{{/each}}")?
-                .dead_conditions
-                .is_empty()
+        assert_eq!(
+            handlebars("{{#each items}}{{/each}}")?.dead_conditions,
+            Vec::<String>::new()
         );
         Ok(())
     }

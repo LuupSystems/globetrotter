@@ -766,7 +766,6 @@ pub enum Language {
 
 impl Language {
     /// Iterates over all known languages.
-    #[must_use]
     pub fn iter() -> <Self as strum::IntoEnumIterator>::Iterator {
         <Self as strum::IntoEnumIterator>::iter()
     }
