@@ -5,6 +5,8 @@ use globetrotter_model::{Language, TemplateEngine, Translations};
 use similar_asserts::assert_eq as sim_assert_eq;
 use std::process::Command;
 
+mod common;
+
 fn catalog() -> eyre::Result<Translations> {
     Ok(Translations::from_str(
         include_str!("../../../test-data/typst/catalog.toml"),
@@ -27,7 +29,7 @@ fn module(languages: &[Language]) -> eyre::Result<String> {
 fn golden_module() -> eyre::Result<()> {
     sim_assert_eq!(
         have: module(&[Language::En, Language::De])?,
-        want: include_str!("../../../test-data/typst/translations.typ")
+        want: common::with_current_version(include_str!("../../../test-data/typst/translations.typ"))?
     );
     Ok(())
 }

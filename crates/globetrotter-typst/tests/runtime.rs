@@ -9,6 +9,8 @@ use similar_asserts::assert_eq as sim_assert_eq;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+mod common;
+
 const RUNTIME: &str = include_str!("../../../runtime/typst/globetrotter/lib.typ");
 const FIXTURE_MODULE: &str =
     include_str!("../../../runtime/typst/globetrotter/tests/translations.typ");
@@ -244,7 +246,7 @@ fn fixture_module_is_current() -> eyre::Result<()> {
         &[Language::En, Language::De],
         true,
     )?;
-    sim_assert_eq!(have: module, want: FIXTURE_MODULE);
+    sim_assert_eq!(have: module, want: common::with_current_version(FIXTURE_MODULE)?);
     Ok(())
 }
 

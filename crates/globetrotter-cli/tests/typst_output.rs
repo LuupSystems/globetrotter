@@ -5,6 +5,9 @@
 use color_eyre::eyre;
 use std::process::Command;
 
+#[path = "../../globetrotter-typst/tests/common/mod.rs"]
+mod common;
+
 #[test_util::test]
 fn generates_typst_from_yaml_and_honors_dry_run() -> eyre::Result<()> {
     let directory = tempfile::tempdir()?;
@@ -51,7 +54,7 @@ fn generates_typst_from_yaml_and_honors_dry_run() -> eyre::Result<()> {
     let generated = std::fs::read_to_string(root.join("generated/translations.typ"))?;
     assert_eq!(
         generated,
-        include_str!("../../../test-data/typst/translations.typ")
+        common::with_current_version(include_str!("../../../test-data/typst/translations.typ"))?
     );
     assert_eq!(
         generated,
