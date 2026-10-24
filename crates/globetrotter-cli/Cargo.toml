@@ -89,7 +89,7 @@ tracing-subscriber = { version = "0", features = ["json", "env-filter"] }
 globetrotter = { path = "../globetrotter", default-features = false }
 
 # OS-standard user cache directory for models and downloaded data
-dirs = "6"
+dirs = "7.0.0"
 
 # format: sort translation files while preserving comments
 toml_edit = "0"

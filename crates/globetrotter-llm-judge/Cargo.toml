@@ -42,7 +42,7 @@ indoc.workspace = true
 # configurable, so local servers like ollama/vLLM/llama.cpp work unchanged).
 # Only the chat-completion API surface is enabled; TLS stays on the default
 # rustls, so no system OpenSSL is required.
-async-openai = { version = "0.41", features = ["chat-completion"] }
+async-openai = { version = "0.42.1", features = ["chat-completion"] }
 
 # The response schema is derived from the `Verdict` struct rather than written
 # by hand, so the parsed type and the schema sent to the server cannot drift.
@@ -50,7 +50,7 @@ schemars = "1"
 
 # Content-addressed verdict cache: hashing and the OS user-cache location.
 blake3 = "1"
-dirs = "6"
+dirs = "7.0.0"
 
 [dev-dependencies]
 color-eyre.workspace = true
