@@ -10,7 +10,8 @@ pre_commit_hooks = [
 ]
 additional_files = [
   "Cargo.lock",
-  "docs/examples/*/generated/**"
+  # Match the directories, which are staged recursively; a trailing `/**` matches nothing.
+  "docs/examples/*/generated"
 ]
 
 [[tool.bumpversion.files]]
