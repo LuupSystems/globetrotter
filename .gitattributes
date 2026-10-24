@@ -1,0 +1,4 @@
+# Keep LF in every checkout, including Windows with core.autocrlf.
+# Generators embed checked-in templates such as header.typ, and golden tests compare their output
+# byte for byte with checked-in fixtures, so CRLF would change both sides.
+* text=auto eol=lf
