@@ -39,7 +39,7 @@ tasks:
       # is missing. safe.directory: the bind-mounted repo is owned by another uid.
       - >-
         docker run --rm -e GITHUB_TOKEN -e TAP_GITHUB_TOKEN -e "HOST_UID=$(id -u)" -e "HOST_GID=$(id
-        -g)" -v "${PWD}:/workspace" -w /workspace {{.ZIGBUILD_IMAGE}} bash -euo pipefail -c '
+        -g)" {{.DOCKER_ENV}} -v "${PWD}:/workspace" -w /workspace {{.ZIGBUILD_IMAGE}} bash -euo pipefail -c '
         fix_perms() { for d in target goreleaser-dist; do [ -e "$d" ] && chown -R
         "${HOST_UID}:${HOST_GID}" "$d" || true; done; }; trap fix_perms EXIT; case "$(uname -m)" in
         x86_64) arch=x86_64 ;; aarch64|arm64) arch=arm64 ;; *) echo "unsupported arch" >&2; exit 1
@@ -49,10 +49,17 @@ tasks:
         goreleaser {{.GORELEASER_ARGS}}'
 
   build:goreleaser:
-    desc: "build in release mode using goreleaser"
+    desc: "cross-build every release target using goreleaser, without release optimizations"
     cmds:
       - task: goreleaser
-        vars: { GORELEASER_ARGS: "build --snapshot --clean --timeout 120m" }
+        vars:
+          GORELEASER_ARGS: "build --snapshot --clean --timeout 120m"
+          # The snapshot only proves that every target compiles and links.
+          # LTO with one codegen unit dominates its build time, and `task release` keeps it.
+          DOCKER_ENV: >-
+            -e CARGO_PROFILE_RELEASE_OPT_LEVEL=0
+            -e CARGO_PROFILE_RELEASE_LTO=off
+            -e CARGO_PROFILE_RELEASE_CODEGEN_UNITS=256
 
   release:
     desc: "release using goreleaser"
