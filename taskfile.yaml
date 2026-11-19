@@ -111,9 +111,26 @@ tasks:
       - cargo fc check --all-targets {{.CLI_ARGS}}
 
   clean:
-    desc: "clean cargo workspace"
+    desc: "remove all build output: the cargo workspace, goreleaser's dist, examples and the docs site"
+    dir: "{{.ROOT_DIR}}"
     cmds:
       - cargo clean {{.CLI_ARGS}}
+      # The `dist` directory `.goreleaser.yaml` names.
+      - rm -rf goreleaser-dist
+      - task: clean:build
+      # The modules and PDFs `task example:typst` writes.
+      - rm -rf examples/example-typst/generated
+      - rm -rf docs/public docs/resources docs/.hugo_build.lock
+
+  clean:build:
+    desc: "remove zigbuild/cc probe garbage object files"
+    cmds:
+      # prettier-ignore
+      - >-
+        find .
+        -type f
+        \( -name '.intentionally-empty-file.o' -o -name '*_compiler_family.o' \)
+        -delete
 
   docs:cargo:
     desc: "open the rustdoc API documentation preview"
