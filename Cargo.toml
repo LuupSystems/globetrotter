@@ -13,9 +13,7 @@ version = "0.0.17"
 edition = "2024"
 authors = ["roman <roman@luup-systems.com>"]
 description = "Polyglot, type-safe internationalization"
-license-file = "LICENSE"
-readme = "README.md"
-homepage = "https://github.com/LuupSystems/globetrotter"
+homepage = "https://luupsystems.github.io/globetrotter/"
 repository = "https://github.com/LuupSystems/globetrotter"
 
 [workspace.metadata.cargo-fc]
@@ -111,9 +109,7 @@ handlebars = "6"
 globetrotter = { path = "./crates/globetrotter/" }
 globetrotter-model = { path = "./crates/globetrotter-model/" }
 globetrotter-llm-judge = { path = "./crates/globetrotter-llm-judge/" }
-globetrotter-cli = { path = "./crates/globetrotter-cli/" }
 globetrotter-rust = { path = "./crates/globetrotter-rust/" }
-globetrotter-php = { path = "./crates/globetrotter-php/" }
 globetrotter-python = { path = "./crates/globetrotter-python/" }
 globetrotter-typescript = { path = "./crates/globetrotter-typescript/" }
 globetrotter-golang = { path = "./crates/globetrotter-golang/" }

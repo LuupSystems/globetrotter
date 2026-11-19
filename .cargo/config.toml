@@ -6,3 +6,6 @@ c = 'check --workspace --all-targets'
 t = "nextest run -P default --retries 0 --no-tests warn --all-targets"
 lint = "clippy --all-targets --no-deps"
 fixit = "clippy --fix --allow-dirty --allow-staged --all-targets --no-deps"
+
+[registries.crates-io]
+min-publish-age = "2 weeks"

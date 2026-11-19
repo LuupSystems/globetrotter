@@ -969,36 +969,31 @@ impl Outputs {
     /// Returns `true` if no outputs are configured.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        if !self.json.is_empty() {
-            return false;
-        }
-
-        #[cfg(feature = "typescript")]
-        if self.typescript.as_ref().is_some_and(|c| !c.is_empty()) {
-            return false;
-        }
-
-        #[cfg(feature = "rust")]
-        if self.rust.as_ref().is_some_and(|c| !c.is_empty()) {
-            return false;
-        }
-
-        #[cfg(feature = "golang")]
-        if self.golang.as_ref().is_some_and(|c| !c.is_empty()) {
-            return false;
-        }
-
-        #[cfg(feature = "python")]
-        if self.python.as_ref().is_some_and(|c| !c.is_empty()) {
-            return false;
-        }
-
-        #[cfg(feature = "typst")]
-        if self.typst.as_ref().is_some_and(|config| !config.is_empty()) {
-            return false;
-        }
-
-        true
+        [
+            self.json.is_empty(),
+            #[cfg(feature = "typescript")]
+            self.typescript
+                .as_ref()
+                .is_none_or(globetrotter_typescript::OutputConfig::is_empty),
+            #[cfg(feature = "rust")]
+            self.rust
+                .as_ref()
+                .is_none_or(globetrotter_rust::OutputConfig::is_empty),
+            #[cfg(feature = "golang")]
+            self.golang
+                .as_ref()
+                .is_none_or(globetrotter_golang::OutputConfig::is_empty),
+            #[cfg(feature = "python")]
+            self.python
+                .as_ref()
+                .is_none_or(globetrotter_python::OutputConfig::is_empty),
+            #[cfg(feature = "typst")]
+            self.typst
+                .as_ref()
+                .is_none_or(globetrotter_typst::OutputConfig::is_empty),
+        ]
+        .into_iter()
+        .all(|empty| empty)
     }
 }
 
